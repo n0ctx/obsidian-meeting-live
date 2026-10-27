@@ -1,0 +1,10 @@
+{
+  "id": "meeting-live",
+  "name": "Meeting Live",
+  "version": "1.0.0",
+  "minAppVersion": "1.11.4",
+  "description": "Embed a live meeting workspace in your notes: local recording, real-time Volcengine speech recognition, AI stage summaries, and meeting notes from recordings.",
+  "author": "n0ctx",
+  "authorUrl": "https://github.com/n0ctx",
+  "isDesktopOnly": true
+}
