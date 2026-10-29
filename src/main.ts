@@ -199,7 +199,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     withSession("start", "开始或继续录音", "mic", async (s) => (await this.ensureConsent()) && s.start(), (s) => s.status !== "recording" && s.status !== "stopping")
     withSession("pause", "暂停录音", "pause", (s) => s.pause(), (s) => s.status === "recording")
     withSession("stop", "结束会议", "square", (s) => s.stop(), (s) => ["recording", "paused", "interrupted"].includes(s.status))
-    withSession("summarize", "立即生成阶段摘要", "sparkles", (s) => !s.summarizeNow() && new Notice("没有新的转写内容需要总结"), () => true)
+    withSession("summarize", "立即生成阶段摘要", "list", (s) => !s.summarizeNow() && new Notice("没有新的转写内容需要总结"), () => true)
     withSession("minutes", "生成正式纪要", "file-pen-line", (s) => this.openMinutes(s), (s) => s.utterances.length > 0)
   }
 

@@ -1,5 +1,12 @@
 /* Meeting Live — embedded meeting workbench */
 
+/* Summary kind labels: Smiley Sans (OFL-1.1, atelierAnchor) subset to 事实观点待办未决 and renamed per its Reserved Font Names. */
+@font-face {
+  font-family: "Meeting Live Label";
+  src: url(data:font/woff2;base64,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) format("woff2");
+  font-display: block;
+}
+
 .ml-host {
   container-type: inline-size;
   margin: 0.4em 0 1em;
@@ -11,6 +18,10 @@
   --ml-ok: var(--color-green);
   --ml-warn: var(--color-orange);
   --ml-info: var(--color-blue);
+  --ml-fact: oklch(0.5 0.08 250);
+  --ml-opinion: oklch(0.53 0.15 0);
+  --ml-todo: oklch(0.52 0.1 155);
+  --ml-open: oklch(0.58 0.13 70);
   --ml-state: var(--ml-accent);
   --ml-line: var(--background-modifier-border);
   --ml-soft: color-mix(in srgb, var(--text-normal) 4.5%, transparent);
@@ -40,6 +51,10 @@
   --ml-soft: color-mix(in srgb, var(--text-normal) 6%, transparent);
   --ml-softer: color-mix(in srgb, var(--text-normal) 3.5%, transparent);
   --ml-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 14px 36px -20px rgb(0 0 0 / 0.7);
+  --ml-fact: oklch(0.74 0.06 245);
+  --ml-opinion: oklch(0.76 0.11 0);
+  --ml-todo: oklch(0.78 0.08 155);
+  --ml-open: oklch(0.8 0.1 75);
   background: color-mix(in srgb, var(--background-secondary) 55%, var(--background-primary));
 }
 
@@ -351,8 +366,7 @@
 }
 
 @container (max-width: 679px) {
-  .ml-pane-title .ml-pane-icon,
-  .ml-pane-title > span:nth-child(2) { display: none; }
+  .ml-pane-title > span:first-child { display: none; }
 }
 
 @container (max-width: 520px) {
@@ -392,9 +406,6 @@
   white-space: nowrap;
 }
 
-.ml-pane-icon { display: inline-flex; color: var(--text-muted); }
-.ml-pane-icon svg { width: 15px; height: 15px; }
-.ml-pane-icon.is-ai { color: var(--ml-accent); }
 .ml-count { overflow: hidden; margin-left: 2px; color: var(--text-faint); font-size: 12px; font-weight: 400; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 
 .ml-pane-actions { display: flex; align-items: center; gap: 2px; }
@@ -643,8 +654,9 @@
 }
 
 .ml-point {
-  --ml-kind: var(--ml-info);
+  --ml-kind: var(--ml-fact);
   display: flex;
+  align-items: baseline;
   gap: 10px;
   margin: 0;
   padding: 5px 0;
@@ -652,24 +664,18 @@
   line-height: 1.7;
 }
 
-.ml-point.is-opinion { --ml-kind: var(--color-purple); }
-.ml-point.is-todo { --ml-kind: var(--ml-ok); }
-.ml-point.is-open { --ml-kind: var(--ml-warn); }
+.ml-point.is-opinion { --ml-kind: var(--ml-opinion); }
+.ml-point.is-todo { --ml-kind: var(--ml-todo); }
+.ml-point.is-open { --ml-kind: var(--ml-open); }
 
 .ml-point-mark {
-  display: inline-flex;
   flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin-top: 1.5px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--ml-kind) 15%, transparent);
-  color: color-mix(in srgb, var(--ml-kind) 85%, var(--text-normal));
+  color: var(--ml-kind);
+  font-family: "Meeting Live Label", var(--font-interface);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  user-select: none;
 }
-
-.ml-point-mark svg { width: 12px; height: 12px; stroke-width: 2.25; }
 
 .ml-point-text { min-width: 0; overflow-wrap: anywhere; }
 .ml-point-text strong { font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -1011,7 +1017,8 @@
 .ml-btn.is-ghost:hover:not(:disabled) { color: var(--text-normal); }
 .ml-btn-icon { display: inline-flex; }
 .ml-btn-icon svg { width: 14px; height: 14px; }
-.ml-summarize .ml-btn-icon { color: var(--ml-accent); }
+.ml-btn.ml-summarize { background: transparent; color: var(--text-muted); font-weight: 500; }
+.ml-btn.ml-summarize:hover:not(:disabled) { background: var(--ml-soft); color: var(--text-normal); }
 
 /* ------------------------------------------------------------------ missing / loading */
 

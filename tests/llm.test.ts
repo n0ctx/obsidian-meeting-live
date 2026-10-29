@@ -54,10 +54,10 @@ test("summary markdown lists items with kind marks, bold figures and flags unver
   }
   const md = summaryMarkdown(record, (ms) => `@${ms}`)
   assert.match(md, /## 阶段 2 · 00:01:00 – 00:02:00 · 毛利/)
-  assert.match(md, /^- 📄 毛利率 \*\*45%\*\*（⚠ 原文未找到 45，请核对） @65000$/m)
-  assert.match(md, /^- 💬 维持报价，Q3 收入 \*\*3\.2 亿元\*\*$/m)
-  assert.match(md, /^- \[ \] 周五前提交方案$/m)
-  assert.match(md, /^- ❓ 是否含税未定$/m)
+  assert.match(md, /^- 【事实】毛利率 \*\*45%\*\*（⚠ 原文未找到 45，请核对） @65000$/m)
+  assert.match(md, /^- 【观点】维持报价，Q3 收入 \*\*3\.2 亿元\*\*$/m)
+  assert.match(md, /^- \[ \] 【待办】周五前提交方案$/m)
+  assert.match(md, /^- 【未决】是否含税未定$/m)
 })
 
 test("legacy sectioned summaries become one time-ordered list without follow-ups", () => {

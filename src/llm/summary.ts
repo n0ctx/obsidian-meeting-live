@@ -175,7 +175,7 @@ function cite(t: number | undefined, link: TimeLink): string {
   return t === undefined ? "" : ` ${link(t)}`
 }
 
-const MARKDOWN_MARK: Record<SummaryKind, string> = { fact: "- 📄 ", opinion: "- 💬 ", todo: "- [ ] ", open: "- ❓ " }
+const MARKDOWN_MARK: Record<SummaryKind, string> = { fact: "- 【事实】", opinion: "- 【观点】", todo: "- [ ] 【待办】", open: "- 【未决】" }
 
 export function summaryMarkdown(record: SummaryRecord, link: TimeLink): string {
   const title = record.content?.title ? ` · ${record.content.title}` : ""

@@ -5,7 +5,6 @@ import { formatClock, type SummaryKind, type SummaryRecord } from "../meeting/ty
 
 const TRIGGER_LABEL: Record<SummaryRecord["trigger"], string> = { auto: "", manual: "手动", final: "收尾" }
 const KIND_LABEL: Record<SummaryKind, string> = { fact: "事实", opinion: "观点", todo: "待办", open: "未决" }
-const KIND_ICON: Record<SummaryKind, string> = { fact: "file-text", opinion: "message-circle", todo: "square-check", open: "circle-help" }
 
 export class SummaryPane {
   readonly el: HTMLElement
@@ -23,7 +22,6 @@ export class SummaryPane {
     this.el = parent.createDiv({ cls: "ml-pane ml-pane-summary" })
     const head = this.el.createDiv({ cls: "ml-pane-head" })
     const title = head.createDiv({ cls: "ml-pane-title" })
-    setIcon(title.createSpan({ cls: "ml-pane-icon is-ai" }), "sparkles")
     title.createSpan({ text: "AI 阶段摘要" })
     this.countEl = title.createSpan({ cls: "ml-count" })
     head.appendChild(actions)
@@ -59,7 +57,7 @@ export class SummaryPane {
     const icon = body.createSpan({ cls: "ml-next-icon" })
     const text = body.createDiv({ cls: "ml-next-text" })
     if (problem) {
-      setIcon(icon, "sparkles")
+      setIcon(icon, "list")
       text.createDiv({ cls: "ml-next-title", text: "AI 摘要未启用" })
       text.createDiv({ cls: "ml-next-sub", text: `${problem}。录音与转写不受影响。` })
       this.next.dataset.state = "off"
@@ -68,7 +66,7 @@ export class SummaryPane {
     if (s.status === "ended" || s.status === "interrupted" || Number.isNaN(interval)) {
       this.next.dataset.state = "done"
       if (s.meta.summaries.length === 0) {
-        setIcon(icon, "sparkles")
+        setIcon(icon, "list")
         text.createDiv({ cls: "ml-next-title", text: s.status === "ended" ? "没有生成阶段摘要" : "暂无阶段摘要" })
         text.createDiv({ cls: "ml-next-sub", text: s.utterances.length ? "可点击「立即总结」生成" : "会议没有转写内容" })
       } else this.next.empty()
@@ -146,8 +144,7 @@ export class SummaryPane {
     const ul = body.createEl("ul", { cls: "ml-points" })
     for (const item of record.content.items) {
       const li = ul.createEl("li", { cls: `ml-point is-${item.kind}` })
-      const mark = li.createSpan({ cls: "ml-point-mark", attr: { "aria-label": KIND_LABEL[item.kind] } })
-      setIcon(mark, KIND_ICON[item.kind])
+      li.createSpan({ cls: "ml-point-mark", text: KIND_LABEL[item.kind] })
       const text = li.createDiv({ cls: "ml-point-text" })
       for (const part of splitFigures(item)) {
         if (part.figure) text.createEl("strong", { cls: part.unverified ? "is-unverified" : "", text: part.text })

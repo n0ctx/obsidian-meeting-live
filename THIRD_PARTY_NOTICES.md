@@ -14,6 +14,14 @@ https://github.com/garetneda-gif/obsidian-realtime-transcription
 
 MIT License — Copyright (c) 2024 garetneda-gif
 
+## Smiley Sans (得意黑)
+
+The summary kind labels in `styles.css` embed a subset of Smiley Sans Oblique (the glyphs 事实观点待办未决),
+renamed "Meeting Live Label" as the license requires for modified versions. https://github.com/atelier-anchor/smiley-sans
+
+SIL Open Font License 1.1 — Copyright (c) 2022–2024 atelierAnchor, with Reserved Font Names "Smiley" and "得意黑".
+License text: https://openfontlicense.org
+
 ## ws
 
 Bundled WebSocket client. https://github.com/websockets/ws — MIT License, Copyright (c) 2011 Einar Otto Stangvik and contributors.

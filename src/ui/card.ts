@@ -240,9 +240,7 @@ export class MeetingCard extends MarkdownRenderChild {
     this.transcript.onSeek = (ms) => void this.player?.play(ms)
 
     const sActions = createDiv({ cls: "ml-pane-actions" })
-    const now = sActions.createEl("button", { cls: "ml-btn is-small is-ghost ml-summarize" })
-    setIcon(now.createSpan({ cls: "ml-btn-icon" }), "sparkles")
-    now.createSpan({ text: "立即总结" })
+    const now = sActions.createEl("button", { cls: "ml-btn is-small ml-summarize", text: "立即总结" })
     now.addEventListener("click", () => this.summarizeNow())
     this.iconButton(sActions, "file-text", "打开 AI 摘要文件", () => this.host.openPath(session.summaryPath))
     this.summaries = new SummaryPane(panes, session, sActions)
@@ -280,7 +278,7 @@ export class MeetingCard extends MarkdownRenderChild {
     }
     check(true, "mic", "本地录音", `${settings.audioFormat === "ogg" ? "Opus 高码率" : "WAV 无损"} · 保存在 ${settings.folder}/`)
     check(!asrProblem, "captions", "实时转写", asrProblem ? `${asrProblem}；不影响录音` : "火山引擎豆包流式识别")
-    check(!llmProblem, "sparkles", "阶段摘要", llmProblem ? `${llmProblem}；可稍后补生成` : `每 ${settings.summaryIntervalMin} 分钟 · ${this.host.llm().model}`)
+    check(!llmProblem, "list", "阶段摘要", llmProblem ? `${llmProblem}；可稍后补生成` : `每 ${settings.summaryIntervalMin} 分钟 · ${this.host.llm().model}`)
     content.createDiv({ cls: "ml-privacy", text: "录音时音频会实时上传至火山引擎识别，转写文本会发送到你配置的 LLM 服务生成摘要。原始录音与转写只保存在本库。" })
   }
 
@@ -356,7 +354,7 @@ export class MeetingCard extends MarkdownRenderChild {
       }
       if (!session.llmProblem && session.status === "recording" && this.host.settings.autoSummary) {
         const running = session.meta.summaries.some((s) => s.status === "running")
-        chips.push({ icon: "sparkles", text: running ? "摘要生成中" : `下次摘要 ${formatClock(Math.max(0, session.nextSummaryInMs))}`, tone: running ? "busy" : "idle" })
+        chips.push({ icon: running ? "list" : "timer", text: running ? "摘要生成中" : `下次摘要 ${formatClock(Math.max(0, session.nextSummaryInMs))}`, tone: running ? "busy" : "idle" })
       }
       const save = session.saveState
       chips.push({ icon: save === "error" ? "triangle-alert" : "check", text: save === "error" ? "保存失败" : save === "saving" ? "保存中" : "已保存", tone: save === "error" ? "error" : "idle" })
@@ -443,14 +441,14 @@ export class MeetingCard extends MarkdownRenderChild {
   private openMenu(event: MouseEvent): void {
     const session = this.session!
     const menu = new Menu()
-    menu.addItem((i) => i.setTitle("立即生成阶段摘要").setIcon("sparkles").onClick(() => this.summarizeNow()))
+    menu.addItem((i) => i.setTitle("立即生成阶段摘要").setIcon("list").onClick(() => this.summarizeNow()))
     if (session.isLive && (session.asrState === "failed" || session.asrState === "reconnecting")) {
       menu.addItem((i) => i.setTitle("立即重连语音识别").setIcon("refresh-cw").onClick(() => session.retryAsr()))
     }
     menu.addItem((i) => i.setTitle("生成正式纪要…").setIcon("file-pen-line").onClick(() => this.host.openMinutes(session)))
     menu.addSeparator()
     menu.addItem((i) => i.setTitle("打开原始转写").setIcon("captions").onClick(() => this.host.openPath(session.transcriptPath)))
-    menu.addItem((i) => i.setTitle("打开 AI 阶段摘要").setIcon("sparkles").onClick(() => this.host.openPath(session.summaryPath)))
+    menu.addItem((i) => i.setTitle("打开 AI 阶段摘要").setIcon("list").onClick(() => this.host.openPath(session.summaryPath)))
     menu.addItem((i) => i.setTitle("在访达中显示会议文件夹").setIcon("folder-open").onClick(() => this.host.revealFolder(session)))
     menu.addItem((i) =>
       i
@@ -508,7 +506,7 @@ export class MeetingCard extends MarkdownRenderChild {
       a.addEventListener("click", () => this.host.openPath(path))
     }
     link("captions", "原始转写", session.transcriptPath)
-    if (session.meta.summaries.some((s) => s.status === "done")) link("sparkles", "AI 摘要", session.summaryPath)
+    if (session.meta.summaries.some((s) => s.status === "done")) link("list", "AI 摘要", session.summaryPath)
     for (const [i, path] of session.meta.minutes.entries()) link("file-pen-line", session.meta.minutes.length > 1 ? `正式纪要 ${i + 1}` : "正式纪要", path)
     const segs = session.meta.segments
     if (segs.length) {

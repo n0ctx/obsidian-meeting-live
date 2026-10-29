@@ -24,7 +24,6 @@ export class TranscriptPane {
     this.el = parent.createDiv({ cls: "ml-pane ml-pane-transcript" })
     const head = this.el.createDiv({ cls: "ml-pane-head" })
     const title = head.createDiv({ cls: "ml-pane-title" })
-    setIcon(title.createSpan({ cls: "ml-pane-icon" }), "captions")
     title.createSpan({ text: "实时转写" })
     this.countEl = title.createSpan({ cls: "ml-count" })
     head.appendChild(actions)

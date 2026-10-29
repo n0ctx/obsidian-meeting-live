@@ -31,7 +31,7 @@ export class ConsentModal extends Modal {
     }
     item("hard-drive", "原始录音只保存在本地", "录音、原始转写和会议元数据写入当前 Vault 的会议目录，插件不会上传录音文件。")
     item("captions", "音频实时上传至火山引擎", "录音时，音频流会实时发送到字节跳动火山引擎语音识别服务（openspeech.bytedance.com）进行转写。")
-    item("sparkles", "转写文本发送至 LLM 服务", `阶段摘要和正式纪要会把转写文本与所选笔记发送到你配置的模型服务：${this.llmTarget}。`)
+    item("send", "转写文本发送至 LLM 服务", `阶段摘要和正式纪要会把转写文本与所选笔记发送到你配置的模型服务：${this.llmTarget}。`)
     list.createDiv({ cls: "ml-consent-note", text: "请确保已获得参会者对录音和使用云端服务处理的同意。此确认只需进行一次。" })
     const buttons = this.contentEl.createDiv({ cls: "modal-button-container" })
     buttons.createEl("button", { text: "取消" }).addEventListener("click", () => this.close())
