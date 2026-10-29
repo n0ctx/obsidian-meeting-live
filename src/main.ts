@@ -77,6 +77,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     this.updateStatusBar()
 
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => void this.manager.handleRename(oldPath, file.path)))
+    this.registerEvent(this.app.vault.on("modify", (file) => void this.endDetachedMeeting(file.path)))
+    this.registerEvent(this.app.vault.on("delete", (file) => void this.endDetachedMeeting(file.path)))
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor, view) => {
         menu.addItem((item) =>
@@ -246,6 +248,15 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     }
     if (!record || !(await this.ensureConsent())) return
     await session.start().catch((error: Error) => new Notice(error.message))
+  }
+
+  private async endDetachedMeeting(path: string): Promise<void> {
+    try {
+      const ended = await this.manager.endIfDetached(path)
+      if (ended) new Notice(`会议组件已从笔记中删除，「${ended.meta.title}」已结束录音，录音与转写均已保存`)
+    } catch (error) {
+      new Notice(`结束会议失败：${(error as Error).message}`)
+    }
   }
 
   private updateStatusBar(): void {

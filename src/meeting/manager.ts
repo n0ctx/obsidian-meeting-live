@@ -126,6 +126,17 @@ export class MeetingManager extends Events {
     }
   }
 
+  /** Ends the live meeting once its block is gone from its note: no card is left to stop it, and it would block every other meeting. */
+  async endIfDetached(path: string): Promise<MeetingSession | undefined> {
+    const session = this.active
+    if (!session || session.meta.notePath !== path || session.status === "stopping") return undefined
+    const adapter = this.store.app.vault.adapter
+    const content = (await adapter.exists(path)) ? await adapter.read(path) : ""
+    if (this.active !== session || new RegExp(`^\\s*id\\s*:\\s*${session.id}\\s*$`, "m").test(content)) return undefined
+    await session.stop()
+    return session
+  }
+
   shutdown(): void {
     for (const session of this.sessions.values()) session.shutdown()
   }
