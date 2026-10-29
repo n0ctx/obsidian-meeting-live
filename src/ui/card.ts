@@ -56,7 +56,7 @@ export class MeetingCard extends MarkdownRenderChild {
   private root!: HTMLElement
   private statusEl!: HTMLElement
   private statusText!: HTMLElement
-  private eyebrowText!: HTMLElement
+  private metaText!: HTMLElement
   private titleInput!: HTMLInputElement
   private clockEl!: HTMLElement
   private controls!: HTMLElement
@@ -176,11 +176,6 @@ export class MeetingCard extends MarkdownRenderChild {
 
     const head = this.root.createDiv({ cls: "ml-head" })
     const main = head.createDiv({ cls: "ml-head-main" })
-    const eyebrow = main.createDiv({ cls: "ml-eyebrow" })
-    this.statusEl = eyebrow.createSpan({ cls: "ml-status" })
-    this.statusEl.createSpan({ cls: "ml-dot" })
-    this.statusText = this.statusEl.createSpan()
-    this.eyebrowText = eyebrow.createSpan({ cls: "ml-eyebrow-text" })
     this.titleInput = main.createEl("input", { cls: "ml-title", attr: { type: "text", spellcheck: "false", "aria-label": "会议名称" } })
     this.titleInput.value = session.meta.title
     this.titleInput.addEventListener("change", () => session.rename(this.titleInput.value))
@@ -191,7 +186,12 @@ export class MeetingCard extends MarkdownRenderChild {
         this.titleInput.blur()
       }
     })
-    this.chips = main.createDiv({ cls: "ml-chips" })
+    const meta = main.createDiv({ cls: "ml-meta" })
+    this.statusEl = meta.createSpan({ cls: "ml-status" })
+    this.statusEl.createSpan({ cls: "ml-dot" })
+    this.statusText = this.statusEl.createSpan()
+    this.metaText = meta.createSpan({ cls: "ml-meta-text" })
+    this.chips = meta.createSpan({ cls: "ml-chips" })
 
     const side = head.createDiv({ cls: "ml-head-side" })
     const meter = side.createDiv({ cls: "ml-meter" })
@@ -336,7 +336,7 @@ export class MeetingCard extends MarkdownRenderChild {
       parts.push(`${session.utterances.length} 段发言`)
       if (session.meta.summaries.length) parts.push(`${session.meta.summaries.length} 个阶段`)
     }
-    this.eyebrowText.setText(parts.join(" · "))
+    this.metaText.setText(parts.join(" · "))
     this.renderChips()
     if (session.status === "recording") this.summaries?.renderNext()
     this.player?.refresh()
