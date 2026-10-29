@@ -161,9 +161,9 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       icon: "audio-lines",
       editorCallback: (editor, view) => view instanceof MarkdownView && void this.insertMeeting(editor, view),
     })
-    this.addRibbonIcon("audio-lines", "Meeting Live：插入会议组件", () => {
+    this.addRibbonIcon("audio-lines", "Meeting Live：插入会议组件并开始录音", () => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView)
-      if (view) void this.insertMeeting(view.editor, view)
+      if (view) void this.insertMeeting(view.editor, view, true)
       else new Notice("请先打开一篇笔记，再插入会议组件")
     })
     this.addRibbonIcon("file-audio", "Meeting Live：录音生成访谈记录", () => {
@@ -227,11 +227,12 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     return id ? this.manager.loaded(id) : undefined
   }
 
-  private async insertMeeting(editor: Editor, view: MarkdownView): Promise<void> {
+  private async insertMeeting(editor: Editor, view: MarkdownView, record = false): Promise<void> {
     const file = view.file
     if (!file) return
+    let session: MeetingSession
     try {
-      const session = await this.manager.create(file.basename, file.path)
+      session = await this.manager.create(file.basename, file.path)
       const cursor = editor.getCursor()
       const line = editor.getLine(cursor.line)
       const prefix = line.trim() ? "\n\n" : ""
@@ -241,7 +242,10 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       editor.setCursor({ line: Math.min(after, editor.lastLine()), ch: 0 })
     } catch (error) {
       new Notice(`创建会议失败：${(error as Error).message}`)
+      return
     }
+    if (!record || !(await this.ensureConsent())) return
+    await session.start().catch((error: Error) => new Notice(error.message))
   }
 
   private updateStatusBar(): void {
