@@ -50,7 +50,7 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   llmEffort: "low",
   llmApiKeySecret: "",
   autoSummary: true,
-  summaryIntervalMin: 5,
+  summaryIntervalMin: 1,
   summaryFocus: DEFAULT_SUMMARY_FOCUS,
   minutesPrompt: DEFAULT_MINUTES_PROMPT,
   consentAccepted: false,
