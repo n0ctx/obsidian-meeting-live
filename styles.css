@@ -642,30 +642,34 @@
 }
 
 .ml-point {
+  --ml-kind: var(--ml-info);
   display: flex;
-  gap: 8px;
+  gap: 9px;
   margin: 0;
-  padding: 3px 0;
+  padding: 4px 0;
   font-size: 13.5px;
   line-height: 1.62;
 }
+
+.ml-point.is-opinion { --ml-kind: var(--color-purple); }
+.ml-point.is-todo { --ml-kind: var(--ml-ok); }
+.ml-point.is-open { --ml-kind: var(--ml-warn); }
 
 .ml-point-mark {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 1.62em;
-  color: var(--text-faint);
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ml-kind) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ml-kind) 22%, transparent);
+  color: color-mix(in srgb, var(--ml-kind) 88%, var(--text-normal));
 }
 
-.ml-point-mark svg { width: 13px; height: 13px; stroke-width: 2.5; }
-.ml-point.is-point .ml-point-mark::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--text-faint); }
-.ml-point.is-decision .ml-point-mark { color: var(--ml-ok); }
-.ml-point.is-decision .ml-point-text { font-weight: 520; }
-.ml-point.is-todo .ml-point-mark { color: var(--ml-accent); }
-.ml-point.is-open .ml-point-mark { color: var(--ml-warn); }
+.ml-point-mark svg { width: 12px; height: 12px; stroke-width: 2.25; }
 
 .ml-point-text { min-width: 0; overflow-wrap: anywhere; }
 .ml-point-text strong { font-weight: 700; font-variant-numeric: tabular-nums; }

@@ -12,14 +12,14 @@ const utterances: Utterance[] = [
 ]
 
 test("summary parsing snaps citations, orders by time, flags unverified numbers, tolerates fences", () => {
-  const raw = '```json\n{"title":"收入与订单","items":[{"kind":"decision","text":"毛利率 45%","t":"00:01:06"},{"kind":"point","text":"今年预计收入 3.2 亿元","t":"00:00:01"},{"kind":"todo","text":"补充订单周期"},{"kind":"bogus","text":"在手订单 1.5 亿"}]}\n```'
+  const raw = '```json\n{"title":"收入与订单","items":[{"kind":"opinion","text":"毛利率 45%","t":"00:01:06"},{"kind":"fact","text":"今年预计收入 3.2 亿元","t":"00:00:01"},{"kind":"todo","text":"补充订单周期"},{"kind":"bogus","text":"在手订单 1.5 亿"}]}\n```'
   const content = parseSummary(raw, utterances)!
   assert.equal(content.title, "收入与订单")
   assert.deepEqual(content.items.map((i) => [i.kind, i.t, i.unverified]), [
-    ["point", 1000, []],
+    ["fact", 1000, []],
     ["todo", undefined, []],
-    ["point", undefined, []],
-    ["decision", 65_000, ["45"]],
+    ["fact", undefined, []],
+    ["opinion", 65_000, ["45"]],
   ])
   assert.equal(parseSummary("抱歉，我无法完成", utterances), undefined)
 })
@@ -32,9 +32,11 @@ test("number verification ignores separators but not different or partial number
 })
 
 test("summary prompt carries contract, focus, timestamps and prior context", () => {
-  const previous: SummaryRecord[] = [{ index: 1, startMs: 0, endMs: 60_000, trigger: "auto", status: "done", attempts: 1, utterances: [1000], content: { title: "收入", items: [{ kind: "point", text: "收入 3.2 亿", unverified: [] }] } }]
+  const previous: SummaryRecord[] = [{ index: 1, startMs: 0, endMs: 60_000, trigger: "auto", status: "done", attempts: 1, utterances: [1000], content: { title: "收入", items: [{ kind: "fact", text: "收入 3.2 亿", unverified: [] }] } }]
   const [system, user] = buildSummaryMessages("访谈", "关注订单", { startMs: 60_000, endMs: 120_000 }, utterances.slice(1), previous)
   assert.match(system.content, /plans, forecasts and estimates/)
+  assert.match(system.content, /- fact: .*\n- opinion: /)
+  assert.doesNotMatch(system.content, /misrecognized/)
   assert.match(system.content, /关注订单/)
   assert.match(user.content, /Stage 1 \(00:00–01:00\) 收入: 收入 3\.2 亿/)
   assert.match(user.content, /\[00:01:05\] 毛利率/)
@@ -44,16 +46,16 @@ test("summary markdown lists items with kind marks, bold figures and flags unver
   const record: SummaryRecord = {
     index: 2, startMs: 60_000, endMs: 120_000, trigger: "manual", status: "done", attempts: 1, utterances: [],
     content: { title: "毛利", items: [
-      { kind: "point", text: "毛利率 45%", t: 65_000, unverified: ["45"] },
-      { kind: "decision", text: "维持报价，Q3 收入 3.2 亿元", unverified: [] },
+      { kind: "fact", text: "毛利率 45%", t: 65_000, unverified: ["45"] },
+      { kind: "opinion", text: "维持报价，Q3 收入 3.2 亿元", unverified: [] },
       { kind: "todo", text: "周五前提交方案", unverified: [] },
       { kind: "open", text: "是否含税未定", unverified: [] },
     ] },
   }
   const md = summaryMarkdown(record, (ms) => `@${ms}`)
   assert.match(md, /## 阶段 2 · 00:01:00 – 00:02:00 · 毛利/)
-  assert.match(md, /^- 毛利率 \*\*45%\*\*（⚠ 原文未找到 45，请核对） @65000$/m)
-  assert.match(md, /^- ✅ 维持报价，Q3 收入 \*\*3\.2 亿元\*\*$/m)
+  assert.match(md, /^- 📄 毛利率 \*\*45%\*\*（⚠ 原文未找到 45，请核对） @65000$/m)
+  assert.match(md, /^- 💬 维持报价，Q3 收入 \*\*3\.2 亿元\*\*$/m)
   assert.match(md, /^- \[ \] 周五前提交方案$/m)
   assert.match(md, /^- ❓ 是否含税未定$/m)
 })
@@ -65,9 +67,9 @@ test("legacy sectioned summaries become one time-ordered list without follow-ups
   assert.deepEqual(meta.summaries[0].content, {
     title: "",
     items: [
-      { kind: "decision", text: "收入增长", t: 1000, unverified: [] },
-      { kind: "point", text: "销量 4500 台", t: 30_000, unverified: ["4500"] },
-      { kind: "point", text: "订单", t: 65_000, unverified: [] },
+      { kind: "opinion", text: "收入增长", t: 1000, unverified: [] },
+      { kind: "fact", text: "销量 4500 台", t: 30_000, unverified: ["4500"] },
+      { kind: "fact", text: "订单", t: 65_000, unverified: [] },
     ],
   })
 })

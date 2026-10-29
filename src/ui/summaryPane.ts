@@ -4,8 +4,8 @@ import type { MeetingSession } from "../meeting/session.ts"
 import { formatClock, type SummaryKind, type SummaryRecord } from "../meeting/types.ts"
 
 const TRIGGER_LABEL: Record<SummaryRecord["trigger"], string> = { auto: "", manual: "手动", final: "收尾" }
-const KIND_LABEL: Record<SummaryKind, string> = { point: "要点", decision: "结论", todo: "待办", open: "未决" }
-const KIND_ICON: Record<SummaryKind, string> = { point: "", decision: "check", todo: "square", open: "circle-help" }
+const KIND_LABEL: Record<SummaryKind, string> = { fact: "事实", opinion: "观点", todo: "待办", open: "未决" }
+const KIND_ICON: Record<SummaryKind, string> = { fact: "file-text", opinion: "message-circle", todo: "square-check", open: "circle-help" }
 
 export class SummaryPane {
   readonly el: HTMLElement
@@ -147,7 +147,7 @@ export class SummaryPane {
     for (const item of record.content.items) {
       const li = ul.createEl("li", { cls: `ml-point is-${item.kind}` })
       const mark = li.createSpan({ cls: "ml-point-mark", attr: { "aria-label": KIND_LABEL[item.kind] } })
-      if (KIND_ICON[item.kind]) setIcon(mark, KIND_ICON[item.kind])
+      setIcon(mark, KIND_ICON[item.kind])
       const text = li.createDiv({ cls: "ml-point-text" })
       for (const part of splitFigures(item)) {
         if (part.figure) text.createEl("strong", { cls: part.unverified ? "is-unverified" : "", text: part.text })

@@ -10,22 +10,23 @@ Summarize only the "Current stage" transcript. "Previous summaries" are context;
 List the key points in the order they were said. Each point is one short sentence that reads on its own: keep the subject it refers to and its numbers, units, dates and names.
 
 Kinds:
-- point: what was discussed, reported or stated
-- decision: a decision or conclusion that was reached
+- fact: a fact, figure, event, status or plan that someone reported
+- opinion: a judgment, assessment, forecast or conclusion that someone expressed, including decisions reached
 - todo: an action someone will take; include the owner and deadline only if stated
-- open: a disagreement, an unresolved question, or a line that may be misrecognized
+- open: a disagreement, or a question that was raised and left unanswered
 
 Rules:
 - Use only what the transcript says. Do not invent names, numbers or conclusions, and do not add your own suggestions.
 - Keep plans, forecasts and estimates marked as such.
 - Keep numbers and units exactly as spoken.
 - Merge lines about the same thing into one point. Skip small talk and filler.
+- Do not point out likely speech-recognition errors.
 - Cite the supporting line for each point in "t", copying its timestamp.
 - "title" names what this stage is about in a few words.
 - Write in the same language as the transcript.
 
 Output one JSON object only, no code fences:
-{"title":"","items":[{"kind":"point","text":"","t":"00:00:00"}]}`
+{"title":"","items":[{"kind":"fact","text":"","t":"00:00:00"}]}`
 
 export function transcriptLines(utterances: Utterance[]): string {
   return utterances.map((u) => `[${formatClock(u.startMs, true)}] ${u.text}`).join("\n")
@@ -114,7 +115,7 @@ function extractJson(text: string): unknown {
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "")
 
-const KINDS: SummaryKind[] = ["point", "decision", "todo", "open"]
+const KINDS: SummaryKind[] = ["fact", "opinion", "todo", "open"]
 
 /** Orders items by cited time; an uncited item stays right after the item before it. */
 function chronological(items: SummaryItem[]): SummaryItem[] {
@@ -138,7 +139,7 @@ export function parseSummary(text: string, utterances: Utterance[]): SummaryCont
   const items: SummaryItem[] = (Array.isArray(data.items) ? (data.items as unknown[]) : [])
     .map((item) => {
       const record = (item && typeof item === "object" ? item : { text: item }) as Record<string, unknown>
-      const kind = KINDS.find((k) => k === record.kind) ?? "point"
+      const kind = KINDS.find((k) => k === record.kind) ?? "fact"
       const body = str(record.text)
       return { kind, text: body, t: snapTime(record.t, utterances), unverified: unverifiedNumbers(body, source) }
     })
@@ -159,8 +160,8 @@ export function upgradeSummaries(meta: MeetingMeta): void {
     const old = record.content as LegacyContent | SummaryContent | undefined
     if (!old || "items" in old) continue
     const items = (kind: SummaryKind, list: { text: string; t?: number }[] = []): SummaryItem[] => list.map((p) => ({ kind, text: p.text, t: p.t, unverified: [] }))
-    const figures = (old.figures ?? []).map((f): SummaryItem => ({ kind: "point", text: `${f.context} ${f.value}`.trim(), t: f.t, unverified: f.verified ? [] : numbersIn(f.value) }))
-    record.content = { title: "", items: chronological([...items("point", old.topics), ...figures, ...items("decision", old.conclusions), ...items("open", old.conflicts)]) }
+    const figures = (old.figures ?? []).map((f): SummaryItem => ({ kind: "fact", text: `${f.context} ${f.value}`.trim(), t: f.t, unverified: f.verified ? [] : numbersIn(f.value) }))
+    record.content = { title: "", items: chronological([...items("fact", old.topics), ...figures, ...items("opinion", old.conclusions), ...items("open", old.conflicts)]) }
   }
 }
 
@@ -174,7 +175,7 @@ function cite(t: number | undefined, link: TimeLink): string {
   return t === undefined ? "" : ` ${link(t)}`
 }
 
-const MARKDOWN_MARK: Record<SummaryKind, string> = { point: "- ", decision: "- ✅ ", todo: "- [ ] ", open: "- ❓ " }
+const MARKDOWN_MARK: Record<SummaryKind, string> = { fact: "- 📄 ", opinion: "- 💬 ", todo: "- [ ] ", open: "- ❓ " }
 
 export function summaryMarkdown(record: SummaryRecord, link: TimeLink): string {
   const title = record.content?.title ? ` · ${record.content.title}` : ""

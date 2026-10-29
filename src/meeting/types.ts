@@ -26,7 +26,7 @@ export interface Utterance {
   text: string
 }
 
-export type SummaryKind = "point" | "decision" | "todo" | "open"
+export type SummaryKind = "fact" | "opinion" | "todo" | "open"
 
 export interface SummaryItem {
   kind: SummaryKind

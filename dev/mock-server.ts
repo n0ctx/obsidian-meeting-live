@@ -40,9 +40,9 @@ const server = createServer((req, res) => {
         content = JSON.stringify({
           title: "经营情况",
           items: [
-            { kind: "point", text: `讨论了${first.text.slice(0, 18)}…等问题`, t: first.t },
-            { kind: "point", text: "毛利率 45%（测试用错误数字）", t: first.t },
-            { kind: "decision", text: last.text.replace(/。$/, ""), t: last.t },
+            { kind: "fact", text: `讨论了${first.text.slice(0, 18)}…等问题`, t: first.t },
+            { kind: "fact", text: "毛利率 45%（测试用错误数字）", t: first.t },
+            { kind: "opinion", text: last.text.replace(/。$/, ""), t: last.t },
             { kind: "todo", text: "财务补充收入口径说明", t: last.t },
             { kind: "open", text: "收入为预计值，尚未经审计", t: last.t },
           ],
