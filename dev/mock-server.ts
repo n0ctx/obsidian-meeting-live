@@ -32,20 +32,20 @@ const server = createServer((req, res) => {
       const request = JSON.parse(body) as { messages: { role: string; content: string }[] }
       const user = request.messages.find((m) => m.role === "user")?.content ?? ""
       const lines = [...user.matchAll(/^\[(\d{2}:\d{2}:\d{2})\] (.+)$/gm)].map((m) => ({ t: m[1], text: m[2] }))
-      const isSummary = request.messages[0]?.content.includes("只输出一个 JSON 对象")
+      const isSummary = request.messages[0]?.content.includes("Output one JSON object only")
       let content: string
       if (isSummary) {
         const first = lines[0] ?? { t: "00:00:00", text: "" }
         const last = lines[lines.length - 1] ?? first
         content = JSON.stringify({
-          topics: [{ text: `讨论了${first.text.slice(0, 18)}…等问题`, t: first.t }],
-          conclusions: [{ text: last.text.replace(/。$/, ""), t: last.t }],
-          figures: [
-            { value: "三点二亿元", context: "今年预计收入", t: first.t },
-            { value: "45%", context: "毛利率（测试用错误数字）", t: last.t },
+          title: "经营情况",
+          items: [
+            { kind: "point", text: `讨论了${first.text.slice(0, 18)}…等问题`, t: first.t },
+            { kind: "point", text: "毛利率 45%（测试用错误数字）", t: first.t },
+            { kind: "decision", text: last.text.replace(/。$/, ""), t: last.t },
+            { kind: "todo", text: "财务补充收入口径说明", t: last.t },
+            { kind: "open", text: "收入为预计值，尚未经审计", t: last.t },
           ],
-          conflicts: [{ text: "收入为预计值，尚未经审计", t: first.t }],
-          followups: [{ text: "头部客户的合同期限与续约条件？", t: last.t }],
         })
       } else {
         content = `1.业务情况\n公司今年收入预计三点二亿元，去年为两亿一千万。\n\n待核实事项\n- 毛利率口径（来源 ${lines[1]?.t ?? "00:00:00"}）`

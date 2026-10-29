@@ -26,26 +26,21 @@ export interface Utterance {
   text: string
 }
 
-export interface SummaryPoint {
+export type SummaryKind = "point" | "decision" | "todo" | "open"
+
+export interface SummaryItem {
+  kind: SummaryKind
   text: string
   /** Timeline position of the supporting transcript line. */
   t?: number
-}
-
-export interface SummaryFigure {
-  value: string
-  context: string
-  t?: number
-  /** Whether the value literally appears in the source transcript window. */
-  verified: boolean
+  /** Numbers in the text that do not appear in the source transcript window. */
+  unverified: string[]
 }
 
 export interface SummaryContent {
-  topics: SummaryPoint[]
-  conclusions: SummaryPoint[]
-  figures: SummaryFigure[]
-  conflicts: SummaryPoint[]
-  followups: SummaryPoint[]
+  title: string
+  /** Key points in the order they were said. */
+  items: SummaryItem[]
 }
 
 export type SummaryStatus = "pending" | "running" | "done" | "failed"

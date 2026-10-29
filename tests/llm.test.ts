@@ -2,50 +2,74 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { chat, chatCompletionsUrl, chatRequestBody, extractCompletionText } from "../src/llm/client.ts"
 import { buildMinutesMessages, stripMeetingBlocks } from "../src/llm/minutes.ts"
-import { buildSummaryMessages, parseSummary, summaryMarkdown, verifyFigure } from "../src/llm/summary.ts"
+import { buildSummaryMessages, parseSummary, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
 import { dueCutoff, uncovered } from "../src/meeting/schedule.ts"
-import type { SummaryRecord, Utterance } from "../src/meeting/types.ts"
+import type { MeetingMeta, SummaryRecord, Utterance } from "../src/meeting/types.ts"
 
 const utterances: Utterance[] = [
   { startMs: 1000, endMs: 4000, text: "今年收入预计 3.2 亿元，去年 2.1 亿。" },
   { startMs: 65_000, endMs: 70_000, text: "毛利率百分之四十二，在手订单 1.5 亿。" },
 ]
 
-test("summary parsing snaps citations, verifies figures, tolerates fences", () => {
-  const raw = '```json\n{"topics":[{"text":"收入与毛利","t":"00:01:06"}],"conclusions":["收入增长"],"figures":[{"value":"3.2 亿元","context":"今年预计收入","t":"00:00:01"},{"value":"45%","context":"毛利率","t":"bad"}],"conflicts":[],"followups":[{"text":"订单周期？","t":"00:09:59"}]}\n```'
+test("summary parsing snaps citations, orders by time, flags unverified numbers, tolerates fences", () => {
+  const raw = '```json\n{"title":"收入与订单","items":[{"kind":"decision","text":"毛利率 45%","t":"00:01:06"},{"kind":"point","text":"今年预计收入 3.2 亿元","t":"00:00:01"},{"kind":"todo","text":"补充订单周期"},{"kind":"bogus","text":"在手订单 1.5 亿"}]}\n```'
   const content = parseSummary(raw, utterances)!
-  assert.equal(content.topics[0].t, 65_000)
-  assert.equal(content.conclusions[0].text, "收入增长")
-  assert.equal(content.conclusions[0].t, undefined)
-  assert.deepEqual(content.figures.map((f) => [f.value, f.verified, f.t]), [
-    ["3.2 亿元", true, 1000],
-    ["45%", false, undefined],
+  assert.equal(content.title, "收入与订单")
+  assert.deepEqual(content.items.map((i) => [i.kind, i.t, i.unverified]), [
+    ["point", 1000, []],
+    ["todo", undefined, []],
+    ["point", undefined, []],
+    ["decision", 65_000, ["45"]],
   ])
-  assert.equal(content.followups[0].t, 65_000)
   assert.equal(parseSummary("抱歉，我无法完成", utterances), undefined)
 })
 
-test("figure verification ignores separators but not different numbers", () => {
-  assert.equal(verifyFigure("3,000万", "收入 3000万 元"), true)
-  assert.equal(verifyFigure("1.5亿", "在手订单 1.5 亿"), true)
-  assert.equal(verifyFigure("1.6亿", "在手订单 1.5 亿"), false)
+test("number verification ignores separators but not different or partial numbers", () => {
+  assert.deepEqual(unverifiedNumbers("收入 3,000万", "收入 3000万 元"), [])
+  assert.deepEqual(unverifiedNumbers("订单 1.5亿", "在手订单 1.5 亿"), [])
+  assert.deepEqual(unverifiedNumbers("订单 1.6亿", "在手订单 1.5 亿"), ["1.6"])
+  assert.deepEqual(unverifiedNumbers("订单 5 亿", "在手订单 1.5 亿"), ["5"])
 })
 
 test("summary prompt carries contract, focus, timestamps and prior context", () => {
-  const previous: SummaryRecord[] = [{ index: 1, startMs: 0, endMs: 60_000, trigger: "auto", status: "done", attempts: 1, utterances: [1000], content: { topics: [{ text: "收入" }], conclusions: [], figures: [], conflicts: [], followups: [] } }]
+  const previous: SummaryRecord[] = [{ index: 1, startMs: 0, endMs: 60_000, trigger: "auto", status: "done", attempts: 1, utterances: [1000], content: { title: "收入", items: [{ kind: "point", text: "收入 3.2 亿", unverified: [] }] } }]
   const [system, user] = buildSummaryMessages("访谈", "关注订单", { startMs: 60_000, endMs: 120_000 }, utterances.slice(1), previous)
   assert.match(system.content, /plans, forecasts and estimates/)
   assert.match(system.content, /关注订单/)
-  assert.match(user.content, /Stage 1 \(00:00–01:00\): topics: 收入/)
+  assert.match(user.content, /Stage 1 \(00:00–01:00\) 收入: 收入 3\.2 亿/)
   assert.match(user.content, /\[00:01:05\] 毛利率/)
 })
 
-test("summary markdown renders sections and flags unverified figures", () => {
-  const record: SummaryRecord = { index: 2, startMs: 60_000, endMs: 120_000, trigger: "manual", status: "done", attempts: 1, utterances: [], content: { topics: [], conclusions: [{ text: "结论", t: 65_000 }], figures: [{ value: "45%", context: "毛利率", verified: false }], conflicts: [], followups: [] } }
+test("summary markdown lists items with kind marks, bold figures and flags unverified numbers", () => {
+  const record: SummaryRecord = {
+    index: 2, startMs: 60_000, endMs: 120_000, trigger: "manual", status: "done", attempts: 1, utterances: [],
+    content: { title: "毛利", items: [
+      { kind: "point", text: "毛利率 45%", t: 65_000, unverified: ["45"] },
+      { kind: "decision", text: "维持报价，Q3 收入 3.2 亿元", unverified: [] },
+      { kind: "todo", text: "周五前提交方案", unverified: [] },
+      { kind: "open", text: "是否含税未定", unverified: [] },
+    ] },
+  }
   const md = summaryMarkdown(record, (ms) => `@${ms}`)
-  assert.match(md, /## 阶段 2 · 00:01:00 – 00:02:00/)
-  assert.match(md, /- 结论 @65000/)
-  assert.match(md, /\*\*45%\*\* 毛利率（⚠ 原文未找到该数值，请核对）/)
+  assert.match(md, /## 阶段 2 · 00:01:00 – 00:02:00 · 毛利/)
+  assert.match(md, /^- 毛利率 \*\*45%\*\*（⚠ 原文未找到 45，请核对） @65000$/m)
+  assert.match(md, /^- ✅ 维持报价，Q3 收入 \*\*3\.2 亿元\*\*$/m)
+  assert.match(md, /^- \[ \] 周五前提交方案$/m)
+  assert.match(md, /^- ❓ 是否含税未定$/m)
+})
+
+test("legacy sectioned summaries become one time-ordered list without follow-ups", () => {
+  const legacy = { topics: [{ text: "订单", t: 65_000 }], conclusions: [{ text: "收入增长", t: 1000 }], figures: [{ value: "4500 台", context: "销量", t: 30_000, verified: false }], conflicts: [], followups: [{ text: "周期？" }] }
+  const meta = { summaries: [{ index: 1, startMs: 0, endMs: 120_000, trigger: "auto", status: "done", attempts: 1, utterances: [], content: legacy }] } as unknown as MeetingMeta
+  upgradeSummaries(meta)
+  assert.deepEqual(meta.summaries[0].content, {
+    title: "",
+    items: [
+      { kind: "decision", text: "收入增长", t: 1000, unverified: [] },
+      { kind: "point", text: "销量 4500 台", t: 30_000, unverified: ["4500"] },
+      { kind: "point", text: "订单", t: 65_000, unverified: [] },
+    ],
+  })
 })
 
 test("scheduling waits for grace and recognizer catch-up, and claims late utterances", () => {

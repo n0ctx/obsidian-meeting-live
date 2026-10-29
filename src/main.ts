@@ -1,6 +1,7 @@
 import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
 import { volcConfigProblem, volcConnector } from "./asr/volcConnection.ts"
 import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
+import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import { MeetingManager } from "./meeting/manager.ts"
 import type { MeetingSession } from "./meeting/session.ts"
 import { MeetingStore } from "./meeting/store.ts"
@@ -14,6 +15,8 @@ import { JOB_LANGUAGE, parseJobBlock, removeJobBlock } from "./asr/jobBlock.ts"
 import type { FileAsrPost } from "./asr/fileAsr.ts"
 import { MeetingCard, parseBlockId, type CardHost } from "./ui/card.ts"
 import { ConsentModal, MinutesModal } from "./ui/modals.ts"
+
+const LEGACY_SUMMARY_FOCUS = `Focus on the questions discussed, decisions and conclusions, key numbers and dates, disagreements or uncertainties, and useful follow-up questions.`
 
 export default class MeetingLivePlugin extends Plugin implements CardHost {
   override settings: MeetingLiveSettings = DEFAULT_SETTINGS
@@ -33,6 +36,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
 
   override async onload(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<MeetingLiveSettings> | null) }
+    // The previous default asked for follow-up questions, which stage summaries no longer include.
+    if (this.settings.summaryFocus === LEGACY_SUMMARY_FOCUS) this.settings.summaryFocus = DEFAULT_SUMMARY_FOCUS
     const store = new MeetingStore(this.app, () => this.settings.folder)
     this.manager = new MeetingManager(store, {
       settings: () => this.settings,

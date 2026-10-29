@@ -1,4 +1,5 @@
 import { Events } from "obsidian"
+import { upgradeSummaries } from "../llm/summary.ts"
 import { MeetingSession, type SessionEnv } from "./session.ts"
 import { newMeetingId, type MeetingStore } from "./store.ts"
 import { localTimestamp, type MeetingMeta } from "./types.ts"
@@ -75,6 +76,7 @@ export class MeetingManager extends Events {
       if (!entry) return undefined
       const metaText = await this.store.app.vault.adapter.read(this.store.path(entry.folder, "meeting.json"))
       const meta = JSON.parse(metaText) as MeetingMeta
+      upgradeSummaries(meta)
       const session = new MeetingSession(this.sessionEnv(), entry.folder, meta, await this.store.readTranscript(entry.folder))
       session.on("change", () => this.trigger("session-change", session))
       this.sessions.set(id, session)

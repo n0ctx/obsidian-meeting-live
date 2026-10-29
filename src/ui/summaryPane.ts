@@ -1,9 +1,11 @@
 import { Notice, setIcon } from "obsidian"
-import { summaryMarkdown } from "../llm/summary.ts"
+import { isEmptySummary, splitFigures, summaryMarkdown } from "../llm/summary.ts"
 import type { MeetingSession } from "../meeting/session.ts"
-import { formatClock, type SummaryPoint, type SummaryRecord } from "../meeting/types.ts"
+import { formatClock, type SummaryKind, type SummaryRecord } from "../meeting/types.ts"
 
 const TRIGGER_LABEL: Record<SummaryRecord["trigger"], string> = { auto: "", manual: "手动", final: "收尾" }
+const KIND_LABEL: Record<SummaryKind, string> = { point: "要点", decision: "结论", todo: "待办", open: "未决" }
+const KIND_ICON: Record<SummaryKind, string> = { point: "", decision: "check", todo: "square", open: "circle-help" }
 
 export class SummaryPane {
   readonly el: HTMLElement
@@ -100,7 +102,8 @@ export class SummaryPane {
       else this.collapsed.add(record.index)
       this.render()
     })
-    head.createSpan({ cls: "ml-stage-index", text: `阶段 ${record.index}` })
+    const name = record.content?.title || `阶段 ${record.index}`
+    head.createSpan({ cls: "ml-stage-index", text: name, attr: { title: name } })
     const range = head.createEl("button", { cls: "ml-stage-range", text: `${formatClock(record.startMs)} – ${formatClock(record.endMs)}`, attr: { "aria-label": "定位到该时段" } })
     range.addEventListener("click", () => this.onLocate?.(record.startMs))
     const tag = TRIGGER_LABEL[record.trigger]
@@ -136,45 +139,26 @@ export class SummaryPane {
       body.createDiv({ cls: "ml-raw", text: record.raw ?? "" })
       return
     }
-    const c = record.content
-    const points = (cls: string, label: string, icon: string, items: SummaryPoint[]) => {
-      if (!items.length) return
-      const section = body.createDiv({ cls: `ml-sec ${cls}` })
-      const h = section.createDiv({ cls: "ml-sec-head" })
-      setIcon(h.createSpan({ cls: "ml-sec-icon" }), icon)
-      h.createSpan({ text: label })
-      const ul = section.createEl("ul")
-      for (const item of items) {
-        const li = ul.createEl("li")
-        li.createSpan({ text: item.text })
-        this.cite(li, item.t)
-      }
+    if (isEmptySummary(record.content)) {
+      body.createDiv({ cls: "ml-raw is-muted", text: "本阶段没有可提炼的实质内容" })
+      return
     }
-    points("is-topics", "主要议题", "list", c.topics)
-    points("is-conclusions", "核心观点与结论", "circle-check", c.conclusions)
-    if (c.figures.length) {
-      const section = body.createDiv({ cls: "ml-sec is-figures" })
-      const h = section.createDiv({ cls: "ml-sec-head" })
-      setIcon(h.createSpan({ cls: "ml-sec-icon" }), "hash")
-      h.createSpan({ text: "关键数据" })
-      const grid = section.createDiv({ cls: "ml-figures" })
-      for (const f of c.figures) {
-        const fig = grid.createDiv({ cls: "ml-figure" })
-        fig.toggleClass("is-unverified", !f.verified)
-        fig.createDiv({ cls: "ml-figure-value", text: f.value })
-        fig.createDiv({ cls: "ml-figure-context", text: f.context })
-        const foot = fig.createDiv({ cls: "ml-figure-foot" })
-        if (!f.verified) {
-          const warn = foot.createSpan({ cls: "ml-figure-warn", attr: { "aria-label": "原文中没有找到这个数值，请对照转写核实" } })
-          setIcon(warn, "circle-alert")
-          warn.createSpan({ text: "原文未见" })
-        }
-        this.cite(foot, f.t)
+    const ul = body.createEl("ul", { cls: "ml-points" })
+    for (const item of record.content.items) {
+      const li = ul.createEl("li", { cls: `ml-point is-${item.kind}` })
+      const mark = li.createSpan({ cls: "ml-point-mark", attr: { "aria-label": KIND_LABEL[item.kind] } })
+      if (KIND_ICON[item.kind]) setIcon(mark, KIND_ICON[item.kind])
+      const text = li.createDiv({ cls: "ml-point-text" })
+      for (const part of splitFigures(item)) {
+        if (part.figure) text.createEl("strong", { cls: part.unverified ? "is-unverified" : "", text: part.text })
+        else text.appendText(part.text)
       }
+      if (item.unverified.length) {
+        const warn = text.createSpan({ cls: "ml-point-warn", attr: { "aria-label": `原文中没有找到 ${item.unverified.join("、")}，请对照转写核实` } })
+        setIcon(warn, "circle-alert")
+      }
+      this.cite(text, item.t)
     }
-    points("is-conflicts", "分歧与待核实", "triangle-alert", c.conflicts)
-    points("is-followups", "待追问", "circle-help", c.followups)
-    if (Object.values(c).every((list: unknown[]) => list.length === 0)) body.createDiv({ cls: "ml-raw is-muted", text: "本阶段没有可提炼的实质内容" })
   }
 
   private cite(parent: HTMLElement, t: number | undefined): void {

@@ -1,24 +1,31 @@
-import { formatClock, parseClock, type SummaryContent, type SummaryFigure, type SummaryPoint, type SummaryRecord, type Utterance } from "../meeting/types.ts"
+import { formatClock, parseClock, type MeetingMeta, type SummaryContent, type SummaryItem, type SummaryKind, type SummaryRecord, type Utterance } from "../meeting/types.ts"
 import type { ChatMessage } from "./client.ts"
 
-export const DEFAULT_SUMMARY_FOCUS = `Focus on the questions discussed, decisions and conclusions, key numbers and dates, disagreements or uncertainties, and useful follow-up questions.`
+export const DEFAULT_SUMMARY_FOCUS = `Focus on the questions discussed, decisions and conclusions, action items, key numbers and dates, and disagreements or uncertainties.`
 
 const CONTRACT = `You summarize one stage of a meeting from its raw speech-to-text transcript. Each line starts with a [timestamp].
 
 Summarize only the "Current stage" transcript. "Previous summaries" are context; do not repeat them.
 
+List the key points in the order they were said. Each point is one short sentence that reads on its own: keep the subject it refers to and its numbers, units, dates and names.
+
+Kinds:
+- point: what was discussed, reported or stated
+- decision: a decision or conclusion that was reached
+- todo: an action someone will take; include the owner and deadline only if stated
+- open: a disagreement, an unresolved question, or a line that may be misrecognized
+
 Rules:
-- Use only what the transcript says. Do not invent names, numbers or conclusions.
+- Use only what the transcript says. Do not invent names, numbers or conclusions, and do not add your own suggestions.
 - Keep plans, forecasts and estimates marked as such.
 - Keep numbers and units exactly as spoken.
-- Cite the supporting line for each item in "t", copying its timestamp.
-- Leave a field as an empty array when nothing fits. One short sentence per item.
+- Merge lines about the same thing into one point. Skip small talk and filler.
+- Cite the supporting line for each point in "t", copying its timestamp.
+- "title" names what this stage is about in a few words.
 - Write in the same language as the transcript.
 
-Fields: topics (questions discussed), conclusions (decisions and stated views), figures (value + what it refers to), conflicts (disagreements, contradictions, uncertain or possibly misrecognized items), followups (questions worth asking next).
-
 Output one JSON object only, no code fences:
-{"topics":[{"text":"","t":"00:00:00"}],"conclusions":[{"text":"","t":""}],"figures":[{"value":"","context":"","t":""}],"conflicts":[{"text":"","t":""}],"followups":[{"text":"","t":""}]}`
+{"title":"","items":[{"kind":"point","text":"","t":"00:00:00"}]}`
 
 export function transcriptLines(utterances: Utterance[]): string {
   return utterances.map((u) => `[${formatClock(u.startMs, true)}] ${u.text}`).join("\n")
@@ -31,8 +38,7 @@ function previousDigest(previous: SummaryRecord[]): string {
     .map((s) => {
       const label = `Stage ${s.index} (${formatClock(s.startMs)}–${formatClock(s.endMs)})`
       if (!s.content) return `${label}: ${(s.raw ?? "").slice(0, 400)}`
-      const join = (items: SummaryPoint[]) => items.map((i) => i.text).join("; ")
-      return `${label}: topics: ${join(s.content.topics)}; conclusions: ${join(s.content.conclusions)}`
+      return `${label}${s.content.title ? ` ${s.content.title}` : ""}: ${s.content.items.map((i) => i.text).join("; ")}`
     })
     .join("\n")
 }
@@ -54,18 +60,36 @@ export function buildSummaryMessages(title: string, focus: string, window: { sta
   ]
 }
 
-function normalizeForMatch(text: string): string {
-  return text.replace(/[\s,，、]/g, "").toLowerCase()
+const NUMBER = /\d+(?:[.,]\d+)*/g
+/** A number with its separators and magnitude, highlighted as one figure. */
+const FIGURE = /(?<![A-Za-z\d.])\d+(?:[.,:]\d+)*(?:\s?(?:%|[万亿]*元|[万亿]+))?/g
+
+const numbersIn = (text: string) => (text.match(NUMBER) ?? []).map((n) => n.replace(/,/g, ""))
+
+/** Numbers in the text that do not appear as whole numbers in the source, ignoring spaces and thousands separators. */
+export function unverifiedNumbers(text: string, source: string): string[] {
+  const haystack = source.replace(/[\s,，]/g, "")
+  const missing = numbersIn(text).filter((n) => !new RegExp(`(?<![\\d.])${n.replace(/\./g, "\\.")}(?!\\.?\\d)`).test(haystack))
+  return [...new Set(missing)]
 }
 
-/** A figure counts as verified when its value, or every number in it, appears in the source text. */
-export function verifyFigure(value: string, source: string): boolean {
-  const haystack = normalizeForMatch(source)
-  const needle = normalizeForMatch(value)
-  if (!needle) return false
-  if (haystack.includes(needle)) return true
-  const numbers = needle.match(/\d+(?:\.\d+)?/g)
-  return !!numbers && numbers.every((n) => haystack.includes(n))
+export interface TextPart {
+  text: string
+  figure: boolean
+  unverified: boolean
+}
+
+/** Splits text so figures can be emphasized, flagging those containing an unverified number. */
+export function splitFigures(item: SummaryItem): TextPart[] {
+  const parts: TextPart[] = []
+  let last = 0
+  for (const match of item.text.matchAll(FIGURE)) {
+    if (match.index > last) parts.push({ text: item.text.slice(last, match.index), figure: false, unverified: false })
+    parts.push({ text: match[0], figure: true, unverified: numbersIn(match[0]).some((n) => item.unverified.includes(n)) })
+    last = match.index + match[0].length
+  }
+  if (last < item.text.length) parts.push({ text: item.text.slice(last), figure: false, unverified: false })
+  return parts
 }
 
 /** Maps a cited time to the closest utterance start in the window, so links land on real lines. */
@@ -90,6 +114,17 @@ function extractJson(text: string): unknown {
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "")
 
+const KINDS: SummaryKind[] = ["point", "decision", "todo", "open"]
+
+/** Orders items by cited time; an uncited item stays right after the item before it. */
+function chronological(items: SummaryItem[]): SummaryItem[] {
+  let last = -Infinity
+  return items
+    .map((item, i) => ({ item, i, key: (last = item.t ?? last) }))
+    .sort((a, b) => a.key - b.key || a.i - b.i)
+    .map((x) => x.item)
+}
+
 export function parseSummary(text: string, utterances: Utterance[]): SummaryContent | undefined {
   let data: Record<string, unknown>
   try {
@@ -100,32 +135,37 @@ export function parseSummary(text: string, utterances: Utterance[]): SummaryCont
     return undefined
   }
   const source = utterances.map((u) => u.text).join("\n")
-  const points = (key: string): SummaryPoint[] =>
-    (Array.isArray(data[key]) ? (data[key] as unknown[]) : [])
-      .map((item) => {
-        const record = (item && typeof item === "object" ? item : { text: item }) as Record<string, unknown>
-        return { text: str(record.text), t: snapTime(record.t, utterances) }
-      })
-      .filter((p) => p.text)
-  const figures: SummaryFigure[] = (Array.isArray(data.figures) ? (data.figures as unknown[]) : [])
+  const items: SummaryItem[] = (Array.isArray(data.items) ? (data.items as unknown[]) : [])
     .map((item) => {
-      const record = (item && typeof item === "object" ? item : {}) as Record<string, unknown>
-      const value = str(record.value)
-      return { value, context: str(record.context), t: snapTime(record.t, utterances), verified: verifyFigure(value, source) }
+      const record = (item && typeof item === "object" ? item : { text: item }) as Record<string, unknown>
+      const kind = KINDS.find((k) => k === record.kind) ?? "point"
+      const body = str(record.text)
+      return { kind, text: body, t: snapTime(record.t, utterances), unverified: unverifiedNumbers(body, source) }
     })
-    .filter((f) => f.value)
-  const content: SummaryContent = {
-    topics: points("topics"),
-    conclusions: points("conclusions"),
-    figures,
-    conflicts: points("conflicts"),
-    followups: points("followups"),
+    .filter((i) => i.text)
+  return { title: str(data.title), items: chronological(items) }
+}
+
+interface LegacyContent {
+  topics?: { text: string; t?: number }[]
+  conclusions?: { text: string; t?: number }[]
+  figures?: { value: string; context: string; t?: number; verified: boolean }[]
+  conflicts?: { text: string; t?: number }[]
+}
+
+/** Converts summaries saved in the earlier sectioned layout; its follow-up suggestions are dropped. */
+export function upgradeSummaries(meta: MeetingMeta): void {
+  for (const record of meta.summaries) {
+    const old = record.content as LegacyContent | SummaryContent | undefined
+    if (!old || "items" in old) continue
+    const items = (kind: SummaryKind, list: { text: string; t?: number }[] = []): SummaryItem[] => list.map((p) => ({ kind, text: p.text, t: p.t, unverified: [] }))
+    const figures = (old.figures ?? []).map((f): SummaryItem => ({ kind: "point", text: `${f.context} ${f.value}`.trim(), t: f.t, unverified: f.verified ? [] : numbersIn(f.value) }))
+    record.content = { title: "", items: chronological([...items("point", old.topics), ...figures, ...items("decision", old.conclusions), ...items("open", old.conflicts)]) }
   }
-  return content
 }
 
 export function isEmptySummary(content: SummaryContent): boolean {
-  return Object.values(content).every((list: unknown[]) => list.length === 0)
+  return content.items.length === 0
 }
 
 export type TimeLink = (ms: number) => string
@@ -134,25 +174,18 @@ function cite(t: number | undefined, link: TimeLink): string {
   return t === undefined ? "" : ` ${link(t)}`
 }
 
+const MARKDOWN_MARK: Record<SummaryKind, string> = { point: "- ", decision: "- ✅ ", todo: "- [ ] ", open: "- ❓ " }
+
 export function summaryMarkdown(record: SummaryRecord, link: TimeLink): string {
-  const lines: string[] = [`## 阶段 ${record.index} · ${formatClock(record.startMs, true)} – ${formatClock(record.endMs, true)}`, ""]
+  const title = record.content?.title ? ` · ${record.content.title}` : ""
+  const lines: string[] = [`## 阶段 ${record.index} · ${formatClock(record.startMs, true)} – ${formatClock(record.endMs, true)}${title}`, ""]
   if (record.content) {
-    const section = (title: string, items: SummaryPoint[]) => {
-      if (items.length === 0) return
-      lines.push(`**${title}**`, ...items.map((i) => `- ${i.text}${cite(i.t, link)}`), "")
+    for (const item of record.content.items) {
+      const text = splitFigures(item).map((p) => (p.figure ? `**${p.text}**` : p.text)).join("")
+      const warn = item.unverified.length ? `（⚠ 原文未找到 ${item.unverified.join("、")}，请核对）` : ""
+      lines.push(`${MARKDOWN_MARK[item.kind]}${text}${warn}${cite(item.t, link)}`)
     }
-    section("主要议题", record.content.topics)
-    section("核心观点与结论", record.content.conclusions)
-    if (record.content.figures.length) {
-      lines.push(
-        "**关键数据**",
-        ...record.content.figures.map((f) => `- **${f.value}** ${f.context}${f.verified ? "" : "（⚠ 原文未找到该数值，请核对）"}${cite(f.t, link)}`),
-        "",
-      )
-    }
-    section("分歧与待核实", record.content.conflicts)
-    section("待追问", record.content.followups)
-    if (isEmptySummary(record.content)) lines.push("本阶段没有可提炼的实质内容。", "")
+    lines.push(isEmptySummary(record.content) ? "本阶段没有可提炼的实质内容。" : "", "")
   } else if (record.raw) {
     lines.push(record.raw, "")
   }
