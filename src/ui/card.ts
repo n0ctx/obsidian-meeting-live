@@ -20,7 +20,12 @@ export interface CardHost {
   openSettings(): void
   openPath(path: string): void
   revealFolder(session: MeetingSession): void
+  saveSettings(): Promise<void>
 }
+
+/** Neither column may be squeezed below this share of the card when side by side. */
+const MIN_SHARE = 0.3
+const DEFAULT_SHARE = 0.4
 
 const STATUS_LABEL: Record<MeetingStatus, string> = {
   idle: "未开始",
@@ -62,6 +67,7 @@ export class MeetingCard extends MarkdownRenderChild {
   private controls!: HTMLElement
   private chips!: HTMLElement
   private alertEl!: HTMLElement
+  private liveEl!: HTMLElement
   private body!: HTMLElement
   private footRow!: HTMLElement
   private waveform: Waveform | undefined
@@ -99,8 +105,14 @@ export class MeetingCard extends MarkdownRenderChild {
     this.build()
     const on = (name: string, fn: (...args: unknown[]) => void) => this.refs.push([session, session.on(name, fn)])
     on("change", () => this.update())
-    on("utterance", (u) => this.transcript?.append(u as Utterance))
-    on("interim", () => this.transcript?.renderInterim())
+    on("utterance", (u) => {
+      this.transcript?.append(u as Utterance)
+      this.renderLive()
+    })
+    on("interim", () => {
+      this.transcript?.renderInterim()
+      this.renderLive()
+    })
     on("gap", () => {
       this.transcript?.gapsChanged()
       this.player?.refresh()
@@ -171,7 +183,7 @@ export class MeetingCard extends MarkdownRenderChild {
   private build(): void {
     const session = this.session!
     this.root = this.containerEl.createDiv({ cls: "ml-card" })
-    this.root.dataset.tab = "transcript"
+    this.root.dataset.tab = "summary"
     this.root.createDiv({ cls: "ml-edge" })
 
     const head = this.root.createDiv({ cls: "ml-head" })
@@ -190,8 +202,8 @@ export class MeetingCard extends MarkdownRenderChild {
     this.statusEl = meta.createSpan({ cls: "ml-status" })
     this.statusEl.createSpan({ cls: "ml-dot" })
     this.statusText = this.statusEl.createSpan()
-    this.metaText = meta.createSpan({ cls: "ml-meta-text" })
     this.chips = meta.createSpan({ cls: "ml-chips" })
+    this.metaText = meta.createSpan({ cls: "ml-meta-text" })
 
     const side = head.createDiv({ cls: "ml-head-side" })
     const meter = side.createDiv({ cls: "ml-meter" })
@@ -200,6 +212,11 @@ export class MeetingCard extends MarkdownRenderChild {
     this.controls = side.createDiv({ cls: "ml-controls" })
 
     this.alertEl = this.root.createDiv({ cls: "ml-alert" })
+    this.liveEl = this.root.createEl("button", { cls: "ml-live", attr: { "aria-label": "查看完整转写" } })
+    this.liveEl.addEventListener("click", () => {
+      this.root.dataset.tab = "transcript"
+      this.syncTabs()
+    })
     this.body = this.root.createDiv({ cls: "ml-body" })
 
     const foot = this.root.createDiv({ cls: "ml-foot" })
@@ -238,6 +255,7 @@ export class MeetingCard extends MarkdownRenderChild {
     this.iconButton(tActions, "file-text", "打开原始转写文件", () => this.host.openPath(session.transcriptPath))
     this.transcript = new TranscriptPane(panes, session, tActions)
     this.transcript.onSeek = (ms) => void this.player?.play(ms)
+    this.buildDivider(panes)
 
     const sActions = createDiv({ cls: "ml-pane-actions" })
     const now = sActions.createEl("button", { cls: "ml-btn is-small ml-summarize", text: "立即总结" })
@@ -251,6 +269,49 @@ export class MeetingCard extends MarkdownRenderChild {
       this.player?.seek(ms, this.player.playing)
     }
     this.syncTabs()
+  }
+
+  /** Drag handle between the side-by-side panes; the chosen split is shared by every meeting card. */
+  private buildDivider(panes: HTMLElement): void {
+    const divider = panes.createDiv({ cls: "ml-divider", attr: { role: "separator", tabindex: "0", "aria-orientation": "vertical", "aria-label": "调整转写与摘要的宽度" } })
+    const apply = (share: number) => {
+      const value = Math.min(1 - MIN_SHARE, Math.max(MIN_SHARE, share))
+      panes.style.setProperty("--ml-transcript-share", String(value))
+      divider.setAttr("aria-valuenow", String(Math.round(value * 100)))
+      return value
+    }
+    const commit = (share: number) => {
+      this.host.settings.transcriptShare = apply(share)
+      void this.host.saveSettings()
+    }
+    divider.setAttr("aria-valuemin", String(MIN_SHARE * 100))
+    divider.setAttr("aria-valuemax", String((1 - MIN_SHARE) * 100))
+    apply(this.host.settings.transcriptShare)
+    const shareAt = (x: number) => {
+      const rect = panes.getBoundingClientRect()
+      return (x - rect.left) / rect.width
+    }
+    divider.addEventListener("pointerdown", (e) => {
+      e.preventDefault()
+      divider.setPointerCapture(e.pointerId)
+      divider.addClass("is-dragging")
+    })
+    divider.addEventListener("pointermove", (e) => {
+      if (divider.hasPointerCapture(e.pointerId)) apply(shareAt(e.clientX))
+    })
+    divider.addEventListener("pointerup", (e) => {
+      if (!divider.hasPointerCapture(e.pointerId)) return
+      divider.releasePointerCapture(e.pointerId)
+      divider.removeClass("is-dragging")
+      commit(shareAt(e.clientX))
+    })
+    divider.addEventListener("dblclick", () => commit(DEFAULT_SHARE))
+    divider.addEventListener("keydown", (e) => {
+      const step = e.key === "ArrowLeft" ? -0.02 : e.key === "ArrowRight" ? 0.02 : 0
+      if (!step) return
+      e.preventDefault()
+      commit(this.host.settings.transcriptShare + step)
+    })
   }
 
   private buildHero(): void {
@@ -318,6 +379,7 @@ export class MeetingCard extends MarkdownRenderChild {
     }
     this.renderControls()
     this.renderAlert()
+    this.renderLive()
     this.tick()
     this.transcript?.updateMeta()
     this.summaries?.render()
@@ -338,6 +400,7 @@ export class MeetingCard extends MarkdownRenderChild {
     this.renderChips()
     if (session.status === "recording") this.summaries?.renderNext()
     this.player?.refresh()
+    this.root.toggleClass("is-playing", !!this.player?.playing)
   }
 
   private renderChips(): void {
@@ -350,7 +413,6 @@ export class MeetingCard extends MarkdownRenderChild {
         const backlog = session.asrBacklogMs
         const text = session.asrState === "reconnecting" && backlog > 1500 ? `${label} · 已缓冲 ${Math.round(backlog / 1000)}s` : label
         chips.push({ icon: session.asrState === "live" ? "audio-lines" : session.asrState === "failed" || session.asrState === "reconnecting" ? "wifi-off" : "captions", text, tone, title: session.asrDetail })
-        if (session.deviceLabel) chips.push({ icon: "mic", text: session.deviceLabel.replace(/^Default - /, "").replace(/\s*\(.*\)$/, ""), tone: "idle" })
       }
       if (!session.llmProblem && session.status === "recording" && this.host.settings.autoSummary) {
         const running = session.meta.summaries.some((s) => s.status === "running")
@@ -358,6 +420,8 @@ export class MeetingCard extends MarkdownRenderChild {
       }
       const save = session.saveState
       chips.push({ icon: save === "error" ? "triangle-alert" : "check", text: save === "error" ? "保存失败" : save === "saving" ? "保存中" : "已保存", tone: save === "error" ? "error" : "idle" })
+      // Least important last: it is the first to drop when the header runs out of room.
+      if (live && session.deviceLabel) chips.push({ icon: "mic", text: session.deviceLabel.replace(/^Default - /, "").replace(/\s*\(.*\)$/, ""), tone: "idle" })
     }
     const key = JSON.stringify(chips.map((c) => [c.icon, c.text, c.tone, c.title]))
     if (this.chips.dataset.key === key) return
@@ -492,6 +556,19 @@ export class MeetingCard extends MarkdownRenderChild {
       const b = this.alertEl.createEl("button", { cls: "ml-link", text: label })
       b.addEventListener("click", action)
     }
+  }
+
+  /** The latest speech, for following the meeting while the summary tab is open. */
+  private renderLive(): void {
+    const session = this.session!
+    const interims = session.interims
+    const latest = interims.length ? { startMs: interims[0].startMs, text: interims.map((u) => u.text).join("") } : session.utterances.at(-1)
+    this.liveEl.empty()
+    this.liveEl.toggleClass("is-visible", session.isLive && !!latest)
+    if (!session.isLive || !latest) return
+    this.liveEl.createSpan({ cls: `ml-live-ts ${interims.length ? "is-live" : ""}`, text: formatClock(latest.startMs) })
+    const text = this.liveEl.createSpan({ cls: "ml-live-text" }).createSpan({ text: latest.text })
+    if (interims.length) text.createSpan({ cls: "ml-caret" })
   }
 
   private renderFoot(): void {

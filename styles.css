@@ -85,21 +85,30 @@
 .ml-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px 28px;
+  gap: 10px 20px;
   align-items: center;
-  padding: 18px var(--ml-pad) 20px;
+  padding: 12px var(--ml-pad);
 }
 
 .ml-card[data-status="recording"] .ml-head { background: linear-gradient(180deg, color-mix(in srgb, var(--ml-rec) 5%, transparent), transparent 90%); }
 
-.ml-head-main { min-width: 0; }
+.ml-head-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
 
+/* One line: items that do not fit wrap onto a hidden second line instead of being cut mid-word. */
 .ml-meta {
   display: flex;
+  flex: 1 1 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
+  gap: 0 12px;
   min-width: 0;
+  height: 22px;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -147,19 +156,22 @@
 
 .ml-card input.ml-title {
   display: block;
+  flex: 0 1 auto;
+  field-sizing: content;
   height: auto;
-  width: calc(100% + 12px);
-  margin: 0 -6px 6px;
+  min-width: 6em;
+  max-width: 100%;
+  margin: 0 -6px;
   padding: 2px 6px;
   border: none !important;
   border-radius: 6px;
   background: transparent !important;
   box-shadow: none !important;
   color: var(--text-normal);
-  font-size: 22px !important;
+  font-size: 17px !important;
   font-weight: 650;
-  line-height: 1.3;
-  letter-spacing: -0.015em;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
 }
 
@@ -194,9 +206,8 @@
 
 .ml-head-side {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
 }
 
 .ml-meter {
@@ -208,7 +219,7 @@
 .ml-clock {
   color: var(--text-normal);
   font-family: var(--ml-mono);
-  font-size: 26px;
+  font-size: 19px;
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -220,8 +231,8 @@
 
 .ml-wave {
   display: block;
-  width: 124px;
-  height: 30px;
+  width: 88px;
+  height: 24px;
 }
 
 .ml-card:not([data-status="recording"], [data-status="paused"], [data-status="stopping"]) .ml-wave { display: none; }
@@ -309,6 +320,54 @@
 
 .ml-link:hover { text-decoration: underline; }
 
+/* ------------------------------------------------------------------ live strip */
+
+.ml-live {
+  display: none;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 6px;
+  width: 100%;
+  height: auto !important;
+  padding: 10px calc(var(--ml-pad) - 2px) 12px calc(var(--ml-pad) - 10px) !important;
+  border: none !important;
+  border-top: 1px solid var(--ml-line) !important;
+  border-radius: 0;
+  background: none !important;
+  color: var(--text-normal);
+  text-align: left;
+  font-weight: 400;
+  white-space: normal;
+}
+
+.ml-card[data-tab="summary"] .ml-live.is-visible { display: grid; }
+.ml-card.is-hero .ml-live { display: none; }
+.ml-live:hover { background: var(--ml-softer) !important; }
+
+.ml-live-ts {
+  align-self: end;
+  padding: 1px 4px;
+  color: var(--text-faint);
+  font-family: var(--ml-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ml-live-ts.is-live { color: var(--ml-rec); }
+
+/* Two lines, anchored to the newest words; older lines scroll out of view at the top. */
+.ml-live-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: calc(2 * 1.65em);
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.65;
+  mask-image: linear-gradient(180deg, transparent, #000 0.9em);
+}
+
 /* ------------------------------------------------------------------ body */
 
 .ml-body {
@@ -353,15 +412,27 @@
 .ml-card[data-tab="transcript"] .ml-pane-summary,
 .ml-card[data-tab="summary"] .ml-pane-transcript { display: none; }
 
-@container (min-width: 680px) {
+@container (min-width: 960px) {
+  .ml-card[data-tab] .ml-live.is-visible { display: none; }
   .ml-tabs { display: none; }
-  .ml-panes { grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); border-top: none; }
+  /* The summary is read during the meeting, so it takes the wider column unless the divider is moved. */
+  .ml-panes {
+    grid-template-columns: calc(var(--ml-transcript-share, 0.4) * 100%) 1px minmax(0, 1fr);
+    border-top: none;
+  }
+  .ml-panes .ml-divider { display: block; }
+  /* In the narrower transcript column the time sits at the start of the text instead of in its own column. */
+  .ml-panes .ml-pane-transcript .ml-line { display: block; padding-left: 10px; }
+  .ml-panes .ml-pane-transcript .ml-ts { display: inline; margin: 0 4px 0 -4px; vertical-align: 1px; }
+  .ml-panes .ml-pane-transcript .ml-text { display: inline; }
   .ml-card .ml-pane { display: flex !important; }
-  .ml-pane-summary { border-left: 1px solid var(--ml-line); background: var(--ml-softer); }
+  .ml-pane-summary { background: var(--ml-softer); }
   .ml-panes .ml-pane-head { padding-top: 10px; }
 }
 
-@container (max-width: 679px) {
+@container (max-width: 959px) {
+  /* The live strip already shows speech coming in; the header keeps its room for status. */
+  .ml-wave { display: none; }
   .ml-pane-title > span:first-child { display: none; }
 }
 
@@ -373,8 +444,29 @@
   .ml-ctl { padding: 0 10px; }
   .ml-ctl.is-record.is-hero .ml-ctl-label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
   .ml-wave { width: 72px; }
-  .ml-clock { font-size: 22px; }
+  .ml-clock { font-size: 17px; }
 }
+
+.ml-divider {
+  position: relative;
+  z-index: 1;
+  display: none;
+  background: var(--ml-line);
+  cursor: col-resize;
+  touch-action: none;
+  transition: background 120ms ease;
+}
+
+/* A wider grab area than the 1px line it draws. */
+.ml-divider::before {
+  content: "";
+  position: absolute;
+  inset: 0 -5px;
+}
+
+.ml-divider:hover,
+.ml-divider.is-dragging { background: var(--ml-accent); }
+.ml-divider:focus-visible { outline: 2px solid color-mix(in srgb, var(--ml-accent) 70%, transparent); outline-offset: 0; }
 
 .ml-pane {
   position: relative;
@@ -424,7 +516,7 @@
 .ml-icon-btn svg { width: 15px; height: 15px; }
 
 .ml-scroll {
-  height: clamp(260px, 46vh, 520px);
+  height: clamp(320px, 60vh, 720px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 6px 0 20px;
@@ -484,8 +576,8 @@
   user-select: text;
 }
 
-.ml-line.is-interim { display: none; margin: 0 calc(var(--ml-pad) - 12px) 0 calc(var(--ml-pad) - 14px); }
-.ml-line.is-interim.is-visible { display: grid; }
+.ml-line.is-interim { margin: 0 calc(var(--ml-pad) - 12px) 0 calc(var(--ml-pad) - 14px); }
+.ml-line.is-interim:not(.is-visible) { display: none !important; }
 .ml-line.is-interim .ml-text { color: var(--text-muted); }
 
 .ml-caret {
@@ -831,7 +923,8 @@
   background: var(--ml-softer);
 }
 
-.ml-card.is-hero .ml-foot { display: none; }
+.ml-card.is-hero .ml-foot,
+.ml-card:is([data-status="recording"], [data-status="stopping"]):not(.is-playing) .ml-foot { display: none; }
 
 .ml-player {
   display: flex;

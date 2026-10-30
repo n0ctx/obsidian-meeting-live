@@ -27,6 +27,8 @@ export interface MeetingLiveSettings {
   autoSummary: boolean
   summaryIntervalMin: number
   summaryFocus: string
+  /** Share of the card width given to the transcript when it sits beside the summary. */
+  transcriptShare: number
   minutesPrompt: string
   consentAccepted: boolean
 }
@@ -52,6 +54,7 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   autoSummary: true,
   summaryIntervalMin: 5,
   summaryFocus: DEFAULT_SUMMARY_FOCUS,
+  transcriptShare: 0.4,
   minutesPrompt: DEFAULT_MINUTES_PROMPT,
   consentAccepted: false,
 }
