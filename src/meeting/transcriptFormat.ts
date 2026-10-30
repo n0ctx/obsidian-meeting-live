@@ -1,4 +1,4 @@
-import { formatClock, type TranscriptGap, type Utterance } from "./types.ts"
+import { formatClock, type MeetingMeta, type TranscriptGap, type Utterance } from "./types.ts"
 
 const UTTERANCE_LINE = /^\[(\d{2}:\d{2}:\d{2})\] (.*) \^t(\d+)-(\d+)\s*$/
 
@@ -6,16 +6,15 @@ export function blockId(u: Pick<Utterance, "startMs" | "endMs">): string {
   return `t${Math.round(u.startMs)}-${Math.round(u.endMs)}`
 }
 
-export function transcriptHeader(meetingId: string, title: string, notePath: string): string {
-  const note = notePath.replace(/\.md$/, "")
+export function transcriptHeader(meta: Pick<MeetingMeta, "id" | "notePath" | "createdAt">): string {
+  const note = meta.notePath.replace(/\.md$/, "")
   return [
     "---",
-    `meeting: ${meetingId}`,
+    `meeting: ${meta.id}`,
     "type: meeting-transcript",
     `note: "[[${note}]]"`,
+    `date: ${meta.createdAt.slice(0, 10)}`,
     "---",
-    "",
-    `# 原始转写 · ${title}`,
     "",
     "> [!info] 由火山引擎实时语音识别生成的原始转写，按录音时间轴记录。AI 内容另存于摘要与纪要文件，不会改写本文件。",
     "",
@@ -26,6 +25,11 @@ export function transcriptHeader(meetingId: string, title: string, notePath: str
 export function utteranceLine(u: Utterance): string {
   const text = u.text.replace(/\s*\n\s*/g, " ").trim()
   return `[${formatClock(u.startMs, true)}] ${text} ^${blockId(u)}\n\n`
+}
+
+/** Marks where an audio segment starts in the transcript, playable in place. */
+export function audioLine(path: string): string {
+  return `![[${path}]]\n\n`
 }
 
 export function gapLine(gap: TranscriptGap): string {

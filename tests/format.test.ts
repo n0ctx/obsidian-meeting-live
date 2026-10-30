@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { decodeClientFrame, decodeServerFrame, encodeAudio, encodeFullRequest, encodeServerError, encodeServerResult } from "../src/asr/volcProtocol.ts"
-import { gapLine, parseTranscript, transcriptHeader, utteranceLine } from "../src/meeting/transcriptFormat.ts"
+import { audioLine, gapLine, parseTranscript, transcriptHeader, utteranceLine } from "../src/meeting/transcriptFormat.ts"
 import { formatClock, parseClock } from "../src/meeting/types.ts"
 
 test("client and server frames round-trip", () => {
@@ -19,7 +19,8 @@ test("client and server frames round-trip", () => {
 
 test("transcript markdown round-trips and ignores other lines", () => {
   const md =
-    transcriptHeader("m-1", "访谈", "Interview/a.md") +
+    transcriptHeader({ id: "m-1", notePath: "Interview/a.md", createdAt: "2026-10-27T14:30:00+08:00" }) +
+    audioLine("Meetings/a/audio/a 录音 01.ogg") +
     utteranceLine({ startMs: 3200, endMs: 5600, text: "公司去年收入 3 亿，\n毛利 40%" }) +
     gapLine({ startMs: 6000, endMs: 9000, reason: "网络中断" }) +
     utteranceLine({ startMs: 9100, endMs: 9900, text: "[注意] ^ 符号" }) +

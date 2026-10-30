@@ -70,7 +70,8 @@ test("a failed write-up retries without re-running recognition, then replaces th
   assert.equal(job.failedAt, "writing")
   assert.ok(job.recognized)
   assert.equal(asrCalls, 2)
-  assert.deepEqual(created, ["Meetings/录音转写/2026-10-27 访谈 原始转写.md"])
+  assert.deepEqual(created, ["Meetings/录音转写/访谈 原始转写.md"])
+  assert.match(files["Meetings/录音转写/访谈 原始转写.md"], /^---\ntype: audio-transcript\nnote: "\[\[访谈\]\]"\ndate: 2026-10-27\n/)
   assert.match(files["访谈.md"], /```meeting-live-job\nid: j-/)
 
   done = finished()
@@ -81,7 +82,7 @@ test("a failed write-up retries without re-running recognition, then replaces th
   assert.equal(created.length, 1, "retry must not write a second raw transcript")
   assert.doesNotMatch(files["访谈.md"], /meeting-live-job/)
   assert.match(files["访谈.md"], /^## 速记\n- 李总\n\n> \[!info\] 访谈记录由 m 根据录音「访谈.mp3」/)
-  assert.match(files["访谈.md"], /> 原始转写：\[\[Meetings\/录音转写\/2026-10-27 访谈 原始转写\|/)
+  assert.match(files["访谈.md"], /> 原始转写：\[\[Meetings\/录音转写\/访谈 原始转写\|/)
   assert.match(files["访谈.md"], /### 一、财务\n- 收入3亿\n$/)
   assert.equal(jobs.get(job.id), undefined)
 })

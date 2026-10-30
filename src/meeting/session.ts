@@ -8,8 +8,8 @@ import { buildMinutesMessages } from "../llm/minutes.ts"
 import { buildOverviewMessages, buildSummaryMessages, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
-import { SUMMARY_FILE, TRANSCRIPT_FILE, type MeetingStore } from "./store.ts"
-import { blockId, gapLine, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
+import { MINUTES_FILE, SUMMARY_FILE, TRANSCRIPT_FILE, meetingFile, movedPath, noteName, type MeetingStore } from "./store.ts"
+import { audioLine, blockId, gapLine, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
 import { formatClock, formatDate, formatDateTime, totalDuration, type AudioFormat, type AudioSegment, type MeetingMeta, type SummaryRecord, type TranscriptGap, type Utterance } from "./types.ts"
 
 export interface SessionEnv {
@@ -30,12 +30,14 @@ const SUMMARY_RETRY_MS = [5000, 20000]
 const MAX_SUMMARY_ATTEMPTS = 3
 const SAVE_DEBOUNCE_MS = 2000
 
+const basename = (path: string) => path.split("/").pop()!.replace(/\.md$/, "")
+
 /**
  * Runtime of one meeting. Lives in the plugin, not in any rendered card, so re-rendering,
  * switching notes or changing view mode never interrupts recording or recognition.
  */
 export class MeetingSession extends Events {
-  readonly folder: string
+  folder: string
   meta: MeetingMeta
   utterances: Utterance[] = []
   interims: Utterance[] = []
@@ -90,11 +92,11 @@ export class MeetingSession extends Events {
   }
 
   get transcriptPath(): string {
-    return this.env.store.path(this.folder, TRANSCRIPT_FILE)
+    return this.env.store.path(this.folder, meetingFile(this.meta.name, TRANSCRIPT_FILE))
   }
 
   get summaryPath(): string {
-    return this.env.store.path(this.folder, SUMMARY_FILE)
+    return this.env.store.path(this.folder, meetingFile(this.meta.name, SUMMARY_FILE))
   }
 
   get llmProblem(): string | undefined {
@@ -144,6 +146,7 @@ export class MeetingSession extends Events {
       this.meta.status = "ended"
       await this.saveNow()
       this.emitChange()
+      void this.syncName()
     })
   }
 
@@ -186,11 +189,12 @@ export class MeetingSession extends Events {
   }
 
   private async openSegment(capture: AudioCapture, format: AudioFormat): Promise<void> {
-    const path = await this.env.store.audioFile(this.folder, this.meta.segments.length + 1, format)
+    const path = await this.env.store.audioFile(this.folder, this.meta.name, this.meta.segments.length + 1, format)
     this.recorder = await SegmentRecorder.create(this.env.store.fullPath(path), format, capture.sampleRate, capture.channels, (error) => this.onRecorderError(error))
     this.liveFrames = 0
     this.liveSegment = { file: path, format, startMs: this.durationMs, durationMs: 0, startedAt: new Date().toISOString(), sampleRate: capture.sampleRate, channels: capture.channels }
     this.meta.segments.push(this.liveSegment)
+    void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, audioLine(path)))
   }
 
   private startAsr(): void {
@@ -235,7 +239,7 @@ export class MeetingSession extends Events {
     this.liveSegment = undefined
     await this.asr?.end()
     this.levels.fill(0)
-    for (const gap of this.meta.gaps.slice(this.runGapStart)) void this.writeIo(() => this.env.store.appendTranscript(this.folder, gapLine(gap)))
+    for (const gap of this.meta.gaps.slice(this.runGapStart)) void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, gapLine(gap)))
     await this.saveNow()
     this.emitChange()
   }
@@ -301,7 +305,7 @@ export class MeetingSession extends Events {
     const index = this.utterances.findIndex((x) => x.startMs > u.startMs)
     if (index < 0) this.utterances.push(u)
     else this.utterances.splice(index, 0, u)
-    void this.writeIo(() => this.env.store.appendTranscript(this.folder, utteranceLine(u)))
+    void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, utteranceLine(u)))
     this.trigger("utterance", u)
   }
 
@@ -401,7 +405,7 @@ export class MeetingSession extends Events {
     }
     this.trigger("summary")
     await this.saveNow()
-    if (record.status === "done") void this.writeIo(() => this.env.store.writeSummaries(this.folder, this.summariesMarkdown()))
+    if (record.status === "done") void this.writeIo(() => this.env.store.write(this.summaryPath, this.summariesMarkdown()))
   }
 
   /** Completed stage summaries not yet merged into the overview. */
@@ -446,7 +450,7 @@ export class MeetingSession extends Events {
       this.overviewRunning = false
       this.trigger("summary")
       await this.saveNow()
-      void this.writeIo(() => this.env.store.writeSummaries(this.folder, this.summariesMarkdown()))
+      void this.writeIo(() => this.env.store.write(this.summaryPath, this.summariesMarkdown()))
     }
   }
 
@@ -461,6 +465,8 @@ export class MeetingSession extends Events {
       "---",
       `meeting: ${this.meta.id}`,
       "type: meeting-summaries",
+      `note: "[[${this.meta.notePath.replace(/\.md$/, "")}]]"`,
+      `date: ${this.meta.createdAt.slice(0, 10)}`,
       `transcript: "[[${this.transcriptPath.replace(/\.md$/, "")}]]"`,
       "---",
       "",
@@ -492,14 +498,16 @@ export class MeetingSession extends Events {
         notes,
       })
       const text = await llm.complete(messages)
-      const path = await this.env.store.uniquePath(this.folder, "正式纪要", "md")
+      const path = await this.env.store.uniquePath(this.folder, meetingFile(this.meta.name, MINUTES_FILE), "md")
       const note = this.meta.notePath.replace(/\.md$/, "")
       const doc = [
         "---",
         `meeting: ${this.meta.id}`,
         "type: meeting-minutes",
         `note: "[[${note}]]"`,
+        `date: ${this.meta.createdAt.slice(0, 10)}`,
         `transcript: "[[${this.transcriptPath.replace(/\.md$/, "")}]]"`,
+        ...(this.meta.summaries.some((s) => s.status === "done") ? [`summary: "[[${this.summaryPath.replace(/\.md$/, "")}]]"`] : []),
         `model: ${llm.model}`,
         `generated: ${formatDateTime(new Date())}`,
         "---",
@@ -521,6 +529,7 @@ export class MeetingSession extends Events {
       throw error
     } finally {
       this.emitChange()
+      void this.syncName()
     }
   }
 
@@ -534,9 +543,31 @@ export class MeetingSession extends Events {
     this.emitChange()
   }
 
-  setNotePath(path: string): void {
+  /** Follows the note to a new path; a title never edited by hand follows its name. */
+  setNotePath(path: string): Promise<unknown> {
+    if (this.meta.title === basename(this.meta.notePath)) this.meta.title = basename(path)
     this.meta.notePath = path
     void this.saveNow()
+    this.emitChange()
+    return this.syncName()
+  }
+
+  /** Renames the meeting folder and files after the note, once nothing is recording or writing minutes into them. */
+  syncName(): Promise<unknown> {
+    if (!this.meta.name || this.isLive || this.minutes.status === "running") return Promise.resolve()
+    return this.writeIo(async () => {
+      const from = this.meta.name
+      if (!from || this.isLive) return
+      const { folder, name } = await this.env.store.renameMeeting(this.folder, from, noteName(this.meta.notePath))
+      if (name === from) return
+      const moved = (path: string) => movedPath(path, this.folder, folder, from, name)
+      for (const segment of this.meta.segments) segment.file = moved(segment.file)
+      this.meta.minutes = this.meta.minutes.map(moved)
+      this.meta.name = name
+      this.folder = folder
+      await this.env.store.saveMeta(folder, structuredClone(this.meta))
+      this.emitChange()
+    })
   }
 
   private writeIo(task: () => Promise<void>): Promise<unknown> {

@@ -38,7 +38,7 @@ Network use:
 
 Stored locally:
 
-- Recordings, raw transcripts, summaries and meeting metadata go to a folder in your vault (default `Meetings/`). AI output is kept in separate files and never overwrites the raw transcript or audio.
+- Recordings, raw transcripts, summaries and meeting metadata go to a folder in your vault (default `Meetings/`), one subfolder per meeting. The subfolder and its files are named after the note, and are renamed with it once the meeting is no longer recording. AI output is kept in separate files and never overwrites the raw transcript or audio.
 - Settings and prompts are saved only in the plugin's `data.json` inside your vault.
 - API keys are kept in Obsidian's secret storage; the settings file only holds each secret's name.
 

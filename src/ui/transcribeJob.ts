@@ -115,11 +115,11 @@ export class TranscribeJob {
   private async saveRawTranscript(result: FileAsrResult): Promise<string> {
     const folder = normalizeFolder(this.deps.transcriptFolder())
     if (!this.app.vault.getAbstractFileByPath(folder)) await this.app.vault.createFolder(folder)
-    const base = `${folder}/${formatDate(new Date(this.source.modified))} ${this.target.basename} 原始转写`
+    const base = `${folder}/${this.target.basename} 原始转写`
     let path = `${base}.md`
     for (let n = 2; this.app.vault.getAbstractFileByPath(path); n++) path = `${base} ${n}.md`
     const body = renderInterviewRecord(result, { title: `${this.target.basename} 原始转写`, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), resourceId: this.auth.resourceId }, true)
-    await this.app.vault.create(path, `---\ntype: audio-transcript\nnote: "[[${this.target.path.replace(/\.md$/, "")}]]"\nsource: "${this.source.name}"\n---\n\n${body}`)
+    await this.app.vault.create(path, `---\ntype: audio-transcript\nnote: "[[${this.target.path.replace(/\.md$/, "")}]]"\ndate: ${formatDate(new Date(this.source.modified))}\nsource: "${this.source.name}"\n---\n\n${body}`)
     return path
   }
 

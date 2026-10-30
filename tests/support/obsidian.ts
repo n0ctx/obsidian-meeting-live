@@ -29,10 +29,31 @@ export class Notice {
 
 export class TFile {
   path: string
+  name: string
   basename: string
+  parent: TFolder | null = null
   constructor(path: string) {
     this.path = path
-    this.basename = path.split("/").pop()!.replace(/\.md$/, "")
+    this.name = path.split("/").pop()!
+    this.basename = this.name.replace(/\.md$/, "")
+  }
+}
+
+export class TFolder {
+  path: string
+  parent: TFolder | null = null
+  children: (TFile | TFolder)[]
+  constructor(path: string, children: (TFile | TFolder)[] = []) {
+    this.path = path
+    this.children = children
+    for (const child of children) child.parent = this
+  }
+}
+
+export class Vault {
+  static recurseChildren(root: TFolder, callback: (file: TFile | TFolder) => unknown) {
+    callback(root)
+    for (const child of root.children) child instanceof TFolder ? Vault.recurseChildren(child, callback) : callback(child)
   }
 }
 

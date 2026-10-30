@@ -19,7 +19,7 @@ function setup(reply: (messages: ChatMessage[]) => string) {
     store: {
       path: (folder: string, name: string) => `${folder}/${name}`,
       saveMeta: async () => undefined,
-      writeSummaries: async (_folder: string, markdown: string) => void (files.summaries = markdown),
+      write: async (_path: string, markdown: string) => void (files.summaries = markdown),
     },
     settings: () => DEFAULT_SETTINGS,
     llm: () => ({
@@ -32,7 +32,7 @@ function setup(reply: (messages: ChatMessage[]) => string) {
       },
     }),
   } as unknown as SessionEnv
-  const meta = { title: "访谈", summaries: [stage(1, 0, 1000), stage(2, 300_000, 302000)], gaps: [], segments: [], lastCutoffMs: 600_000 } as unknown as MeetingMeta
+  const meta = { title: "访谈", notePath: "访谈.md", createdAt: "2026-10-27T14:30:00+08:00", summaries: [stage(1, 0, 1000), stage(2, 300_000, 302000)], gaps: [], segments: [], lastCutoffMs: 600_000 } as unknown as MeetingMeta
   const session = new MeetingSession(env, "m", meta, transcript)
   return { session, prompts, files }
 }

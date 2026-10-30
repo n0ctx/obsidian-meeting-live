@@ -82,6 +82,8 @@ export interface MeetingMeta {
   version: 1
   id: string
   title: string
+  /** Name of the meeting folder and prefix of its files, following the note's name; absent for meetings created before files were named. */
+  name?: string
   notePath: string
   createdAt: string
   updatedAt: string
