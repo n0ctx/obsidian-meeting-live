@@ -7,7 +7,7 @@ const SHAPE = `{"title":"","paragraphs":[{"topic":"","text":"","t":"00:00:00"}],
 
 const STAGE_CONTRACT = `You summarize one stage of a meeting from its raw speech-to-text transcript. Each line starts with a [timestamp].
 
-Summarize only the "Current stage" transcript. The overview and previous stages are context: use them to see what this stage continues, but do not restate what they already cover.
+Summarize only the "Current stage" transcript. The overview and previous stage are context: use them to see what this stage continues, but do not restate what they already cover.
 
 Write one paragraph per topic, in the order discussed; usually one to three. A paragraph explains what was discussed and how it fits together: the situation and figures reported, the judgments, forecasts and reasons given, and any decision or conclusion reached. Write connected prose, not a string of fragments. Make clear by wording which parts were reported as fact and which are someone's judgment, forecast or decision. Keep each paragraph under about 150 Chinese characters or 100 words; if a topic needs more, split it into sub-topics.
 
@@ -68,15 +68,15 @@ function stageDigest(s: SummaryRecord): string {
 const withFocus = (contract: string, focus: string) => (focus.trim() ? `${contract}\n\nFocus:\n${focus.trim()}` : contract)
 
 export function buildSummaryMessages(title: string, focus: string, window: { startMs: number; endMs: number }, utterances: Utterance[], previous: SummaryRecord[], overview: SummaryContent | undefined): ChatMessage[] {
-  const done = previous.filter((s) => s.status === "done").slice(-2)
+  const last = previous.filter((s) => s.status === "done").at(-1)
   const user = [
     `Meeting: ${title}`,
     "",
     "Meeting overview so far (context only):",
     overview ? contentLines(overview).join("\n") : "(none)",
     "",
-    "Previous stages (context only):",
-    done.length ? done.map(stageDigest).join("\n\n") : "(none)",
+    "Previous stage (context only):",
+    last ? stageDigest(last) : "(none)",
     "",
     `Current stage transcript (${formatClock(window.startMs, true)}–${formatClock(window.endMs, true)}):`,
     transcriptLines(utterances),
