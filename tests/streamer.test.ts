@@ -112,6 +112,46 @@ test("reconnect resumes from unconfirmed speech with correct time offsets", asyn
   mock.timers.reset()
 })
 
+test("an utterance the recognizer drops without confirming is kept, but not one still in progress", async () => {
+  const server = new FakeServer()
+  const rec = recorder()
+  const asr = new AsrStreamer(server.connect, rec.events, { manualTicks: true })
+  asr.begin(0)
+  await flush()
+  server.emit([{ text: "第一句", start_time: 1000, end_time: 2000, definite: false }])
+  // A reply carrying only an earlier sentence must not cut the one in progress short.
+  server.emit([{ text: "开场。", start_time: 0, end_time: 500, definite: true }])
+  server.emit([{ text: "第一句还在说", start_time: 1000, end_time: 9000, definite: false }])
+  assert.deepEqual(rec.finals.map((u) => u.text), ["开场。"])
+  server.emit([{ text: "第二句", start_time: 9200, end_time: 9800, definite: true }])
+  assert.deepEqual(rec.finals.map((u) => [u.text, u.startMs]), [["开场。", 0], ["第一句还在说", 1000], ["第二句", 9200]])
+  asr.dispose()
+})
+
+test("an utterance left unconfirmed too long is kept and recognition restarts after it", async () => {
+  const server = new FakeServer()
+  const rec = recorder()
+  const asr = new AsrStreamer(server.connect, rec.events, { manualTicks: true, maxChunksPerTick: 100, maxInterimMs: 5000 })
+  asr.begin(0)
+  await flush()
+  for (let i = 0; i < 8; i++) asr.push(second())
+  asr.tick()
+  server.emit([{ text: "一直没有判停", start_time: 1000, end_time: 5000, definite: false }])
+  assert.equal(server.connections.length, 1)
+  server.emit([{ text: "一直没有判停的长句", start_time: 1000, end_time: 6400, definite: false }])
+  assert.deepEqual(rec.finals.map((u) => [u.text, u.startMs, u.endMs]), [["一直没有判停的长句", 1000, 6400]])
+  assert.deepEqual(rec.interims(), [])
+  assert.equal(server.connections[0].closed, true)
+  await flush()
+  assert.equal(server.connections.length, 2)
+  asr.tick()
+  // The new connection resumes where the kept text ends: 6.4 s → 8 s.
+  assert.equal(server.current.sent, 16000 * 1.6)
+  server.emit([{ text: "接着说。", start_time: 0, end_time: 800, definite: true }])
+  assert.equal(rec.finals.at(-1)?.startMs, 6400)
+  asr.dispose()
+})
+
 test("offline longer than the buffer produces an explicit gap", async () => {
   const server = new FakeServer()
   server.fail = new AsrError("网络不可用", false)

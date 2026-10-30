@@ -41,6 +41,8 @@ export interface AsrOptions {
   maxChunksPerTick: number
   tickMs: number
   finalTimeoutMs: number
+  /** Longest an utterance may stay unconfirmed before its text is kept and recognition restarts. */
+  maxInterimMs: number
   /** Disables the internal timer so tests can drive tick() directly. */
   manualTicks?: boolean
 }
@@ -51,6 +53,7 @@ const DEFAULTS: AsrOptions = {
   maxChunksPerTick: 3,
   tickMs: 100,
   finalTimeoutMs: 8000,
+  maxInterimMs: 60_000,
 }
 
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000]
@@ -277,8 +280,8 @@ export class AsrStreamer {
 
   private handleResult(data: unknown, last: boolean, base: number): void {
     const baseMs = samplesToMs(base)
-    const interims: Utterance[] = []
     const raw = utterancesOf(data)
+    const parsed: { u: Utterance; definite: boolean }[] = []
     let previousEnd = 0
     for (const item of raw) {
       const text = typeof item.text === "string" ? item.text.trim() : ""
@@ -286,12 +289,25 @@ export class AsrStreamer {
       const end = Number(item.end_time)
       if (Number.isFinite(end)) previousEnd = end
       if (!text) continue
-      const u: Utterance = { startMs: baseMs + start, endMs: baseMs + (Number.isFinite(end) && end >= start ? end : start), text }
-      if (item.definite === true) this.acceptFinal(u)
-      else interims.push(u)
+      parsed.push({ u: { startMs: baseMs + start, endMs: baseMs + (Number.isFinite(end) && end >= start ? end : start), text }, definite: item.definite === true })
     }
-    if (raw.length > 0 || last) this.setInterims(interims.filter((u) => !this.finalKeys.has(Math.round(u.startMs))))
+    // An unconfirmed utterance the recognizer moved past without confirming is kept as it stands.
+    const latestStart = Math.max(...parsed.map((p) => p.u.startMs))
+    for (const u of this.interims) if (u.startMs < latestStart && u.endMs - 1000 <= latestStart) this.acceptFinal(u)
+    for (const p of parsed) if (p.definite) this.acceptFinal(p.u)
+    const interims = parsed.filter((p) => !p.definite && !this.finalKeys.has(Math.round(p.u.startMs))).map((p) => p.u)
+    if (raw.length > 0 || last) this.setInterims(interims)
     if (last) this.finalWaiter?.()
+    else if (!this.ending && this.interims.some((u) => u.endMs - u.startMs > this.options.maxInterimMs)) this.restartStuck()
+  }
+
+  /** The recognizer stopped confirming utterances: keeps the unconfirmed text and resumes on a new connection. */
+  private restartStuck(): void {
+    for (const u of this.interims) this.acceptFinal(u)
+    this.setInterims([])
+    this.cursor = Math.max(this.ring.start, Math.min(this.cursor, msToSamples(this.lastFinalEndMs)))
+    this.dropConnection()
+    void this.open("reconnecting")
   }
 
   private acceptFinal(u: Utterance): void {
