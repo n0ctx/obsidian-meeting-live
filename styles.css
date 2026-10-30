@@ -654,13 +654,13 @@
 
 .ml-para-topic { margin-right: 6px; font-weight: 600; }
 
-.ml-points {
+.ml-stage-body .ml-points {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.ml-point {
+.ml-stage-body .ml-point {
   --ml-kind: var(--ml-todo);
   display: flex;
   align-items: baseline;
