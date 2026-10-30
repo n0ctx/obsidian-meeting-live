@@ -26,21 +26,37 @@ export interface Utterance {
   text: string
 }
 
-export type SummaryKind = "fact" | "opinion" | "todo" | "open"
-
-export interface SummaryItem {
-  kind: SummaryKind
+export interface SummaryPoint {
   text: string
   /** Timeline position of the supporting transcript line. */
   t?: number
-  /** Numbers in the text that do not appear in the source transcript window. */
+  /** Numbers in the text that do not appear in the source transcript. */
   unverified: string[]
+}
+
+export interface SummaryParagraph extends SummaryPoint {
+  /** What the paragraph is about, in a few words. */
+  topic: string
 }
 
 export interface SummaryContent {
   title: string
-  /** Key points in the order they were said. */
-  items: SummaryItem[]
+  /** One paragraph per topic, in the order discussed. */
+  paragraphs: SummaryParagraph[]
+  todos: SummaryPoint[]
+  /** Disagreements and questions left unanswered. */
+  open: SummaryPoint[]
+}
+
+/** Running picture of the whole meeting, updated as stage summaries complete. */
+export interface MeetingOverview {
+  /** Indexes of the stage summaries merged into the overview. */
+  stages: number[]
+  content?: SummaryContent
+  /** Why the latest update failed; the previous content stays. */
+  error?: string
+  createdAt?: string
+  model?: string
 }
 
 export type SummaryStatus = "pending" | "running" | "done" | "failed"
@@ -73,6 +89,7 @@ export interface MeetingMeta {
   segments: AudioSegment[]
   gaps: TranscriptGap[]
   summaries: SummaryRecord[]
+  overview?: MeetingOverview
   /** Timeline position up to which automatic summary windows have been cut. */
   lastCutoffMs: number
   asrLogIds: string[]

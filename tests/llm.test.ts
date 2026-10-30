@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { chat, chatCompletionsUrl, chatRequestBody, extractCompletionText } from "../src/llm/client.ts"
 import { buildMinutesMessages, stripMeetingBlocks } from "../src/llm/minutes.ts"
-import { buildSummaryMessages, parseSummary, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
+import { buildOverviewMessages, buildSummaryMessages, overviewMarkdown, parseSummary, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
 import { dueCutoff, uncovered } from "../src/meeting/schedule.ts"
 import type { MeetingMeta, SummaryRecord, Utterance } from "../src/meeting/types.ts"
 
@@ -11,16 +11,16 @@ const utterances: Utterance[] = [
   { startMs: 65_000, endMs: 70_000, text: "毛利率百分之四十二，在手订单 1.5 亿。" },
 ]
 
-test("summary parsing snaps citations, orders by time, flags unverified numbers, tolerates fences", () => {
-  const raw = '```json\n{"title":"收入与订单","items":[{"kind":"opinion","text":"毛利率 45%","t":"00:01:06"},{"kind":"fact","text":"今年预计收入 3.2 亿元","t":"00:00:01"},{"kind":"todo","text":"补充订单周期"},{"kind":"bogus","text":"在手订单 1.5 亿"}]}\n```'
+test("summary parsing reads paragraphs and lists, snaps citations, flags unverified numbers, tolerates fences", () => {
+  const raw = '```json\n{"title":"收入与订单","paragraphs":[{"topic":"收入","text":"今年预计收入 3.2 亿元，高于去年","t":"00:00:01"},{"topic":"毛利","text":"毛利率 45%","t":"00:01:06"},{"text":""}],"todos":[{"text":"补充订单周期"}],"open":["在手订单 1.5 亿是否含税"]}\n```'
   const content = parseSummary(raw, utterances)!
   assert.equal(content.title, "收入与订单")
-  assert.deepEqual(content.items.map((i) => [i.kind, i.t, i.unverified]), [
-    ["fact", 1000, []],
-    ["todo", undefined, []],
-    ["fact", undefined, []],
-    ["opinion", 65_000, ["45"]],
+  assert.deepEqual(content.paragraphs.map((p) => [p.topic, p.t, p.unverified]), [
+    ["收入", 1000, []],
+    ["毛利", 65_000, ["45"]],
   ])
+  assert.deepEqual(content.todos, [{ text: "补充订单周期", t: undefined, unverified: [] }])
+  assert.deepEqual(content.open.map((p) => p.text), ["在手订单 1.5 亿是否含税"])
   assert.equal(parseSummary("抱歉，我无法完成", utterances), undefined)
 })
 
@@ -31,46 +31,76 @@ test("number verification ignores separators but not different or partial number
   assert.deepEqual(unverifiedNumbers("订单 5 亿", "在手订单 1.5 亿"), ["5"])
 })
 
-test("summary prompt carries contract, focus, timestamps and prior context", () => {
-  const previous: SummaryRecord[] = [{ index: 1, startMs: 0, endMs: 60_000, trigger: "auto", status: "done", attempts: 1, utterances: [1000], content: { title: "收入", items: [{ kind: "fact", text: "收入 3.2 亿", unverified: [] }] } }]
-  const [system, user] = buildSummaryMessages("访谈", "关注订单", { startMs: 60_000, endMs: 120_000 }, utterances.slice(1), previous)
+const stage1: SummaryRecord = {
+  index: 1, startMs: 0, endMs: 60_000, trigger: "auto", status: "done", attempts: 1, utterances: [1000],
+  content: { title: "收入", paragraphs: [{ topic: "收入", text: "收入 3.2 亿", t: 1000, unverified: [] }], todos: [{ text: "核对口径", unverified: [] }], open: [] },
+}
+
+test("summary prompt asks for topic paragraphs and carries focus, overview, prior stages and timestamps", () => {
+  const overview = { title: "", paragraphs: [{ topic: "经营", text: "全年收入预计增长", t: 1000, unverified: [] }], todos: [], open: [] }
+  const [system, user] = buildSummaryMessages("访谈", "关注订单", { startMs: 60_000, endMs: 120_000 }, utterances.slice(1), [stage1], overview)
+  assert.match(system.content, /one paragraph per topic/)
   assert.match(system.content, /plans, forecasts and estimates/)
-  assert.match(system.content, /- fact: .*\n- opinion: /)
-  assert.doesNotMatch(system.content, /misrecognized/)
   assert.match(system.content, /关注订单/)
-  assert.match(user.content, /Stage 1 \(00:00–01:00\) 收入: 收入 3\.2 亿/)
-  assert.match(user.content, /\[00:01:05\] 毛利率/)
+  assert.match(user.content, /overview so far \(context only\):\n经营: 全年收入预计增长 \[00:00:01\]/)
+  assert.match(user.content, /Stage 1 \(00:00–01:00\) 收入:\n收入: 收入 3\.2 亿 \[00:00:01\]\nTo-do: 核对口径/)
+  assert.match(user.content, /\[00:01:05\] 毛利/)
+  const [, first] = buildSummaryMessages("访谈", "", { startMs: 0, endMs: 60_000 }, utterances, [], undefined)
+  assert.match(first.content, /overview so far \(context only\):\n\(none\)/)
 })
 
-test("summary markdown lists items with kind marks, bold figures and flags unverified numbers", () => {
+test("overview prompt merges new stages into the current overview by topic", () => {
+  const [system, user] = buildOverviewMessages("访谈", "关注订单", undefined, [stage1])
+  assert.match(system.content, /Organize by topic, not by time/)
+  assert.match(system.content, /关注订单/)
+  assert.match(user.content, /Current overview:\n\(none\)/)
+  assert.match(user.content, /New stage summaries:\nStage 1 .*\n收入: 收入 3\.2 亿 \[00:00:01\]/)
+})
+
+test("summary markdown writes topic paragraphs, then to-dos and open questions", () => {
   const record: SummaryRecord = {
     index: 2, startMs: 60_000, endMs: 120_000, trigger: "manual", status: "done", attempts: 1, utterances: [],
-    content: { title: "毛利", items: [
-      { kind: "fact", text: "毛利率 45%", t: 65_000, unverified: ["45"] },
-      { kind: "opinion", text: "维持报价，Q3 收入 3.2 亿元", unverified: [] },
-      { kind: "todo", text: "周五前提交方案", unverified: [] },
-      { kind: "open", text: "是否含税未定", unverified: [] },
-    ] },
+    content: {
+      title: "毛利",
+      paragraphs: [
+        { topic: "毛利", text: "毛利率 45%", t: 65_000, unverified: ["45"] },
+        { topic: "", text: "维持报价，Q3 收入 3.2 亿元", unverified: [] },
+      ],
+      todos: [{ text: "周五前提交方案", unverified: [] }],
+      open: [{ text: "是否含税未定", t: 70_000, unverified: [] }],
+    },
   }
   const md = summaryMarkdown(record, (ms) => `@${ms}`)
   assert.match(md, /## 阶段 2 · 00:01:00 – 00:02:00 · 毛利/)
-  assert.match(md, /^- 【事实】毛利率 \*\*45%\*\*（⚠ 原文未找到 45，请核对） @65000$/m)
-  assert.match(md, /^- 【观点】维持报价，Q3 收入 \*\*3\.2 亿元\*\*$/m)
-  assert.match(md, /^- \[ \] 【待办】周五前提交方案$/m)
-  assert.match(md, /^- 【未决】是否含税未定$/m)
+  assert.match(md, /^\*\*毛利\*\*：毛利率 \*\*45%\*\*（⚠ 原文未找到 45，请核对） @65000$/m)
+  assert.match(md, /^维持报价，Q3 收入 \*\*3\.2 亿元\*\*$/m)
+  assert.match(md, /^- \[ \] 【待办】周五前提交方案\n- 【未决】是否含税未定 @70000$/m)
+  assert.match(overviewMarkdown(record.content!, 120_000, (ms) => `@${ms}`), /^## 会议概览 · 截至 00:02:00\n\n\*\*毛利\*\*：/)
+  assert.match(summaryMarkdown({ ...record, content: { title: "", paragraphs: [], todos: [], open: [] } }, String), /本阶段没有可提炼的实质内容/)
 })
 
-test("legacy sectioned summaries become one time-ordered list without follow-ups", () => {
-  const legacy = { topics: [{ text: "订单", t: 65_000 }], conclusions: [{ text: "收入增长", t: 1000 }], figures: [{ value: "4500 台", context: "销量", t: 30_000, verified: false }], conflicts: [], followups: [{ text: "周期？" }] }
-  const meta = { summaries: [{ index: 1, startMs: 0, endMs: 120_000, trigger: "auto", status: "done", attempts: 1, utterances: [], content: legacy }] } as unknown as MeetingMeta
+test("saved marked points and sectioned summaries become paragraphs and lists", () => {
+  const points = { title: "旧", items: [{ kind: "fact", text: "销量 4500 台", t: 30_000, unverified: ["4500"] }, { kind: "todo", text: "补数据", unverified: [] }, { kind: "opinion", text: "增长放缓", t: 40_000, unverified: [] }] }
+  const sections = { topics: [{ text: "订单", t: 65_000 }], conclusions: [{ text: "收入增长", t: 1000 }], figures: [], conflicts: [{ text: "口径不一" }], followups: [{ text: "周期？" }] }
+  const meta = { summaries: [points, sections].map((content, i) => ({ index: i + 1, startMs: 0, endMs: 120_000, trigger: "auto", status: "done", attempts: 1, utterances: [], content })) } as unknown as MeetingMeta
   upgradeSummaries(meta)
   assert.deepEqual(meta.summaries[0].content, {
-    title: "",
-    items: [
-      { kind: "opinion", text: "收入增长", t: 1000, unverified: [] },
-      { kind: "fact", text: "销量 4500 台", t: 30_000, unverified: ["4500"] },
-      { kind: "fact", text: "订单", t: 65_000, unverified: [] },
+    title: "旧",
+    paragraphs: [
+      { topic: "", text: "销量 4500 台", t: 30_000, unverified: ["4500"] },
+      { topic: "", text: "增长放缓", t: 40_000, unverified: [] },
     ],
+    todos: [{ text: "补数据", t: undefined, unverified: [] }],
+    open: [],
+  })
+  assert.deepEqual(meta.summaries[1].content, {
+    title: "",
+    paragraphs: [
+      { topic: "", text: "收入增长", t: 1000, unverified: [] },
+      { topic: "", text: "订单", t: 65_000, unverified: [] },
+    ],
+    todos: [],
+    open: [{ text: "口径不一", t: undefined, unverified: [] }],
   })
 })
 

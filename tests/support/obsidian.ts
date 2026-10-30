@@ -1,4 +1,4 @@
-// Minimal stand-in for the parts of the Obsidian API used by background jobs, for Node tests only.
+// Minimal stand-in for the parts of the Obsidian API used by background jobs and sessions, for Node tests only.
 type Handler = (...args: unknown[]) => unknown
 
 export class Events {
@@ -15,6 +15,9 @@ export class Events {
     for (const fn of this.handlers.get(name) ?? []) fn(...args)
   }
 }
+
+export class FileSystemAdapter {}
+export const normalizePath = (path: string) => path
 
 export const notices: string[] = []
 export class Notice {

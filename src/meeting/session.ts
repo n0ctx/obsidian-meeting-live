@@ -5,7 +5,7 @@ import { SegmentRecorder, opusSupported, repairSegment } from "../audio/recorder
 import { AsrStreamer, type AsrConnect, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { buildMinutesMessages } from "../llm/minutes.ts"
-import { buildSummaryMessages, parseSummary, summaryMarkdown } from "../llm/summary.ts"
+import { buildOverviewMessages, buildSummaryMessages, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
 import { SUMMARY_FILE, TRANSCRIPT_FILE, type MeetingStore } from "./store.ts"
@@ -44,6 +44,7 @@ export class MeetingSession extends Events {
   saveState: SaveState = "saved"
   savedAt = Date.now()
   minutes: MinutesState = { status: "idle" }
+  overviewRunning = false
   error: string | undefined
   deviceLabel = ""
   /** Recent input levels (0–1, perceptual), newest at levelCursor - 1. */
@@ -353,7 +354,10 @@ export class MeetingSession extends Events {
     if (this.queueRunning) return
     this.queueRunning = true
     try {
-      for (let record = this.nextPending(); record; record = this.nextPending()) await this.runSummary(record)
+      for (let record = this.nextPending(); record; record = this.nextPending()) {
+        await this.runSummary(record)
+        await this.updateOverview()
+      }
     } finally {
       this.queueRunning = false
     }
@@ -378,7 +382,7 @@ export class MeetingSession extends Events {
     record.attempts++
     this.trigger("summary")
     try {
-      const messages = buildSummaryMessages(this.meta.title, this.env.settings().summaryFocus, record, items, previous)
+      const messages = buildSummaryMessages(this.meta.title, this.env.settings().summaryFocus, record, items, previous, this.meta.overview?.content)
       const text = await llm.complete(messages)
       const content = parseSummary(text, items)
       record.content = content
@@ -400,6 +404,52 @@ export class MeetingSession extends Events {
     if (record.status === "done") void this.writeIo(() => this.env.store.writeSummaries(this.folder, this.summariesMarkdown()))
   }
 
+  /** Completed stage summaries not yet merged into the overview. */
+  get overviewBacklog(): SummaryRecord[] {
+    const merged = new Set(this.meta.overview?.stages ?? [])
+    return this.meta.summaries.filter((s) => s.status === "done" && !merged.has(s.index))
+  }
+
+  /** Timeline position the overview covers up to. */
+  get overviewThroughMs(): number {
+    const merged = new Set(this.meta.overview?.stages ?? [])
+    return Math.max(0, ...this.meta.summaries.filter((s) => merged.has(s.index)).map((s) => s.endMs))
+  }
+
+  /** Merges completed stages into the overview; on failure keeps the previous overview and records the error. */
+  async updateOverview(): Promise<void> {
+    if (this.overviewRunning || this.overviewBacklog.length === 0) return
+    this.overviewRunning = true
+    try {
+      for (let stages = this.overviewBacklog; stages.length; stages = this.overviewBacklog) {
+        const llm = this.env.llm()
+        if (llm.problem) return
+        const overview = this.meta.overview ?? { stages: [] }
+        const merged = [...overview.stages, ...stages.map((s) => s.index)].sort((a, b) => a - b)
+        const substantive = stages.filter((s) => !s.content || !isEmptySummary(s.content))
+        if (substantive.length === 0) {
+          this.meta.overview = { ...overview, stages: merged }
+          continue
+        }
+        this.trigger("summary")
+        try {
+          const text = await llm.complete(buildOverviewMessages(this.meta.title, this.env.settings().summaryFocus, overview.content, substantive))
+          const content = parseSummary(text, this.utterances)
+          if (!content) throw new Error("模型返回的概览格式无法识别")
+          this.meta.overview = { stages: merged, content, createdAt: new Date().toISOString(), model: llm.model }
+        } catch (error) {
+          this.meta.overview = { ...overview, error: (error as Error).message }
+          return
+        }
+      }
+    } finally {
+      this.overviewRunning = false
+      this.trigger("summary")
+      await this.saveNow()
+      void this.writeIo(() => this.env.store.writeSummaries(this.folder, this.summariesMarkdown()))
+    }
+  }
+
   summaryLink(ms: number): string {
     const u = this.utterances.find((x) => Math.round(x.startMs) === Math.round(ms))
     const target = this.transcriptPath.replace(/\.md$/, "")
@@ -419,8 +469,10 @@ export class MeetingSession extends Events {
       "> [!caution] AI 生成内容，可能存在遗漏或误读。所有事实以原始转写与录音为准。",
       "",
     ]
-    const body = this.meta.summaries.filter((s) => s.status === "done").map((s) => summaryMarkdown(s, (ms) => this.summaryLink(ms)))
-    return [...head, ...body].join("\n")
+    const link = (ms: number) => this.summaryLink(ms)
+    const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link)] : []
+    const body = this.meta.summaries.filter((s) => s.status === "done").map((s) => summaryMarkdown(s, link))
+    return [...head, ...overview, ...body].join("\n")
   }
 
   // ---------------------------------------------------------------- minutes
