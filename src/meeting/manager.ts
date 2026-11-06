@@ -109,6 +109,8 @@ export class MeetingManager extends Events {
       lastCutoffMs: 0,
       asrLogIds: [],
       minutes: [],
+      // A new meeting starts folded; it expands on click.
+      collapsed: true,
     }
     const folder = await this.store.create(meta)
     this.folders.set(meta.id, { folder, notePath })

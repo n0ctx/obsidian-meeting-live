@@ -181,6 +181,10 @@ export class MeetingCard extends MarkdownRenderChild {
     const session = this.session!
     this.root = this.containerEl.createDiv({ cls: "ml-card" })
     this.root.createDiv({ cls: "ml-edge" })
+    // A click anywhere on the capsule that is not a control or the title expands it.
+    this.root.addEventListener("click", (e) => {
+      if (session.meta.collapsed && !(e.target as HTMLElement).closest("button, input")) session.setCollapsed(false)
+    })
 
     const head = this.root.createDiv({ cls: "ml-head" })
     const main = head.createDiv({ cls: "ml-head-main" })

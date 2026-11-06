@@ -8,7 +8,7 @@ Desktop only (tested on macOS). Requires Obsidian 1.11.4 or later. The interface
 
 ## Features
 
-- **Embedded meeting card.** A `meeting-live` code block renders as an interactive card in Live Preview and Reading view, showing the live transcript. Keep writing above and below it. Fold the card into a one-line capsule to keep only the status, clock and controls.
+- **Embedded meeting card.** A `meeting-live` code block renders as an interactive card in Live Preview and Reading view, showing the live transcript. Keep writing above and below it. A new card starts folded into a one-line capsule with the status, clock and controls, and a two-line caption of the latest speech while recording; click it to expand.
 - **Local recording.** Audio is saved to your vault while you record (Opus or lossless WAV), in segments that stay playable even after a crash, and plays back on one timeline inside the card.
 - **Real-time transcription.** Live partial text, automatic reconnection, and clearly marked gaps when audio could not be transcribed. Recording never depends on transcription.
 - **Stage summaries in the note.** Every N minutes of meeting time (default 1), an OpenAI-compatible model writes what is new as topic paragraphs, to-dos and open questions, and keeps a running overview of the whole meeting. They are written into the note right below the card, in a section the plugin keeps up to date; to-dos you tick there stay ticked. Each point links to the transcript line it rests on, and every transcript time links back to the summary point or stage covering it. Numbers that do not appear in the transcript are flagged.
