@@ -1,11 +1,11 @@
 import { promises as fs } from "node:fs"
-import { FileSystemAdapter, TFile, Vault, normalizePath, type App } from "obsidian"
+import { FileSystemAdapter, MarkdownView, TFile, Vault, normalizePath, type App } from "obsidian"
+import { applyEdit, type TextEdit } from "./noteSummary.ts"
 import { transcriptHeader } from "./transcriptFormat.ts"
 import type { MeetingMeta } from "./types.ts"
 
 export const META_FILE = "meeting.json"
 export const TRANSCRIPT_FILE = "原始转写.md"
-export const SUMMARY_FILE = "AI 阶段摘要.md"
 export const MINUTES_FILE = "正式纪要"
 export const AUDIO_DIR = "audio"
 
@@ -156,6 +156,29 @@ export class MeetingStore {
     let candidate = this.path(folder, `${base}.${ext}`)
     for (let n = 2; await this.adapter.exists(candidate); n++) candidate = this.path(folder, `${base} ${n}.${ext}`)
     return candidate
+  }
+
+  /**
+   * Applies an edit to a note. An open editor takes it as a transaction, so the cursor, scroll
+   * and unsaved typing survive; otherwise the file is rewritten atomically.
+   */
+  async editNote(path: string, edit: (content: string) => TextEdit | undefined): Promise<void> {
+    const file = this.app.vault.getFileByPath(normalizePath(path))
+    if (!file) return
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      const view = leaf.view
+      if (!(view instanceof MarkdownView) || view.file !== file || view.getMode() !== "source") continue
+      const editor = view.editor
+      const change = edit(editor.getValue())
+      if (change) editor.replaceRange(change.text, editor.offsetToPos(change.from), editor.offsetToPos(change.to))
+      return
+    }
+    // Skip the write when nothing changes, so re-rendering a card never touches the note.
+    if (!edit(await this.app.vault.read(file))) return
+    await this.app.vault.process(file, (content) => {
+      const change = edit(content)
+      return change ? applyEdit(content, change) : content
+    })
   }
 
   async write(path: string, content: string): Promise<void> {

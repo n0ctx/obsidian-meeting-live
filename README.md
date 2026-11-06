@@ -8,10 +8,10 @@ Desktop only (tested on macOS). Requires Obsidian 1.11.4 or later. The interface
 
 ## Features
 
-- **Embedded meeting card.** A `meeting-live` code block renders as an interactive card in Live Preview and Reading view. Keep writing above and below it.
+- **Embedded meeting card.** A `meeting-live` code block renders as an interactive card in Live Preview and Reading view, showing the live transcript. Keep writing above and below it. Fold the card into a one-line capsule to keep only the status, clock and controls.
 - **Local recording.** Audio is saved to your vault while you record (Opus or lossless WAV), in segments that stay playable even after a crash, and plays back on one timeline inside the card.
 - **Real-time transcription.** Live partial text, automatic reconnection, and clearly marked gaps when audio could not be transcribed. Recording never depends on transcription.
-- **Stage summaries.** Every N minutes of meeting time (default 1), an OpenAI-compatible model lists what is new as points in spoken order, each marked as a fact, opinion, to-do or open question. Each point links back to the transcript, and numbers that do not appear in the transcript are flagged.
+- **Stage summaries in the note.** Every N minutes of meeting time (default 1), an OpenAI-compatible model writes what is new as topic paragraphs, to-dos and open questions, and keeps a running overview of the whole meeting. They are written into the note right below the card, in a section the plugin keeps up to date; to-dos you tick there stay ticked. Each point links back to the transcript, and numbers that do not appear in the transcript are flagged.
 - **Meeting notes.** After the meeting, generate notes from the transcript, the stage summaries and your own notes, using a prompt you control.
 - **Recording → notes.** Pick an audio file from your vault or disk. It is transcribed with speaker labels and written up as notes in the current note, in the background, with a progress bar shown in the note.
 
@@ -38,7 +38,7 @@ Network use:
 
 Stored locally:
 
-- Recordings, raw transcripts, summaries and meeting metadata go to a folder in your vault (default `Meetings/`), one subfolder per meeting. The subfolder and its files are named after the note, and are renamed with it once the meeting is no longer recording. AI output is kept in separate files and never overwrites the raw transcript or audio.
+- Recordings, raw transcripts and meeting metadata go to a folder in your vault (default `Meetings/`), one subfolder per meeting. The subfolder and its files are named after the note, and are renamed with it once the meeting is no longer recording. Stage summaries are written into the meeting note; AI output never overwrites the raw transcript or audio.
 - Settings and prompts are saved only in the plugin's `data.json` inside your vault.
 - API keys are kept in Obsidian's secret storage; the settings file only holds each secret's name.
 

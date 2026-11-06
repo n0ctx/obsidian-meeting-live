@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import type { ChatMessage } from "../src/llm/client.ts"
+import { applyEdit, type TextEdit } from "../src/meeting/noteSummary.ts"
 import { MeetingSession, type SessionEnv } from "../src/meeting/session.ts"
 import type { MeetingMeta, SummaryRecord } from "../src/meeting/types.ts"
 import { utteranceLine } from "../src/meeting/transcriptFormat.ts"
@@ -14,12 +15,15 @@ function stage(index: number, startMs: number, utterance: number): SummaryRecord
 
 function setup(reply: (messages: ChatMessage[]) => string) {
   const prompts: ChatMessage[][] = []
-  const files: Record<string, string> = {}
+  const files: Record<string, string> = { "访谈.md": "# 访谈\n\n```meeting-live\nid: m-1\n```\n\n我的速记\n" }
   const env = {
     store: {
       path: (folder: string, name: string) => `${folder}/${name}`,
       saveMeta: async () => undefined,
-      write: async (_path: string, markdown: string) => void (files.summaries = markdown),
+      editNote: async (path: string, edit: (content: string) => TextEdit | undefined) => {
+        const change = edit(files[path] ?? "")
+        if (change) files[path] = applyEdit(files[path] ?? "", change)
+      },
     },
     settings: () => DEFAULT_SETTINGS,
     llm: () => ({
@@ -32,7 +36,7 @@ function setup(reply: (messages: ChatMessage[]) => string) {
       },
     }),
   } as unknown as SessionEnv
-  const meta = { title: "访谈", notePath: "访谈.md", createdAt: "2026-10-27T14:30:00+08:00", summaries: [stage(1, 0, 1000), stage(2, 300_000, 302000)], gaps: [], segments: [], lastCutoffMs: 600_000 } as unknown as MeetingMeta
+  const meta = { id: "m-1", title: "访谈", notePath: "访谈.md", createdAt: "2026-10-27T14:30:00+08:00", summaries: [stage(1, 0, 1000), stage(2, 300_000, 302000)], gaps: [], segments: [], lastCutoffMs: 600_000 } as unknown as MeetingMeta
   const session = new MeetingSession(env, "m", meta, transcript)
   return { session, prompts, files }
 }
@@ -54,7 +58,12 @@ test("each finished stage is merged into the overview, which the next stage sees
   assert.equal(session.meta.overview?.content?.paragraphs[0].text, "第 2 版概览")
   assert.equal(session.overviewThroughMs, 600_000)
   await new Promise((r) => setTimeout(r, 0))
-  assert.ok(files.summaries.indexOf("## 会议概览 · 截至 00:10:00") < files.summaries.indexOf("## 阶段 1"))
+  const note = files["访谈.md"]
+  assert.match(note, /^```\n\n%% meeting-live-summary m-1 [^\n]*%%\n## AI 阶段摘要\n/m)
+  assert.ok(note.indexOf("### 会议概览 · 截至 00:10:00") < note.indexOf("### 阶段 1"))
+  assert.ok(note.indexOf("### 阶段 2") < note.indexOf("%% /meeting-live-summary m-1 %%"))
+  assert.match(note, /%% \/meeting-live-summary m-1 %%\n\n我的速记\n$/)
+  assert.equal(note.match(/## AI 阶段摘要/g)?.length, 1)
 })
 
 test("a failed overview update keeps the previous overview and a retry merges every stage left out", async () => {

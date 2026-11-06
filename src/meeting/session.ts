@@ -8,7 +8,8 @@ import { buildMinutesMessages } from "../llm/minutes.ts"
 import { buildOverviewMessages, buildSummaryMessages, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
-import { MINUTES_FILE, SUMMARY_FILE, TRANSCRIPT_FILE, meetingFile, movedPath, noteName, type MeetingStore } from "./store.ts"
+import { placeSummary } from "./noteSummary.ts"
+import { MINUTES_FILE, TRANSCRIPT_FILE, meetingFile, movedPath, noteName, type MeetingStore } from "./store.ts"
 import { audioLine, blockId, gapLine, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
 import { formatClock, formatDate, formatDateTime, totalDuration, type AudioFormat, type AudioSegment, type MeetingMeta, type SummaryRecord, type TranscriptGap, type Utterance } from "./types.ts"
 
@@ -93,10 +94,6 @@ export class MeetingSession extends Events {
 
   get transcriptPath(): string {
     return this.env.store.path(this.folder, meetingFile(this.meta.name, TRANSCRIPT_FILE))
-  }
-
-  get summaryPath(): string {
-    return this.env.store.path(this.folder, meetingFile(this.meta.name, SUMMARY_FILE))
   }
 
   get llmProblem(): string | undefined {
@@ -405,7 +402,7 @@ export class MeetingSession extends Events {
     }
     this.trigger("summary")
     await this.saveNow()
-    if (record.status === "done") void this.writeIo(() => this.env.store.write(this.summaryPath, this.summariesMarkdown()))
+    if (record.status === "done") void this.publishSummary()
   }
 
   /** Completed stage summaries not yet merged into the overview. */
@@ -450,7 +447,7 @@ export class MeetingSession extends Events {
       this.overviewRunning = false
       this.trigger("summary")
       await this.saveNow()
-      void this.writeIo(() => this.env.store.write(this.summaryPath, this.summariesMarkdown()))
+      void this.publishSummary()
     }
   }
 
@@ -460,25 +457,25 @@ export class MeetingSession extends Events {
     return u ? `[[${target}#^${blockId(u)}|${formatClock(ms)}]]` : formatClock(ms)
   }
 
+  /** The note section holding the overview and every finished stage; empty until a stage is done. */
   summariesMarkdown(): string {
-    const head = [
-      "---",
-      `meeting: ${this.meta.id}`,
-      "type: meeting-summaries",
-      `note: "[[${this.meta.notePath.replace(/\.md$/, "")}]]"`,
-      `date: ${this.meta.createdAt.slice(0, 10)}`,
-      `transcript: "[[${this.transcriptPath.replace(/\.md$/, "")}]]"`,
-      "---",
-      "",
-      `# AI 阶段摘要 · ${this.meta.title}`,
+    const done = this.meta.summaries.filter((s) => s.status === "done")
+    if (done.length === 0) return ""
+    const link = (ms: number) => this.summaryLink(ms)
+    const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link, "###")] : []
+    return [
+      "## AI 阶段摘要",
       "",
       "> [!caution] AI 生成内容，可能存在遗漏或误读。所有事实以原始转写与录音为准。",
       "",
-    ]
-    const link = (ms: number) => this.summaryLink(ms)
-    const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link)] : []
-    const body = this.meta.summaries.filter((s) => s.status === "done").map((s) => summaryMarkdown(s, link))
-    return [...head, ...overview, ...body].join("\n")
+      ...overview,
+      ...done.map((s) => summaryMarkdown(s, link, "###")),
+    ].join("\n")
+  }
+
+  /** Writes the summaries into the meeting's note, right below its block. */
+  publishSummary(): Promise<unknown> {
+    return this.writeIo(() => this.env.store.editNote(this.meta.notePath, (content) => placeSummary(content, this.id, this.summariesMarkdown())))
   }
 
   // ---------------------------------------------------------------- minutes
@@ -507,7 +504,6 @@ export class MeetingSession extends Events {
         `note: "[[${note}]]"`,
         `date: ${this.meta.createdAt.slice(0, 10)}`,
         `transcript: "[[${this.transcriptPath.replace(/\.md$/, "")}]]"`,
-        ...(this.meta.summaries.some((s) => s.status === "done") ? [`summary: "[[${this.summaryPath.replace(/\.md$/, "")}]]"`] : []),
         `model: ${llm.model}`,
         `generated: ${formatDateTime(new Date())}`,
         "---",
@@ -534,6 +530,13 @@ export class MeetingSession extends Events {
   }
 
   // ---------------------------------------------------------------- persistence
+
+  setCollapsed(collapsed: boolean): void {
+    if (!!this.meta.collapsed === collapsed) return
+    this.meta.collapsed = collapsed || undefined
+    void this.saveNow()
+    this.emitChange()
+  }
 
   rename(title: string): void {
     const clean = title.trim()

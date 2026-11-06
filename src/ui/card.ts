@@ -5,7 +5,6 @@ import type { MeetingSession } from "../meeting/session.ts"
 import { formatClock, formatShortDateTime, type MeetingStatus, type Utterance } from "../meeting/types.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { TimelinePlayer } from "./player.ts"
-import { SummaryPane } from "./summaryPane.ts"
 import { TranscriptPane } from "./transcriptPane.ts"
 import { Waveform } from "./waveform.ts"
 
@@ -22,10 +21,6 @@ export interface CardHost {
   revealFolder(session: MeetingSession): void
   saveSettings(): Promise<void>
 }
-
-/** Neither column may be squeezed below this share of the card when side by side. */
-const MIN_SHARE = 0.3
-const DEFAULT_SHARE = 0.4
 
 const STATUS_LABEL: Record<MeetingStatus, string> = {
   idle: "未开始",
@@ -67,14 +62,12 @@ export class MeetingCard extends MarkdownRenderChild {
   private controls!: HTMLElement
   private chips!: HTMLElement
   private alertEl!: HTMLElement
-  private liveEl!: HTMLElement
   private body!: HTMLElement
   private footRow!: HTMLElement
   private waveform: Waveform | undefined
   private transcript: TranscriptPane | undefined
-  private summaries: SummaryPane | undefined
   private player: TimelinePlayer | undefined
-  private bodyMode: "hero" | "panes" | undefined
+  private bodyMode: "hero" | "transcript" | undefined
   private busy = false
   private controlsKey = ""
 
@@ -105,24 +98,21 @@ export class MeetingCard extends MarkdownRenderChild {
     this.build()
     const on = (name: string, fn: (...args: unknown[]) => void) => this.refs.push([session, session.on(name, fn)])
     on("change", () => this.update())
-    on("utterance", (u) => {
-      this.transcript?.append(u as Utterance)
-      this.renderLive()
-    })
-    on("interim", () => {
-      this.transcript?.renderInterim()
-      this.renderLive()
-    })
+    on("utterance", (u) => this.transcript?.append(u as Utterance))
+    on("interim", () => this.transcript?.renderInterim())
     on("gap", () => {
       this.transcript?.gapsChanged()
       this.player?.refresh()
     })
     on("summary", () => {
-      this.summaries?.render()
+      this.renderAlert()
+      this.renderChips()
       this.player?.refresh()
     })
     this.refs.push([this.host.manager, this.host.manager.on("active", () => this.update())])
     this.registerInterval(window.setInterval(() => this.tick(), 500))
+    // Meetings summarized before summaries moved into the note get their section written once.
+    if (session.meta.summaries.some((s) => s.status === "done")) void session.publishSummary()
   }
 
   override onunload(): void {
@@ -183,7 +173,6 @@ export class MeetingCard extends MarkdownRenderChild {
   private build(): void {
     const session = this.session!
     this.root = this.containerEl.createDiv({ cls: "ml-card" })
-    this.root.dataset.tab = "summary"
     this.root.createDiv({ cls: "ml-edge" })
 
     const head = this.root.createDiv({ cls: "ml-head" })
@@ -212,11 +201,6 @@ export class MeetingCard extends MarkdownRenderChild {
     this.controls = side.createDiv({ cls: "ml-controls" })
 
     this.alertEl = this.root.createDiv({ cls: "ml-alert" })
-    this.liveEl = this.root.createEl("button", { cls: "ml-live", attr: { "aria-label": "查看完整转写" } })
-    this.liveEl.addEventListener("click", () => {
-      this.root.dataset.tab = "transcript"
-      this.syncTabs()
-    })
     this.body = this.root.createDiv({ cls: "ml-body" })
 
     const foot = this.root.createDiv({ cls: "ml-foot" })
@@ -226,92 +210,21 @@ export class MeetingCard extends MarkdownRenderChild {
     this.update()
   }
 
-  private buildBody(mode: "hero" | "panes"): void {
+  private buildBody(mode: "hero" | "transcript"): void {
     this.bodyMode = mode
     this.body.empty()
     this.transcript = undefined
-    this.summaries = undefined
     this.root.toggleClass("is-hero", mode === "hero")
     if (mode === "hero") return this.buildHero()
     const session = this.session!
-    const tabs = this.body.createDiv({ cls: "ml-tabs", attr: { role: "tablist" } })
-    const tab = (key: string, label: string) => {
-      const b = tabs.createEl("button", { cls: "ml-tab", text: label, attr: { role: "tab" } })
-      b.dataset.tab = key
-      b.addEventListener("click", () => {
-        this.root.dataset.tab = key
-        this.syncTabs()
-      })
-    }
-    tab("transcript", "实时转写")
-    tab("summary", "AI 摘要")
-    const panes = this.body.createDiv({ cls: "ml-panes" })
-
-    const tActions = createDiv({ cls: "ml-pane-actions" })
-    this.iconButton(tActions, "copy", "复制全部转写", () => {
+    const actions = createDiv({ cls: "ml-pane-actions" })
+    this.iconButton(actions, "copy", "复制全部转写", () => {
       void navigator.clipboard.writeText(this.transcript?.plainText() ?? "")
       new Notice("已复制全部转写")
     })
-    this.iconButton(tActions, "file-text", "打开原始转写文件", () => this.host.openPath(session.transcriptPath))
-    this.transcript = new TranscriptPane(panes, session, tActions)
+    this.iconButton(actions, "file-text", "打开原始转写文件", () => this.host.openPath(session.transcriptPath))
+    this.transcript = new TranscriptPane(this.body, session, actions)
     this.transcript.onSeek = (ms) => void this.player?.play(ms)
-    this.buildDivider(panes)
-
-    const sActions = createDiv({ cls: "ml-pane-actions" })
-    const now = sActions.createEl("button", { cls: "ml-btn is-small ml-summarize", text: "立即总结" })
-    now.addEventListener("click", () => this.summarizeNow())
-    this.iconButton(sActions, "file-text", "打开 AI 摘要文件", () => this.host.openPath(session.summaryPath))
-    this.summaries = new SummaryPane(panes, session, sActions)
-    this.summaries.onLocate = (ms) => {
-      this.root.dataset.tab = "transcript"
-      this.syncTabs()
-      this.transcript?.reveal(ms)
-      this.player?.seek(ms, this.player.playing)
-    }
-    this.syncTabs()
-  }
-
-  /** Drag handle between the side-by-side panes; the chosen split is shared by every meeting card. */
-  private buildDivider(panes: HTMLElement): void {
-    const divider = panes.createDiv({ cls: "ml-divider", attr: { role: "separator", tabindex: "0", "aria-orientation": "vertical", "aria-label": "调整转写与摘要的宽度" } })
-    const apply = (share: number) => {
-      const value = Math.min(1 - MIN_SHARE, Math.max(MIN_SHARE, share))
-      panes.style.setProperty("--ml-transcript-share", String(value))
-      divider.setAttr("aria-valuenow", String(Math.round(value * 100)))
-      return value
-    }
-    const commit = (share: number) => {
-      this.host.settings.transcriptShare = apply(share)
-      void this.host.saveSettings()
-    }
-    divider.setAttr("aria-valuemin", String(MIN_SHARE * 100))
-    divider.setAttr("aria-valuemax", String((1 - MIN_SHARE) * 100))
-    apply(this.host.settings.transcriptShare)
-    const shareAt = (x: number) => {
-      const rect = panes.getBoundingClientRect()
-      return (x - rect.left) / rect.width
-    }
-    divider.addEventListener("pointerdown", (e) => {
-      e.preventDefault()
-      divider.setPointerCapture(e.pointerId)
-      divider.addClass("is-dragging")
-    })
-    divider.addEventListener("pointermove", (e) => {
-      if (divider.hasPointerCapture(e.pointerId)) apply(shareAt(e.clientX))
-    })
-    divider.addEventListener("pointerup", (e) => {
-      if (!divider.hasPointerCapture(e.pointerId)) return
-      divider.releasePointerCapture(e.pointerId)
-      divider.removeClass("is-dragging")
-      commit(shareAt(e.clientX))
-    })
-    divider.addEventListener("dblclick", () => commit(DEFAULT_SHARE))
-    divider.addEventListener("keydown", (e) => {
-      const step = e.key === "ArrowLeft" ? -0.02 : e.key === "ArrowRight" ? 0.02 : 0
-      if (!step) return
-      e.preventDefault()
-      commit(this.host.settings.transcriptShare + step)
-    })
   }
 
   private buildHero(): void {
@@ -321,7 +234,7 @@ export class MeetingCard extends MarkdownRenderChild {
     setIcon(art.createDiv({ cls: "ml-hero-mic" }), "mic")
     const content = hero.createDiv({ cls: "ml-hero-content" })
     content.createDiv({ cls: "ml-hero-title", text: "准备就绪" })
-    content.createDiv({ cls: "ml-hero-sub", text: "开始后录音、实时转写和阶段摘要会同步进行。可以在组件上下方继续写速记。" })
+    content.createDiv({ cls: "ml-hero-sub", text: "开始后录音和实时转写同步进行，阶段摘要会写在组件下方。可以在组件上下方继续写速记。" })
     const checks = content.createDiv({ cls: "ml-checks" })
     const settings = this.host.settings
     const asrProblem = this.host.asrProblem()
@@ -339,7 +252,7 @@ export class MeetingCard extends MarkdownRenderChild {
     }
     check(true, "mic", "本地录音", `${settings.audioFormat === "ogg" ? "Opus 高码率" : "WAV 无损"} · 保存在 ${settings.folder}/`)
     check(!asrProblem, "captions", "实时转写", asrProblem ? `${asrProblem}；不影响录音` : "火山引擎豆包流式识别")
-    check(!llmProblem, "list", "阶段摘要", llmProblem ? `${llmProblem}；可稍后补生成` : `每 ${settings.summaryIntervalMin} 分钟 · ${this.host.llm().model}`)
+    check(!llmProblem, "list", "阶段摘要", llmProblem ? `${llmProblem}；可稍后补生成` : `每 ${settings.summaryIntervalMin} 分钟写入笔记 · ${this.host.llm().model}`)
     content.createDiv({ cls: "ml-privacy", text: "录音时音频会实时上传至火山引擎识别，转写文本会发送到你配置的 LLM 服务生成摘要。原始录音与转写只保存在本库。" })
   }
 
@@ -348,14 +261,6 @@ export class MeetingCard extends MarkdownRenderChild {
     setIcon(b, icon)
     b.addEventListener("click", action)
     return b
-  }
-
-  private syncTabs(): void {
-    const active = this.root.dataset.tab
-    this.body.querySelectorAll<HTMLElement>(".ml-tab").forEach((t) => {
-      t.toggleClass("is-active", t.dataset.tab === active)
-      t.setAttr("aria-selected", String(t.dataset.tab === active))
-    })
   }
 
   // ---------------------------------------------------------------- updates
@@ -368,8 +273,9 @@ export class MeetingCard extends MarkdownRenderChild {
     this.statusEl.dataset.status = status
     this.statusText.setText(STATUS_LABEL[status])
     if (document.activeElement !== this.titleInput) this.titleInput.value = session.meta.title
+    this.root.toggleClass("is-capsule", !!session.meta.collapsed)
 
-    const mode = status === "idle" && session.meta.segments.length === 0 ? "hero" : "panes"
+    const mode = status === "idle" && session.meta.segments.length === 0 ? "hero" : "transcript"
     if (mode !== this.bodyMode) this.buildBody(mode)
 
     if (status === "recording") this.waveform?.start()
@@ -379,10 +285,8 @@ export class MeetingCard extends MarkdownRenderChild {
     }
     this.renderControls()
     this.renderAlert()
-    this.renderLive()
     this.tick()
     this.transcript?.updateMeta()
-    this.summaries?.render()
     this.player?.refresh()
     this.renderFoot()
   }
@@ -398,7 +302,6 @@ export class MeetingCard extends MarkdownRenderChild {
     }
     this.metaText.setText(parts.join(" · "))
     this.renderChips()
-    if (session.status === "recording") this.summaries?.renderNext()
     this.player?.refresh()
     this.root.toggleClass("is-playing", !!this.player?.playing)
   }
@@ -439,7 +342,8 @@ export class MeetingCard extends MarkdownRenderChild {
     const session = this.session!
     const status = session.status
     const blocked = this.host.manager.active && this.host.manager.active !== session
-    const key = `${status}:${this.busy}:${blocked}`
+    const collapsed = !!session.meta.collapsed
+    const key = `${status}:${this.busy}:${blocked}:${collapsed}`
     if (key === this.controlsKey) return
     this.controlsKey = key
     this.controls.empty()
@@ -465,6 +369,9 @@ export class MeetingCard extends MarkdownRenderChild {
     } else {
       button("is-record is-hero", "mic", "开始录音", () => this.startRecording(), !!blocked)
     }
+    const fold = this.controls.createEl("button", { cls: "ml-ctl is-fold", attr: { "aria-label": collapsed ? "展开会议组件" : "收起为胶囊", "aria-expanded": String(!collapsed) } })
+    setIcon(fold, collapsed ? "chevrons-up-down" : "chevrons-down-up")
+    fold.addEventListener("click", () => session.setCollapsed(!collapsed))
     const more = this.controls.createEl("button", { cls: "ml-ctl is-more", attr: { "aria-label": "更多操作" } })
     setIcon(more, "ellipsis")
     more.addEventListener("click", (e) => this.openMenu(e))
@@ -496,10 +403,7 @@ export class MeetingCard extends MarkdownRenderChild {
       return
     }
     if (!session.summarizeNow()) new Notice("没有新的转写内容需要总结")
-    else {
-      this.root.dataset.tab = "summary"
-      this.syncTabs()
-    }
+    else new Notice("正在生成阶段摘要，完成后写入组件下方")
   }
 
   private openMenu(event: MouseEvent): void {
@@ -512,7 +416,6 @@ export class MeetingCard extends MarkdownRenderChild {
     menu.addItem((i) => i.setTitle("生成正式纪要…").setIcon("file-pen-line").onClick(() => this.host.openMinutes(session)))
     menu.addSeparator()
     menu.addItem((i) => i.setTitle("打开原始转写").setIcon("captions").onClick(() => this.host.openPath(session.transcriptPath)))
-    menu.addItem((i) => i.setTitle("打开 AI 阶段摘要").setIcon("list").onClick(() => this.host.openPath(session.summaryPath)))
     menu.addItem((i) => i.setTitle("在访达中显示会议文件夹").setIcon("folder-open").onClick(() => this.host.revealFolder(session)))
     menu.addItem((i) =>
       i
@@ -546,6 +449,24 @@ export class MeetingCard extends MarkdownRenderChild {
       tone = "warn"
       text = `与火山引擎的连接中断，正在自动重连。期间的音频已缓存，连上后会补发识别${session.asrDetail ? `（${session.asrDetail}）` : ""}。`
       actions.push(["立即重连", () => session.retryAsr()])
+    } else if (!session.llmProblem) {
+      const failed = session.meta.summaries.filter((s) => s.status === "failed")
+      const overview = session.meta.overview
+      const backlog = session.overviewBacklog.length
+      if (failed.length) {
+        tone = "warn"
+        const last = failed[failed.length - 1]
+        text = `${failed.length > 1 ? `${failed.length} 个阶段` : `阶段 ${last.index} `}的摘要生成失败：${last.error ?? "未知错误"}`
+        actions.push(["重试", () => failed.forEach((s) => session.retrySummary(s.index))])
+      } else if (overview?.error && !session.overviewRunning) {
+        tone = "warn"
+        text = `会议概览更新失败：${overview.error}`
+        actions.push(["重试", () => void session.updateOverview()])
+      } else if (backlog > 0 && !session.isLive && !session.overviewRunning && session.meta.summaries.every((s) => s.status === "done" || s.status === "failed")) {
+        tone = "warn"
+        text = `还有 ${backlog} 个阶段未并入会议概览`
+        actions.push(["合并", () => void session.updateOverview()])
+      }
     }
     this.alertEl.toggleClass("is-visible", !!text)
     if (!text) return
@@ -556,19 +477,6 @@ export class MeetingCard extends MarkdownRenderChild {
       const b = this.alertEl.createEl("button", { cls: "ml-link", text: label })
       b.addEventListener("click", action)
     }
-  }
-
-  /** The latest speech, for following the meeting while the summary tab is open. */
-  private renderLive(): void {
-    const session = this.session!
-    const interims = session.interims
-    const latest = interims.length ? { startMs: interims[0].startMs, text: interims.map((u) => u.text).join("") } : session.utterances.at(-1)
-    this.liveEl.empty()
-    this.liveEl.toggleClass("is-visible", session.isLive && !!latest)
-    if (!session.isLive || !latest) return
-    this.liveEl.createSpan({ cls: `ml-live-ts ${interims.length ? "is-live" : ""}`, text: formatClock(latest.startMs) })
-    const text = this.liveEl.createSpan({ cls: "ml-live-text" }).createSpan({ text: latest.text })
-    if (interims.length) text.createSpan({ cls: "ml-caret" })
   }
 
   private renderFoot(): void {
@@ -583,7 +491,6 @@ export class MeetingCard extends MarkdownRenderChild {
       a.addEventListener("click", () => this.host.openPath(path))
     }
     link("captions", "原始转写", session.transcriptPath)
-    if (session.meta.summaries.some((s) => s.status === "done")) link("list", "AI 摘要", session.summaryPath)
     for (const [i, path] of session.meta.minutes.entries()) link("file-pen-line", session.meta.minutes.length > 1 ? `正式纪要 ${i + 1}` : "正式纪要", path)
     const segs = session.meta.segments
     if (segs.length) {

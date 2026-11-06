@@ -96,6 +96,8 @@ export interface MeetingMeta {
   lastCutoffMs: number
   asrLogIds: string[]
   minutes: string[]
+  /** The card is folded into a single-line capsule. */
+  collapsed?: boolean
 }
 
 export function totalDuration(meta: MeetingMeta): number {

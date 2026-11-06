@@ -249,14 +249,14 @@ function contentMarkdown(content: SummaryContent, link: TimeLink): string[] {
   return lines
 }
 
-export function summaryMarkdown(record: SummaryRecord, link: TimeLink): string {
+export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##"): string {
   const title = record.content?.title ? ` · ${record.content.title}` : ""
-  const lines: string[] = [`## 阶段 ${record.index} · ${formatClock(record.startMs, true)} – ${formatClock(record.endMs, true)}${title}`, ""]
+  const lines: string[] = [`${heading} 阶段 ${record.index} · ${formatClock(record.startMs, true)} – ${formatClock(record.endMs, true)}${title}`, ""]
   if (record.content) lines.push(...(isEmptySummary(record.content) ? ["本阶段没有可提炼的实质内容。", ""] : contentMarkdown(record.content, link)))
   else if (record.raw) lines.push(record.raw, "")
   return lines.join("\n")
 }
 
-export function overviewMarkdown(content: SummaryContent, throughMs: number, link: TimeLink): string {
-  return [`## 会议概览 · 截至 ${formatClock(throughMs, true)}`, "", ...contentMarkdown(content, link)].join("\n")
+export function overviewMarkdown(content: SummaryContent, throughMs: number, link: TimeLink, heading = "##"): string {
+  return [`${heading} 会议概览 · 截至 ${formatClock(throughMs, true)}`, "", ...contentMarkdown(content, link)].join("\n")
 }

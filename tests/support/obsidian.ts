@@ -17,6 +17,7 @@ export class Events {
 }
 
 export class FileSystemAdapter {}
+export class MarkdownView {}
 export const normalizePath = (path: string) => path
 
 export const notices: string[] = []
