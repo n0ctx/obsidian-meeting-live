@@ -261,13 +261,13 @@ function contentMarkdown(content: SummaryContent, link: TimeLink, anchor?: LineA
 }
 
 export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##", anchor?: LineAnchor): string {
-  const title = record.content?.title ? ` · ${record.content.title}` : ""
-  const lines: string[] = [`${heading} 阶段 ${record.index} · ${formatClock(record.startMs, true)} – ${formatClock(record.endMs, true)}${title}`, ""]
+  const name = record.content?.title || `阶段 ${record.index}`
+  const lines: string[] = [`${heading} ${name}（${formatClock(record.startMs, true)} – ${formatClock(record.endMs, true)}）`, ""]
   if (record.content) lines.push(...(isEmptySummary(record.content) ? [anchored("本阶段没有可提炼的实质内容。", anchor?.(undefined, true)), ""] : contentMarkdown(record.content, link, anchor)))
   else if (record.raw) lines.push(anchored(record.raw.trimEnd(), anchor?.(undefined, true)), "")
   return lines.join("\n")
 }
 
 export function overviewMarkdown(content: SummaryContent, throughMs: number, link: TimeLink, heading = "##"): string {
-  return [`${heading} 会议概览 · 截至 ${formatClock(throughMs, true)}`, "", ...contentMarkdown(content, link)].join("\n")
+  return [`${heading} 会议概览（截至 ${formatClock(throughMs, true)}）`, "", ...contentMarkdown(content, link)].join("\n")
 }

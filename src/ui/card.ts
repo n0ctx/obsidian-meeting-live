@@ -62,6 +62,7 @@ export class MeetingCard extends MarkdownRenderChild {
   private controls!: HTMLElement
   private chips!: HTMLElement
   private alertEl!: HTMLElement
+  private captionEl!: HTMLElement
   private body!: HTMLElement
   private footRow!: HTMLElement
   private waveform: Waveform | undefined
@@ -98,8 +99,14 @@ export class MeetingCard extends MarkdownRenderChild {
     this.build()
     const on = (name: string, fn: (...args: unknown[]) => void) => this.refs.push([session, session.on(name, fn)])
     on("change", () => this.update())
-    on("utterance", (u) => this.transcript?.append(u as Utterance))
-    on("interim", () => this.transcript?.renderInterim())
+    on("utterance", (u) => {
+      this.transcript?.append(u as Utterance)
+      this.renderCaption()
+    })
+    on("interim", () => {
+      this.transcript?.renderInterim()
+      this.renderCaption()
+    })
     on("gap", () => {
       this.transcript?.gapsChanged()
       this.player?.refresh()
@@ -203,6 +210,8 @@ export class MeetingCard extends MarkdownRenderChild {
     this.alertEl = this.root.createDiv({ cls: "ml-alert" })
     this.body = this.root.createDiv({ cls: "ml-body" })
 
+    // Hangs below the capsule, outside the card, so the pill keeps its shape.
+    this.captionEl = this.containerEl.createDiv({ cls: "ml-caption", attr: { "aria-live": "polite" } })
     const foot = this.root.createDiv({ cls: "ml-foot" })
     this.player = new TimelinePlayer(foot, session)
     this.player.onPosition = (ms, playing) => this.transcript?.setPlaying(playing ? ms : undefined)
@@ -274,6 +283,7 @@ export class MeetingCard extends MarkdownRenderChild {
     this.statusText.setText(STATUS_LABEL[status])
     if (document.activeElement !== this.titleInput) this.titleInput.value = session.meta.title
     this.root.toggleClass("is-capsule", !!session.meta.collapsed)
+    this.renderCaption()
 
     const mode = status === "idle" && session.meta.segments.length === 0 ? "hero" : "transcript"
     if (mode !== this.bodyMode) this.buildBody(mode)
@@ -476,6 +486,24 @@ export class MeetingCard extends MarkdownRenderChild {
     for (const [label, action] of actions) {
       const b = this.alertEl.createEl("button", { cls: "ml-link", text: label })
       b.addEventListener("click", action)
+    }
+  }
+
+  /** Two subtitle lines under the capsule: the latest confirmed speech, then what is being recognized. */
+  private renderCaption(): void {
+    const session = this.session!
+    const el = this.captionEl
+    const finals = session.utterances.slice(-3).map((u) => u.text)
+    const interim = session.interims.map((u) => u.text).join("")
+    const visible = !!session.meta.collapsed && session.isLive && (finals.length > 0 || !!interim)
+    el.toggleClass("is-visible", visible)
+    el.empty()
+    if (!visible) return
+    const text = el.createDiv({ cls: "ml-caption-text" }).createSpan()
+    text.appendText(finals.join(" "))
+    if (interim) {
+      text.createSpan({ cls: "ml-caption-interim", text: `${finals.length ? " " : ""}${interim}` })
+      text.createSpan({ cls: "ml-caret" })
     }
   }
 

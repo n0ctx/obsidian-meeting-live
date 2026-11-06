@@ -62,8 +62,8 @@ test("each finished stage is merged into the overview, which the next stage sees
   await new Promise((r) => setTimeout(r, 0))
   const note = files["访谈.md"]
   assert.match(note, /^```\n\n%% meeting-live-summary m-1 [^\n]*%%\n## AI 阶段摘要\n/m)
-  assert.ok(note.indexOf("### 会议概览 · 截至 00:10:00") < note.indexOf("### 阶段 1"))
-  assert.ok(note.indexOf("### 阶段 2") < note.indexOf("%% /meeting-live-summary m-1 %%"))
+  assert.ok(note.indexOf("### 会议概览（截至 00:10:00）") < note.indexOf("### 阶段（00:00:00 – 00:05:00）"))
+  assert.ok(note.indexOf("### 阶段（00:05:00 – 00:10:00）") < note.indexOf("%% /meeting-live-summary m-1 %%"))
   assert.match(note, /%% \/meeting-live-summary m-1 %%\n\n我的速记\n$/)
   assert.equal(note.match(/## AI 阶段摘要/g)?.length, 1)
   // The first line of each stage carries its anchor; the transcript times point at the stage or point citing them.
