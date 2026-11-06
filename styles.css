@@ -530,14 +530,14 @@
   .ml-card.is-capsule .ml-wave { display: none; }
 }
 
-/* Subtitles hanging below the capsule: two lines anchored to the newest words. */
+/* Subtitles hanging from the capsule's flat bottom edge: same surface, no top edge, square corners. */
 .ml-caption {
   display: none;
-  margin: 6px 28px 0;
-  padding: 8px 16px;
+  margin: 0 34px;
+  padding: 7px 16px 8px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--background-secondary) 70%, var(--background-primary));
+  border-top: none;
+  background: var(--background-primary);
   color: var(--text-normal);
   font-family: var(--font-interface);
   font-size: 14px;
@@ -545,7 +545,9 @@
   text-align: left;
 }
 
-.ml-caption.is-visible { display: block; animation: ml-rise 200ms ease both; }
+.theme-dark .ml-caption { background: color-mix(in srgb, var(--background-secondary) 55%, var(--background-primary)); }
+.ml-card[data-status="recording"] + .ml-caption { border-color: color-mix(in srgb, var(--color-red) 28%, var(--background-modifier-border)); }
+.ml-caption.is-visible { display: block; animation: ml-drop 200ms ease both; }
 
 .ml-caption-text {
   display: flex;
@@ -561,7 +563,7 @@
 .ml-caption .ml-caret { background: var(--color-red); }
 
 @container (max-width: 520px) {
-  .ml-caption { margin: 6px 12px 0; }
+  .ml-caption { margin: 0 22px; }
 }
 
 /* ------------------------------------------------------------------ hero */
@@ -956,6 +958,7 @@
 @keyframes ml-ping { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(1.9); opacity: 0; } }
 @keyframes ml-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @keyframes ml-blink { to { visibility: hidden; } }
+@keyframes ml-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 @keyframes ml-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes ml-spin { to { transform: rotate(360deg); } }
 @keyframes ml-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
