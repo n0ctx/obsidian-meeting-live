@@ -80,6 +80,14 @@ test("summary markdown writes topic paragraphs, then to-dos and open questions",
   assert.match(md, /^- \[ \] 【待办】周五前提交方案\n- 【未决】是否含税未定 @70000$/m)
   assert.match(overviewMarkdown(record.content!, 120_000, (ms) => `@${ms}`), /^## 会议概览 · 截至 00:02:00\n\n\*\*毛利\*\*：/)
   assert.match(summaryMarkdown({ ...record, content: { title: "", paragraphs: [], todos: [], open: [] } }, String), /本阶段没有可提炼的实质内容/)
+
+  // Anchors: the first line always gets the stage's, later lines only when asked.
+  const anchored = summaryMarkdown(record, (ms) => `@${ms}`, "###", (point, first) => (first ? "s2" : point?.t !== undefined ? `t${point.t}` : undefined))
+  assert.match(anchored, /^### 阶段 2/)
+  assert.match(anchored, /^\*\*毛利\*\*：.* @65000 \^s2$/m)
+  assert.match(anchored, /^维持报价，Q3 收入 \*\*3\.2 亿元\*\*$/m)
+  assert.match(anchored, /^- \[ \] 【待办】周五前提交方案\n- 【未决】是否含税未定 @70000 \^t70000$/m)
+  assert.match(summaryMarkdown({ ...record, content: { title: "", paragraphs: [], todos: [], open: [] } }, String, "###", () => "s9"), /本阶段没有可提炼的实质内容。 \^s9/)
 })
 
 test("saved marked points and sectioned summaries become paragraphs and lists", () => {

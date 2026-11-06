@@ -241,19 +241,30 @@ function pointMarkdown(point: SummaryPoint, link: TimeLink): string {
   return `${text}${warn}${cite(point.t, link)}`
 }
 
-function contentMarkdown(content: SummaryContent, link: TimeLink): string[] {
+/** Block id to put on a summary line, if any; `first` marks the first line of a stage. */
+export type LineAnchor = (point: SummaryPoint | undefined, first: boolean) => string | undefined
+
+const anchored = (line: string, id: string | undefined) => (id ? `${line} ^${id}` : line)
+
+function contentMarkdown(content: SummaryContent, link: TimeLink, anchor?: LineAnchor): string[] {
   const lines: string[] = []
-  for (const p of content.paragraphs) lines.push(`${p.topic ? `**${p.topic}**：` : ""}${pointMarkdown(p, link)}`, "")
-  const lists = [...content.todos.map((p) => `- [ ] 【待办】${pointMarkdown(p, link)}`), ...content.open.map((p) => `- 【未决】${pointMarkdown(p, link)}`)]
+  let first = true
+  const mark = (line: string, point: SummaryPoint) => {
+    const id = anchor?.(point, first)
+    first = false
+    return anchored(line, id)
+  }
+  for (const p of content.paragraphs) lines.push(mark(`${p.topic ? `**${p.topic}**：` : ""}${pointMarkdown(p, link)}`, p), "")
+  const lists = [...content.todos.map((p) => mark(`- [ ] 【待办】${pointMarkdown(p, link)}`, p)), ...content.open.map((p) => mark(`- 【未决】${pointMarkdown(p, link)}`, p))]
   if (lists.length) lines.push(...lists, "")
   return lines
 }
 
-export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##"): string {
+export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##", anchor?: LineAnchor): string {
   const title = record.content?.title ? ` · ${record.content.title}` : ""
   const lines: string[] = [`${heading} 阶段 ${record.index} · ${formatClock(record.startMs, true)} – ${formatClock(record.endMs, true)}${title}`, ""]
-  if (record.content) lines.push(...(isEmptySummary(record.content) ? ["本阶段没有可提炼的实质内容。", ""] : contentMarkdown(record.content, link)))
-  else if (record.raw) lines.push(record.raw, "")
+  if (record.content) lines.push(...(isEmptySummary(record.content) ? [anchored("本阶段没有可提炼的实质内容。", anchor?.(undefined, true)), ""] : contentMarkdown(record.content, link, anchor)))
+  else if (record.raw) lines.push(anchored(record.raw.trimEnd(), anchor?.(undefined, true)), "")
   return lines.join("\n")
 }
 

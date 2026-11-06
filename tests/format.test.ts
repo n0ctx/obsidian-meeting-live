@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { decodeClientFrame, decodeServerFrame, encodeAudio, encodeFullRequest, encodeServerError, encodeServerResult } from "../src/asr/volcProtocol.ts"
-import { audioLine, gapLine, parseTranscript, transcriptHeader, utteranceLine } from "../src/meeting/transcriptFormat.ts"
+import { audioLine, gapLine, linkTranscript, parseTranscript, transcriptHeader, utteranceLine } from "../src/meeting/transcriptFormat.ts"
 import { formatClock, parseClock } from "../src/meeting/types.ts"
 
 test("client and server frames round-trip", () => {
@@ -29,6 +29,24 @@ test("transcript markdown round-trips and ignores other lines", () => {
   const parsed = parseTranscript(md)
   assert.deepEqual(parsed, [
     { startMs: 3200, endMs: 5600, text: "公司去年收入 3 亿， 毛利 40%" },
+    { startMs: 9100, endMs: 9900, text: "[注意] ^ 符号" },
+  ])
+})
+
+test("transcript times link back to the note, and linked lines still parse", () => {
+  const md =
+    utteranceLine({ startMs: 3200, endMs: 5600, text: "收入 3 亿" }) +
+    gapLine({ startMs: 6000, endMs: 9000, reason: "网络中断" }) +
+    utteranceLine({ startMs: 9100, endMs: 9900, text: "[注意] ^ 符号" }, "Daily/周会")
+  assert.match(md, /^\[\[Daily\/周会\|00:00:09\]\] \[注意\] \^ 符号 \^t9100-9900$/m)
+  const linked = linkTranscript(md, (ms) => (ms === 3200 ? "Daily/周会#^m-1-s1" : "Daily/周会"))
+  assert.equal(
+    linked,
+    "[[Daily/周会#^m-1-s1|00:00:03]] 收入 3 亿 ^t3200-5600\n\n" + gapLine({ startMs: 6000, endMs: 9000, reason: "网络中断" }) + "[[Daily/周会|00:00:09]] [注意] ^ 符号 ^t9100-9900\n\n",
+  )
+  assert.equal(linkTranscript(linked, (ms) => (ms === 3200 ? "Daily/周会#^m-1-s1" : "Daily/周会")), linked)
+  assert.deepEqual(parseTranscript(linked), [
+    { startMs: 3200, endMs: 5600, text: "收入 3 亿" },
     { startMs: 9100, endMs: 9900, text: "[注意] ^ 符号" },
   ])
 })

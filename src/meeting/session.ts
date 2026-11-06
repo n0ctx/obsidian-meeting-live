@@ -10,7 +10,7 @@ import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
 import { placeSummary } from "./noteSummary.ts"
 import { MINUTES_FILE, TRANSCRIPT_FILE, meetingFile, movedPath, noteName, type MeetingStore } from "./store.ts"
-import { audioLine, blockId, gapLine, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
+import { audioLine, blockId, gapLine, linkTranscript, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
 import { formatClock, formatDate, formatDateTime, totalDuration, type AudioFormat, type AudioSegment, type MeetingMeta, type SummaryRecord, type TranscriptGap, type Utterance } from "./types.ts"
 
 export interface SessionEnv {
@@ -302,7 +302,7 @@ export class MeetingSession extends Events {
     const index = this.utterances.findIndex((x) => x.startMs > u.startMs)
     if (index < 0) this.utterances.push(u)
     else this.utterances.splice(index, 0, u)
-    void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, utteranceLine(u)))
+    void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, utteranceLine(u, this.noteLink)))
     this.trigger("utterance", u)
   }
 
@@ -457,25 +457,54 @@ export class MeetingSession extends Events {
     return u ? `[[${target}#^${blockId(u)}|${formatClock(ms)}]]` : formatClock(ms)
   }
 
-  /** The note section holding the overview and every finished stage; empty until a stage is done. */
-  summariesMarkdown(): string {
-    const done = this.meta.summaries.filter((s) => s.status === "done")
-    if (done.length === 0) return ""
-    const link = (ms: number) => this.summaryLink(ms)
-    const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link, "###")] : []
-    return [
-      "## AI 阶段摘要",
-      "",
-      "> [!caution] AI 生成内容，可能存在遗漏或误读。所有事实以原始转写与录音为准。",
-      "",
-      ...overview,
-      ...done.map((s) => summaryMarkdown(s, link, "###")),
-    ].join("\n")
+  /** The meeting note as a link target. */
+  private get noteLink(): string {
+    return this.meta.notePath.replace(/\.md$/, "")
   }
 
-  /** Writes the summaries into the meeting's note, right below its block. */
+  /**
+   * The note section holding the overview and every finished stage (empty until a stage is done),
+   * and the block each transcript line links back to: the stage point citing it, else its stage.
+   */
+  noteSummary(): { markdown: string; anchors: Map<number, string> } {
+    const anchors = new Map<number, string>()
+    const done = this.meta.summaries.filter((s) => s.status === "done")
+    if (done.length === 0) return { markdown: "", anchors }
+    const link = (ms: number) => this.summaryLink(ms)
+    const cited = new Set<number>()
+    const stages = done.map((s) => {
+      const stage = `${this.id}-s${s.index}`
+      for (const ms of s.utterances) if (!anchors.has(ms)) anchors.set(ms, stage)
+      return summaryMarkdown(s, link, "###", (point, first) => {
+        const t = point?.t === undefined ? undefined : Math.round(point.t)
+        const fresh = t !== undefined && !cited.has(t)
+        const id = first ? stage : fresh ? `${this.id}-t${t}` : undefined
+        if (fresh && id) {
+          cited.add(t)
+          anchors.set(t, id)
+        }
+        return id
+      })
+    })
+    const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link, "###")] : []
+    const markdown = ["## AI 阶段摘要", "", "> [!caution] AI 生成内容，可能存在遗漏或误读。所有事实以原始转写与录音为准。", "", ...overview, ...stages].join("\n")
+    return { markdown, anchors }
+  }
+
+  /** Writes the summaries into the meeting's note, right below its block, and links each transcript time back to them. */
   publishSummary(): Promise<unknown> {
-    return this.writeIo(() => this.env.store.editNote(this.meta.notePath, (content) => placeSummary(content, this.id, this.summariesMarkdown())))
+    const { markdown, anchors } = this.noteSummary()
+    const note = this.noteLink
+    return this.writeIo(async () => {
+      await this.env.store.editNote(this.meta.notePath, (content) => placeSummary(content, this.id, markdown))
+      const path = this.transcriptPath
+      const current = await this.env.store.readTranscript(path)
+      const linked = linkTranscript(current, (ms) => {
+        const anchor = anchors.get(ms)
+        return anchor ? `${note}#^${anchor}` : note
+      })
+      if (linked !== current) await this.env.store.write(path, linked)
+    })
   }
 
   // ---------------------------------------------------------------- minutes

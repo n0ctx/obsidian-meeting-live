@@ -7,7 +7,7 @@ import type { MeetingMeta, SummaryRecord } from "../src/meeting/types.ts"
 import { utteranceLine } from "../src/meeting/transcriptFormat.ts"
 import { DEFAULT_SETTINGS } from "../src/settings.ts"
 
-const transcript = [{ startMs: 1000, endMs: 4000, text: "今年收入预计 3.2 亿元。" }, { startMs: 302_000, endMs: 305_000, text: "毛利率百分之四十二。" }].map(utteranceLine).join("")
+const transcript = [{ startMs: 1000, endMs: 4000, text: "今年收入预计 3.2 亿元。" }, { startMs: 302_000, endMs: 305_000, text: "毛利率百分之四十二。" }].map((u) => utteranceLine(u)).join("")
 
 function stage(index: number, startMs: number, utterance: number): SummaryRecord {
   return { index, startMs, endMs: startMs + 300_000, trigger: "auto", status: "pending", attempts: 0, utterances: [utterance] }
@@ -15,11 +15,13 @@ function stage(index: number, startMs: number, utterance: number): SummaryRecord
 
 function setup(reply: (messages: ChatMessage[]) => string) {
   const prompts: ChatMessage[][] = []
-  const files: Record<string, string> = { "访谈.md": "# 访谈\n\n```meeting-live\nid: m-1\n```\n\n我的速记\n" }
+  const files: Record<string, string> = { "m/原始转写.md": transcript, "访谈.md": "# 访谈\n\n```meeting-live\nid: m-1\n```\n\n我的速记\n" }
   const env = {
     store: {
       path: (folder: string, name: string) => `${folder}/${name}`,
       saveMeta: async () => undefined,
+      readTranscript: async (path: string) => files[path] ?? "",
+      write: async (path: string, content: string) => void (files[path] = content),
       editNote: async (path: string, edit: (content: string) => TextEdit | undefined) => {
         const change = edit(files[path] ?? "")
         if (change) files[path] = applyEdit(files[path] ?? "", change)
@@ -64,6 +66,10 @@ test("each finished stage is merged into the overview, which the next stage sees
   assert.ok(note.indexOf("### 阶段 2") < note.indexOf("%% /meeting-live-summary m-1 %%"))
   assert.match(note, /%% \/meeting-live-summary m-1 %%\n\n我的速记\n$/)
   assert.equal(note.match(/## AI 阶段摘要/g)?.length, 1)
+  // The first line of each stage carries its anchor; the transcript times point at the stage or point citing them.
+  assert.match(note, /^\*\*收入\*\*：收入 \*\*3\.2 亿元\*\* \[\[[^\]]*\]\] \^m-1-s1$/m)
+  assert.match(files["m/原始转写.md"], /^\[\[访谈#\^m-1-s1\|00:00:01\]\] 今年收入/m)
+  assert.match(files["m/原始转写.md"], /^\[\[访谈#\^m-1-s2\|00:05:02\]\] 毛利率/m)
 })
 
 test("a failed overview update keeps the previous overview and a retry merges every stage left out", async () => {

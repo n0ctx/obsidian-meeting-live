@@ -2,10 +2,12 @@ import { RangeSetBuilder } from "@codemirror/state"
 import { Decoration, ViewPlugin, WidgetType, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view"
 import { editorLivePreviewField } from "obsidian"
 
-// Live Preview shows Obsidian comments as text; the markers fencing the summary region become a quiet hint instead.
-// Reading view already hides them. Putting the cursor on a marker line reveals it as written.
+// Live Preview shows Obsidian comments as text; the markers fencing the summary region become a quiet hint instead,
+// and the block ids that transcript times link back to are hidden. Reading view already hides both.
+// Putting the cursor on a line reveals it as written.
 
 const MARKER = /^%% (\/?)meeting-live-summary m-[\w-]+\b.*%%[ \t]*$/
+const ANCHOR = / \^m-\d{8}-[a-z0-9]+-[st]\d+[ \t]*$/
 
 class MarkerWidget extends WidgetType {
   readonly end: boolean
@@ -34,9 +36,11 @@ function build(view: EditorView): DecorationSet {
   for (const { from, to } of view.visibleRanges) {
     for (let pos = from; pos <= to; ) {
       const line = view.state.doc.lineAt(pos)
-      const match = MARKER.exec(line.text)
-      if (match && !selection.some((r) => r.from <= line.to && r.to >= line.from)) {
-        builder.add(line.from, line.to, Decoration.replace({ widget: new MarkerWidget(match[1] === "/") }))
+      if (!selection.some((r) => r.from <= line.to && r.to >= line.from)) {
+        const marker = MARKER.exec(line.text)
+        const anchor = marker ? null : ANCHOR.exec(line.text)
+        if (marker) builder.add(line.from, line.to, Decoration.replace({ widget: new MarkerWidget(marker[1] === "/") }))
+        else if (anchor) builder.add(line.from + anchor.index, line.to, Decoration.replace({}))
       }
       pos = line.to + 1
     }
