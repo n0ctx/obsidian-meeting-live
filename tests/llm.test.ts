@@ -74,10 +74,10 @@ test("summary markdown writes topic paragraphs, then to-dos and open questions",
     },
   }
   const md = summaryMarkdown(record, (ms) => `@${ms}`)
-  assert.match(md, /^## 01:00 – 02:00 · 毛利$/m)
-  assert.match(summaryMarkdown({ ...record, content: { ...record.content!, title: "" } }, String), /^## 01:00 – 02:00 · 阶段 2$/m)
+  assert.match(md, /^## 毛利$/m)
+  assert.match(summaryMarkdown({ ...record, content: { ...record.content!, title: "" } }, String), /^## 阶段 2$/m)
   // A topic sits on its own line with its time; only unverified figures are marked, the rest stay plain.
-  assert.match(md, /^\*\*毛利\*\* · @65000\n毛利率 ==45%==$/m)
+  assert.match(md, /^\*\*毛利\*\* @65000\n毛利率 ==45%==$/m)
   assert.match(md, /^维持报价，Q3 收入 3\.2 亿元$/m)
   assert.doesNotMatch(md, /原文未找到|【/)
   assert.match(md, /^\*\*待办\*\*\n- \[ \] 周五前提交方案\n\n\*\*未决\*\*\n- 是否含税未定 @70000$/m)
@@ -87,8 +87,8 @@ test("summary markdown writes topic paragraphs, then to-dos and open questions",
 
   // Anchors: the first line always gets the stage's, later lines only when asked.
   const anchored = summaryMarkdown(record, (ms) => `@${ms}`, "###", (point, first) => (first ? "s2" : point?.t !== undefined ? `t${point.t}` : undefined))
-  assert.match(anchored, /^### 01:00 – 02:00 · 毛利$/m)
-  assert.match(anchored, /^\*\*毛利\*\* · @65000\n毛利率 ==45%== \^s2$/m)
+  assert.match(anchored, /^### 毛利$/m)
+  assert.match(anchored, /^\*\*毛利\*\* @65000\n毛利率 ==45%== \^s2$/m)
   assert.match(anchored, /^维持报价，Q3 收入 3\.2 亿元$/m)
   assert.match(anchored, /^- \[ \] 周五前提交方案\n\n\*\*未决\*\*\n- 是否含税未定 @70000 \^t70000$/m)
   assert.match(summaryMarkdown({ ...record, content: { title: "", paragraphs: [], todos: [], open: [] } }, String, "###", () => "s9"), /本阶段没有可提炼的实质内容。 \^s9/)

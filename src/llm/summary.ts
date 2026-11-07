@@ -271,18 +271,16 @@ function contentMarkdown(content: SummaryContent, link: TimeLink, anchor?: LineA
     return anchored(line, id)
   }
   for (const p of content.paragraphs) {
-    const block = p.topic ? `**${p.topic}**${cite(p.t, link).replace(/^ /, " · ")}\n${pointText(p)}` : pointMarkdown(p, link)
+    const block = p.topic ? `**${p.topic}**${cite(p.t, link)}\n${pointText(p)}` : pointMarkdown(p, link)
     lines.push(mark(block, p), "")
   }
   lines.push(...listMarkdown(content, link, mark))
   return lines
 }
 
-const range = (record: SummaryRecord) => `${formatClock(record.startMs)} – ${formatClock(record.endMs)}`
-
 export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##", anchor?: LineAnchor): string {
   const name = record.content?.title || `阶段 ${record.index}`
-  const lines: string[] = [`${heading} ${range(record)} · ${name}`, ""]
+  const lines: string[] = [`${heading} ${name}`, ""]
   if (record.content) lines.push(...(isEmptySummary(record.content) ? [anchored("本阶段没有可提炼的实质内容。", anchor?.(undefined, true)), ""] : contentMarkdown(record.content, link, anchor)))
   else if (record.raw) lines.push(anchored(record.raw.trimEnd(), anchor?.(undefined, true)), "")
   return lines.join("\n")
