@@ -32,8 +32,7 @@ ${SHAPE}`
 const OVERVIEW_CONTRACT = `You keep a running overview of a meeting in progress. You get the current overview and the summaries of new stages; return the updated overview of the whole meeting so far.
 
 - Organize by topic, not by time. Fold each new point into the topic it belongs to, or add a topic. Merge topics that turn out to be the same.
-- Each paragraph covers one topic: what was discussed, the key figures, the judgments and who holds them, and where it stands now. When a later stage revises, decides or answers something, state the latest position.
-- The overview is for seeing the whole meeting at a glance: keep each paragraph under about 150 Chinese characters or 100 words, and leave out details that do not matter for the whole picture.
+- Each paragraph is a single sentence of at most 50 Chinese characters or 30 words: the gist of the topic and where it stands now, with at most one key figure. Do not enumerate features, examples or sub-points; the stage summaries keep those. When a later stage revises, decides or answers something, state the latest position.
 - "todos": every action item so far, with duplicates merged.
 - "open": disagreements and questions still unresolved; drop those settled later and put the answer in the topic's paragraph.
 - Use only what the overview and summaries say. Do not invent names, numbers or conclusions.
@@ -235,10 +234,18 @@ function cite(t: number | undefined, link: TimeLink): string {
   return t === undefined ? "" : ` ${link(t)}`
 }
 
+/** Point text with unverified figures highlighted; every other figure stays plain so emphasis keeps its meaning. */
+function pointText(point: SummaryPoint): string {
+  return splitFigures(point).map((p) => (p.unverified ? `==${p.text}==` : p.text)).join("")
+}
+
 function pointMarkdown(point: SummaryPoint, link: TimeLink): string {
-  const text = splitFigures(point).map((p) => (p.figure ? `**${p.text}**` : p.text)).join("")
-  const warn = point.unverified.length ? `（⚠ 原文未找到 ${point.unverified.join("、")}，请核对）` : ""
-  return `${text}${warn}${cite(point.t, link)}`
+  return `${pointText(point)}${cite(point.t, link)}`
+}
+
+/** Whether any point of the content has a figure the transcript does not contain. */
+export function hasUnverified(content: SummaryContent | undefined): boolean {
+  return !!content && [...content.paragraphs, ...content.todos, ...content.open].some((p) => p.unverified.length > 0)
 }
 
 /** Block id to put on a summary line, if any; `first` marks the first line of a stage. */
@@ -246,6 +253,15 @@ export type LineAnchor = (point: SummaryPoint | undefined, first: boolean) => st
 
 const anchored = (line: string, id: string | undefined) => (id ? `${line} ^${id}` : line)
 
+/** To-dos and open questions, each under its own label. */
+function listMarkdown(content: SummaryContent, link: TimeLink, mark: (line: string, point: SummaryPoint) => string): string[] {
+  const lines: string[] = []
+  if (content.todos.length) lines.push("**待办**", ...content.todos.map((p) => mark(`- [ ] ${pointMarkdown(p, link)}`, p)), "")
+  if (content.open.length) lines.push("**未决**", ...content.open.map((p) => mark(`- ${pointMarkdown(p, link)}`, p)), "")
+  return lines
+}
+
+/** Stage detail: each topic on its own line with its time, the paragraph below it. */
 function contentMarkdown(content: SummaryContent, link: TimeLink, anchor?: LineAnchor): string[] {
   const lines: string[] = []
   let first = true
@@ -254,20 +270,26 @@ function contentMarkdown(content: SummaryContent, link: TimeLink, anchor?: LineA
     first = false
     return anchored(line, id)
   }
-  for (const p of content.paragraphs) lines.push(mark(`${p.topic ? `**${p.topic}**：` : ""}${pointMarkdown(p, link)}`, p), "")
-  const lists = [...content.todos.map((p) => mark(`- [ ] 【待办】${pointMarkdown(p, link)}`, p)), ...content.open.map((p) => mark(`- 【未决】${pointMarkdown(p, link)}`, p))]
-  if (lists.length) lines.push(...lists, "")
+  for (const p of content.paragraphs) {
+    const block = p.topic ? `**${p.topic}**${cite(p.t, link).replace(/^ /, " · ")}\n${pointText(p)}` : pointMarkdown(p, link)
+    lines.push(mark(block, p), "")
+  }
+  lines.push(...listMarkdown(content, link, mark))
   return lines
 }
 
+const range = (record: SummaryRecord) => `${formatClock(record.startMs)} – ${formatClock(record.endMs)}`
+
 export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##", anchor?: LineAnchor): string {
   const name = record.content?.title || `阶段 ${record.index}`
-  const lines: string[] = [`${heading} ${name}（${formatClock(record.startMs, true)} – ${formatClock(record.endMs, true)}）`, ""]
+  const lines: string[] = [`${heading} ${range(record)} · ${name}`, ""]
   if (record.content) lines.push(...(isEmptySummary(record.content) ? [anchored("本阶段没有可提炼的实质内容。", anchor?.(undefined, true)), ""] : contentMarkdown(record.content, link, anchor)))
   else if (record.raw) lines.push(anchored(record.raw.trimEnd(), anchor?.(undefined, true)), "")
   return lines.join("\n")
 }
 
+/** The overview reads as one scannable list: a line per topic, then to-dos and open questions. */
 export function overviewMarkdown(content: SummaryContent, throughMs: number, link: TimeLink, heading = "##"): string {
-  return [`${heading} 会议概览（截至 ${formatClock(throughMs, true)}）`, "", ...contentMarkdown(content, link)].join("\n")
+  const topics = content.paragraphs.map((p) => `- ${p.topic ? `**${p.topic}**：` : ""}${pointMarkdown(p, link)}`)
+  return [`${heading} 会议概览 · 截至 ${formatClock(throughMs)}`, "", ...topics, ...(topics.length ? [""] : []), ...listMarkdown(content, link, (line) => line)].join("\n")
 }

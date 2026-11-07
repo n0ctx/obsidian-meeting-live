@@ -5,7 +5,7 @@ import { SegmentRecorder, opusSupported, repairSegment } from "../audio/recorder
 import { AsrStreamer, type AsrConnect, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { buildMinutesMessages } from "../llm/minutes.ts"
-import { buildOverviewMessages, buildSummaryMessages, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown } from "../llm/summary.ts"
+import { buildOverviewMessages, buildSummaryMessages, hasUnverified, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
 import { placeSummary } from "./noteSummary.ts"
@@ -487,7 +487,9 @@ export class MeetingSession extends Events {
       })
     })
     const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link, "###")] : []
-    const markdown = ["## AI 阶段摘要", "", "> [!caution] AI 生成内容，可能存在遗漏或误读。所有事实以原始转写与录音为准。", "", ...overview, ...stages].join("\n")
+    const unverified = hasUnverified(this.meta.overview?.content) || done.some((s) => hasUnverified(s.content))
+    const caution = `> [!caution] AI 生成，可能有遗漏或误读，以原始转写和录音为准。${unverified ? "==高亮==的数字在转写里没有找到，请核对。" : ""}`
+    const markdown = ["## AI 阶段摘要", "", caution, "", ...overview, ...stages].join("\n")
     return { markdown, anchors }
   }
 

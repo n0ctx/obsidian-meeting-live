@@ -32,8 +32,8 @@ test("nothing is written without a summary, without the block, or for another me
 })
 
 test("to-dos ticked in the note stay ticked after a rewrite", () => {
-  const first = place(note("\n"), "- [ ] 【待办】交方案\n- [ ] 【待办】补数据")!
-  const ticked = first.replace("- [ ] 【待办】交方案", "- [x] 【待办】交方案")
-  const next = place(ticked, "- [ ] 【待办】交方案\n- [ ] 【待办】补数据\n- [ ] 【待办】约下次")!
-  assert.match(next, /- \[x\] 【待办】交方案\n- \[ \] 【待办】补数据\n- \[ \] 【待办】约下次/)
+  const first = place(note("\n"), "- [ ] 交方案\n- [ ] 补数据")!
+  const ticked = first.replace("- [ ] 交方案", "- [x] 交方案")
+  const next = place(ticked, "- [ ] 交方案\n- [ ] 补数据\n- [ ] 约下次")!
+  assert.match(next, /- \[x\] 交方案\n- \[ \] 补数据\n- \[ \] 约下次/)
 })
