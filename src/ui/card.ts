@@ -57,7 +57,11 @@ export class MeetingCard extends MarkdownRenderChild {
   private statusEl!: HTMLElement
   private statusText!: HTMLElement
   private metaText!: HTMLElement
+  private metaEl!: HTMLElement
+  private statusLine!: HTMLElement
+  private statusItems!: HTMLElement
   private titleInput!: HTMLInputElement
+  private titleWrap!: HTMLElement
   private clockEl!: HTMLElement
   private controls!: HTMLElement
   private chips!: HTMLElement
@@ -180,7 +184,6 @@ export class MeetingCard extends MarkdownRenderChild {
   private build(): void {
     const session = this.session!
     this.root = this.containerEl.createDiv({ cls: "ml-card" })
-    this.root.createDiv({ cls: "ml-edge" })
     // A click anywhere on the capsule that is not a control or the title expands it.
     this.root.addEventListener("click", (e) => {
       if (session.meta.collapsed && !(e.target as HTMLElement).closest("button, input")) session.setCollapsed(false)
@@ -188,22 +191,25 @@ export class MeetingCard extends MarkdownRenderChild {
 
     const head = this.root.createDiv({ cls: "ml-head" })
     const main = head.createDiv({ cls: "ml-head-main" })
-    this.titleInput = main.createEl("input", { cls: "ml-title", attr: { type: "text", spellcheck: "false", "aria-label": "会议名称" } })
-    this.titleInput.value = session.meta.title
+    // The wrapper mirrors the value in a hidden copy so the input is exactly as wide as its text.
+    this.titleWrap = main.createSpan({ cls: "ml-title-wrap" })
+    this.titleInput = this.titleWrap.createEl("input", { cls: "ml-title", attr: { type: "text", size: "1", spellcheck: "false", "aria-label": "会议名称" } })
+    this.setTitle(session.meta.title)
+    this.titleInput.addEventListener("input", () => (this.titleWrap.dataset.value = this.titleInput.value))
     this.titleInput.addEventListener("change", () => session.rename(this.titleInput.value))
     this.titleInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") this.titleInput.blur()
       if (e.key === "Escape") {
-        this.titleInput.value = session.meta.title
+        this.setTitle(session.meta.title)
         this.titleInput.blur()
       }
     })
-    const meta = main.createDiv({ cls: "ml-meta" })
-    this.statusEl = meta.createSpan({ cls: "ml-status" })
+    this.metaEl = main.createDiv({ cls: "ml-meta" })
+    this.statusEl = this.metaEl.createSpan({ cls: "ml-status" })
     this.statusEl.createSpan({ cls: "ml-dot" })
     this.statusText = this.statusEl.createSpan()
-    this.chips = meta.createSpan({ cls: "ml-chips" })
-    this.metaText = meta.createSpan({ cls: "ml-meta-text" })
+    // Chips live in the status line of the expanded card and move up into the header row of the capsule.
+    this.chips = createSpan({ cls: "ml-chips" })
 
     const side = head.createDiv({ cls: "ml-head-side" })
     const meter = side.createDiv({ cls: "ml-meter" })
@@ -220,7 +226,15 @@ export class MeetingCard extends MarkdownRenderChild {
     this.player = new TimelinePlayer(foot, session)
     this.player.onPosition = (ms, playing) => this.transcript?.setPlaying(playing ? ms : undefined)
     this.footRow = foot.createDiv({ cls: "ml-foot-row" })
+    this.statusLine = this.root.createDiv({ cls: "ml-statusline" })
+    this.statusItems = this.statusLine.createDiv({ cls: "ml-statusline-items" })
+    this.metaText = this.statusLine.createSpan({ cls: "ml-meta-text" })
     this.update()
+  }
+
+  private setTitle(title: string): void {
+    this.titleInput.value = title
+    this.titleWrap.dataset.value = title
   }
 
   private buildBody(mode: "hero" | "transcript"): void {
@@ -242,13 +256,10 @@ export class MeetingCard extends MarkdownRenderChild {
 
   private buildHero(): void {
     const hero = this.body.createDiv({ cls: "ml-hero" })
-    const art = hero.createDiv({ cls: "ml-hero-art" })
-    for (let i = 0; i < 3; i++) art.createDiv({ cls: "ml-ring" })
-    setIcon(art.createDiv({ cls: "ml-hero-mic" }), "mic")
-    const content = hero.createDiv({ cls: "ml-hero-content" })
-    content.createDiv({ cls: "ml-hero-title", text: "准备就绪" })
-    content.createDiv({ cls: "ml-hero-sub", text: "开始后录音和实时转写同步进行，阶段摘要会写在组件下方。可以在组件上下方继续写速记。" })
-    const checks = content.createDiv({ cls: "ml-checks" })
+    const intro = hero.createDiv({ cls: "ml-hero-intro" })
+    intro.createDiv({ cls: "ml-hero-title", text: "准备就绪" })
+    intro.createDiv({ cls: "ml-hero-sub", text: "开始后录音和实时转写同步进行，阶段摘要会写在组件下方。可以在组件上下方继续写速记。" })
+    const checks = hero.createDiv({ cls: "ml-checks" })
     const settings = this.host.settings
     const asrProblem = this.host.asrProblem()
     const llmProblem = this.session!.llmProblem
@@ -256,9 +267,11 @@ export class MeetingCard extends MarkdownRenderChild {
       const row = checks.createDiv({ cls: `ml-check ${ok ? "is-ok" : "is-off"}` })
       setIcon(row.createSpan({ cls: "ml-check-icon" }), icon)
       const t = row.createDiv({ cls: "ml-check-text" })
-      t.createDiv({ cls: "ml-check-title", text: title })
-      t.createDiv({ cls: "ml-check-detail", text: detail })
-      if (!ok) {
+      t.createSpan({ cls: "ml-check-title", text: title })
+      t.createSpan({ cls: "ml-check-detail", text: detail })
+      if (ok) {
+        row.createSpan({ cls: "ml-check-state", text: "就绪" })
+      } else {
         const fix = row.createEl("button", { cls: "ml-link", text: "去设置" })
         fix.addEventListener("click", () => this.host.openSettings())
       }
@@ -266,7 +279,7 @@ export class MeetingCard extends MarkdownRenderChild {
     check(true, "mic", "本地录音", `${settings.audioFormat === "ogg" ? "Opus 高码率" : "WAV 无损"} · 保存在 ${settings.folder}/`)
     check(!asrProblem, "captions", "实时转写", asrProblem ? `${asrProblem}；不影响录音` : "火山引擎豆包流式识别")
     check(!llmProblem, "list", "阶段摘要", llmProblem ? `${llmProblem}；可稍后补生成` : `每 ${settings.summaryIntervalMin} 分钟写入笔记 · ${this.host.llm().model}`)
-    content.createDiv({ cls: "ml-privacy", text: "录音时音频会实时上传至火山引擎识别，转写文本会发送到你配置的 LLM 服务生成摘要。原始录音与转写只保存在本库。" })
+    hero.createDiv({ cls: "ml-privacy", text: "录音时音频会实时上传至火山引擎识别，转写文本会发送到你配置的 LLM 服务生成摘要。原始录音与转写只保存在本库。" })
   }
 
   private iconButton(parent: HTMLElement, icon: string, label: string, action: () => void): HTMLButtonElement {
@@ -285,8 +298,10 @@ export class MeetingCard extends MarkdownRenderChild {
     this.root.dataset.status = status
     this.statusEl.dataset.status = status
     this.statusText.setText(STATUS_LABEL[status])
-    if (document.activeElement !== this.titleInput) this.titleInput.value = session.meta.title
+    if (document.activeElement !== this.titleInput) this.setTitle(session.meta.title)
     this.root.toggleClass("is-capsule", !!session.meta.collapsed)
+    const chipsHome = session.meta.collapsed ? this.metaEl : this.statusItems
+    if (this.chips.parentElement !== chipsHome) chipsHome.appendChild(this.chips)
     this.renderCaption()
 
     const mode = status === "idle" && session.meta.segments.length === 0 ? "hero" : "transcript"
@@ -335,6 +350,11 @@ export class MeetingCard extends MarkdownRenderChild {
         const running = session.meta.summaries.some((s) => s.status === "running")
         chips.push({ icon: running ? "list" : "timer", text: running ? "摘要生成中" : `下次摘要 ${formatClock(Math.max(0, session.nextSummaryInMs))}`, tone: running ? "busy" : "idle" })
       }
+      if (!session.llmProblem) {
+        const failed = session.meta.summaries.filter((s) => s.status === "failed").length
+        if (failed) chips.push({ icon: "triangle-alert", text: failed > 1 ? `${failed} 个摘要失败` : "摘要失败", tone: "warn" })
+        else if (session.meta.overview?.error && !session.overviewRunning) chips.push({ icon: "triangle-alert", text: "概览更新失败", tone: "warn" })
+      }
       const save = session.saveState
       chips.push({ icon: save === "error" ? "triangle-alert" : "check", text: save === "error" ? "保存失败" : save === "saving" ? "保存中" : "已保存", tone: save === "error" ? "error" : "idle" })
       // Least important last: it is the first to drop when the header runs out of room.
@@ -376,12 +396,12 @@ export class MeetingCard extends MarkdownRenderChild {
       button("is-secondary", "pause", "暂停", () => session.pause())
       button("is-stop", "square", "结束", () => session.stop())
     } else if (status === "paused" || status === "interrupted") {
-      button("is-record", "mic", "继续", () => this.startRecording(), !!blocked)
+      button("is-record", "circle", "继续", () => this.startRecording(), !!blocked)
       button("is-stop", "square", "结束", () => session.stop())
     } else if (status === "ended") {
       button("is-secondary", "mic", "继续录音", () => this.startRecording(), !!blocked)
     } else {
-      button("is-record is-hero", "mic", "开始录音", () => this.startRecording(), !!blocked)
+      button("is-record is-hero", "circle", "开始录音", () => this.startRecording(), !!blocked)
     }
     const fold = this.controls.createEl("button", { cls: "ml-ctl is-fold", attr: { "aria-label": collapsed ? "展开会议组件" : "收起为胶囊", "aria-expanded": String(!collapsed) } })
     setIcon(fold, collapsed ? "chevrons-up-down" : "chevrons-down-up")

@@ -1,0 +1,429 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T06:33:27.884Z",
+  "title": "Design System: Meeting Live",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Field Olive",
+        "canonical": "#a3b06a",
+        "light": "#5a6a26",
+        "tonalRamp": [
+          "#363b27",
+          "#545c3a",
+          "#737c4c",
+          "#8e995d",
+          "#b4bf86",
+          "#c8cfa4",
+          "#dbdfc3",
+          "#eeefe2"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Cream Key",
+        "canonical": "#e1dbc5",
+        "light": "#2c302b",
+        "note": "Inverts to near-black ink fill in light mode.",
+        "tonalRamp": [
+          "#484741",
+          "#727065",
+          "#9d998a",
+          "#c3beab",
+          "#e6e1cf",
+          "#ece8d9",
+          "#f1eee4",
+          "#f7f5ee"
+        ]
+      },
+      "rec": {
+        "role": "secondary",
+        "displayName": "Brick Red",
+        "canonical": "#d9705b",
+        "light": "#b5432c",
+        "tonalRamp": [
+          "#452923",
+          "#6e3d32",
+          "#975142",
+          "#bc6250",
+          "#e08b7a",
+          "#e7aa9c",
+          "#eec8be",
+          "#f5e6df"
+        ]
+      },
+      "warn": {
+        "role": "tertiary",
+        "displayName": "Signal Amber",
+        "canonical": "#d0aa55",
+        "light": "#94660f",
+        "tonalRamp": [
+          "#433a21",
+          "#6a5930",
+          "#91783e",
+          "#b5944b",
+          "#d8ba75",
+          "#e2cb98",
+          "#ebddbb",
+          "#f4eedf"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Green-Charcoal Ground",
+        "canonical": "#1e2220",
+        "light": "#f6f5f0",
+        "note": "Light mode: Paper Ground.",
+        "tonalRamp": [
+          "#111412",
+          "#151816",
+          "#181c1a",
+          "#1b1f1d",
+          "#4a4d4b",
+          "#7a7c79",
+          "#abaca8",
+          "#dbdbd7"
+        ]
+      },
+      "sunk": {
+        "role": "neutral",
+        "displayName": "Sunk",
+        "canonical": "#191c1b",
+        "light": "#eeede6",
+        "tonalRamp": [
+          "#101211",
+          "#121514",
+          "#151817",
+          "#171a19",
+          "#464847",
+          "#787977",
+          "#a9a9a7",
+          "#dbdad6"
+        ]
+      },
+      "raise": {
+        "role": "neutral",
+        "displayName": "Raise",
+        "canonical": "#262b28",
+        "light": "#ffffff",
+        "tonalRamp": [
+          "#131615",
+          "#181c1a",
+          "#1e221f",
+          "#222724",
+          "#505451",
+          "#7f827e",
+          "#aeafab",
+          "#dcdcd8"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#333935",
+        "light": "#dddbd1",
+        "tonalRamp": [
+          "#171a18",
+          "#1f2320",
+          "#272b28",
+          "#2e332f",
+          "#5b5f5b",
+          "#878a86",
+          "#b2b4b0",
+          "#dededa"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "canonical": "#444b46",
+        "light": "#c9c6ba",
+        "tonalRamp": [
+          "#1c1f1d",
+          "#272b28",
+          "#323734",
+          "#3c423e",
+          "#686e69",
+          "#909490",
+          "#b8bab6",
+          "#e1e1dd"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#dcdad0",
+        "light": "#2a2d29",
+        "tonalRamp": [
+          "#464744",
+          "#70706b",
+          "#999992",
+          "#bfbdb5",
+          "#e2e0d7",
+          "#e9e7e0",
+          "#efeee8",
+          "#f6f5f0"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "canonical": "#a3a79c",
+        "light": "#4a4e46",
+        "tonalRamp": [
+          "#363935",
+          "#545752",
+          "#73766e",
+          "#8e9288",
+          "#b4b7ae",
+          "#c8c9c1",
+          "#dbdbd5",
+          "#eeeee9"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3",
+        "canonical": "#888e85",
+        "light": "#666a60",
+        "tonalRamp": [
+          "#2f322f",
+          "#484b47",
+          "#60655f",
+          "#777c74",
+          "#9fa39b",
+          "#b8bbb4",
+          "#d1d2cd",
+          "#eaeae5"
+        ]
+      }
+    },
+    "modes": {
+      "mechanism": "Every --ml-* role is declared twice, on .theme-dark and .theme-light; frontmatter keys ending in -light are the light-mode values.",
+      "fontsScope": ".ml-host, .ml-modal, .ml-settings declare --ml-sans, --ml-mono, --ml-radius (8px), --ml-radius-s (5px) and --ml-ease."
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Meeting title in the header (14px in the capsule)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Transcript text; max 46em."
+      },
+      "ui": {
+        "displayName": "UI",
+        "purpose": "Card base size; ready-state copy."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Button and alert text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Status pill and foot status line."
+      },
+      "clock": {
+        "displayName": "Clock",
+        "purpose": "Header elapsed time, mono tabular."
+      },
+      "timecode": {
+        "displayName": "Timecode",
+        "purpose": "Transcript gutter, player times, rate, gap ranges."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 4px 14px -6px rgb(0 0 0 / 0.35)",
+        "purpose": "Jump-to-latest pill floating over scrolling transcript only."
+      },
+      {
+        "name": "thumb",
+        "value": "0 1px 3px rgb(0 0 0 / 0.35)",
+        "purpose": "Scrubber thumb on hover or focus only."
+      }
+    ],
+    "focus": [
+      {
+        "name": "focus-ring",
+        "value": "outline: 1.5px solid var(--ml-accent); outline-offset: 1px",
+        "purpose": "All card controls, scrubber and job-bar buttons."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "All transitions and entry animations."
+      },
+      {
+        "name": "hover",
+        "value": "120-140ms",
+        "purpose": "Background, border and colour changes on controls."
+      },
+      {
+        "name": "breathe",
+        "value": "opacity 1 to 0.4, 1.6-2.4s ease-in-out infinite",
+        "purpose": "Recording dot (1.8s), busy chip (1.6s), paused clock (2.4s)."
+      },
+      {
+        "name": "rise",
+        "value": "translateY(3px) to 0, 220-260ms",
+        "purpose": "New transcript lines and alerts."
+      },
+      {
+        "name": "drop",
+        "value": "translateY(-4px) to 0, 200ms",
+        "purpose": "Capsule caption appearing."
+      },
+      {
+        "name": "loading-sweep",
+        "value": "2px olive gradient band, 1.2-1.6s",
+        "purpose": "Card loading and running job bar."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce disables all animation and transition",
+        "purpose": "Required for every animated element."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "560px",
+        "purpose": "Container query on the card host (not the viewport)."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Record (Primary Key)",
+      "kind": "button",
+      "refersTo": "control-primary",
+      "description": "The single filled control: starts recording; cream fill, red record dot.",
+      "html": "<div class=\"ds-scope\"><button class=\"ds-btn ds-btn-primary\"><svg width=\"10\" height=\"10\" viewBox=\"0 0 10 10\"><circle cx=\"5\" cy=\"5\" r=\"5\" fill=\"#d9705b\"/></svg>开始录音</button></div>",
+      "css": ".ds-scope{--ml-ground:#1e2220;--ml-sunk:#191c1b;--ml-raise:#262b28;--ml-hover:rgb(220 218 208 / .06);--ml-press:rgb(220 218 208 / .1);--ml-line:#333935;--ml-line-strong:#444b46;--ml-ink:#dcdad0;--ml-ink-2:#a3a79c;--ml-ink-3:#888e85;--ml-accent:#a3b06a;--ml-accent-wash:rgb(163 176 106 / .12);--ml-primary:#e1dbc5;--ml-primary-hover:#ece7d4;--ml-on-primary:#1e2220;--ml-rec:#d9705b;--ml-rec-wash:rgb(217 112 91 / .13);--ml-warn:#d0aa55;--ml-warn-wash:rgb(208 170 85 / .12);font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;background:var(--ml-ground);color:var(--ml-ink);padding:12px;font-size:13px}.ds-btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 8px;border:1px solid var(--ml-line-strong);border-radius:6px;background:transparent;color:var(--ml-ink);font:500 12.5px/1 -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;cursor:pointer;transition:background 140ms cubic-bezier(0.22, 1, 0.36, 1),border-color 140ms cubic-bezier(0.22, 1, 0.36, 1)}.ds-btn:hover{background:var(--ml-hover);border-color:rgb(220 218 208 / .3)}.ds-btn:active{background:var(--ml-press)}.ds-btn:focus-visible{outline:1.5px solid var(--ml-accent);outline-offset:1px}.ds-btn-primary{border-color:transparent;background:var(--ml-primary);color:var(--ml-on-primary);font-weight:600}.ds-btn-primary:hover{border-color:transparent;background:var(--ml-primary-hover)}"
+    },
+    {
+      "name": "Ghost Control",
+      "kind": "button",
+      "refersTo": "control-ghost",
+      "description": "Default header and footer control: outlined, transparent.",
+      "html": "<div class=\"ds-scope\"><button class=\"ds-btn\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\"><rect x=\"6\" y=\"5\" width=\"4\" height=\"14\" rx=\"1\"/><rect x=\"14\" y=\"5\" width=\"4\" height=\"14\" rx=\"1\"/></svg>暂停</button></div>",
+      "css": ".ds-scope{--ml-ground:#1e2220;--ml-sunk:#191c1b;--ml-raise:#262b28;--ml-hover:rgb(220 218 208 / .06);--ml-press:rgb(220 218 208 / .1);--ml-line:#333935;--ml-line-strong:#444b46;--ml-ink:#dcdad0;--ml-ink-2:#a3a79c;--ml-ink-3:#888e85;--ml-accent:#a3b06a;--ml-accent-wash:rgb(163 176 106 / .12);--ml-primary:#e1dbc5;--ml-primary-hover:#ece7d4;--ml-on-primary:#1e2220;--ml-rec:#d9705b;--ml-rec-wash:rgb(217 112 91 / .13);--ml-warn:#d0aa55;--ml-warn-wash:rgb(208 170 85 / .12);font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;background:var(--ml-ground);color:var(--ml-ink);padding:12px;font-size:13px}.ds-btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 8px;border:1px solid var(--ml-line-strong);border-radius:6px;background:transparent;color:var(--ml-ink);font:500 12.5px/1 -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;cursor:pointer;transition:background 140ms cubic-bezier(0.22, 1, 0.36, 1),border-color 140ms cubic-bezier(0.22, 1, 0.36, 1)}.ds-btn:hover{background:var(--ml-hover);border-color:rgb(220 218 208 / .3)}.ds-btn:active{background:var(--ml-press)}.ds-btn:focus-visible{outline:1.5px solid var(--ml-accent);outline-offset:1px}"
+    },
+    {
+      "name": "Stop Control",
+      "kind": "button",
+      "refersTo": "control-stop",
+      "description": "Ends a recording; red text and border, red wash on hover.",
+      "html": "<div class=\"ds-scope\"><button class=\"ds-btn ds-btn-stop\"><svg width=\"10\" height=\"10\" viewBox=\"0 0 10 10\"><rect width=\"10\" height=\"10\" rx=\"1.5\" fill=\"currentColor\"/></svg>结束</button></div>",
+      "css": ".ds-scope{--ml-ground:#1e2220;--ml-sunk:#191c1b;--ml-raise:#262b28;--ml-hover:rgb(220 218 208 / .06);--ml-press:rgb(220 218 208 / .1);--ml-line:#333935;--ml-line-strong:#444b46;--ml-ink:#dcdad0;--ml-ink-2:#a3a79c;--ml-ink-3:#888e85;--ml-accent:#a3b06a;--ml-accent-wash:rgb(163 176 106 / .12);--ml-primary:#e1dbc5;--ml-primary-hover:#ece7d4;--ml-on-primary:#1e2220;--ml-rec:#d9705b;--ml-rec-wash:rgb(217 112 91 / .13);--ml-warn:#d0aa55;--ml-warn-wash:rgb(208 170 85 / .12);font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;background:var(--ml-ground);color:var(--ml-ink);padding:12px;font-size:13px}.ds-btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 8px;border:1px solid var(--ml-line-strong);border-radius:6px;background:transparent;color:var(--ml-ink);font:500 12.5px/1 -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;cursor:pointer;transition:background 140ms cubic-bezier(0.22, 1, 0.36, 1),border-color 140ms cubic-bezier(0.22, 1, 0.36, 1)}.ds-btn:hover{background:var(--ml-hover);border-color:rgb(220 218 208 / .3)}.ds-btn:active{background:var(--ml-press)}.ds-btn:focus-visible{outline:1.5px solid var(--ml-accent);outline-offset:1px}.ds-btn-stop{border-color:rgb(217 112 91 / .45);color:var(--ml-rec)}.ds-btn-stop:hover{border-color:var(--ml-rec);background:var(--ml-rec-wash)}"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Card state tag; colour follows the state, the dot breathes while recording.",
+      "html": "<div class=\"ds-scope\"><span class=\"ds-pill ds-rec\"><i></i>录音中</span> <span class=\"ds-pill ds-idle\"><i></i>未开始</span></div>",
+      "css": ".ds-scope{--ml-ground:#1e2220;--ml-sunk:#191c1b;--ml-raise:#262b28;--ml-hover:rgb(220 218 208 / .06);--ml-press:rgb(220 218 208 / .1);--ml-line:#333935;--ml-line-strong:#444b46;--ml-ink:#dcdad0;--ml-ink-2:#a3a79c;--ml-ink-3:#888e85;--ml-accent:#a3b06a;--ml-accent-wash:rgb(163 176 106 / .12);--ml-primary:#e1dbc5;--ml-primary-hover:#ece7d4;--ml-on-primary:#1e2220;--ml-rec:#d9705b;--ml-rec-wash:rgb(217 112 91 / .13);--ml-warn:#d0aa55;--ml-warn-wash:rgb(208 170 85 / .12);font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;background:var(--ml-ground);color:var(--ml-ink);padding:12px;font-size:13px}.ds-pill{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 7px;border:1px solid rgb(217 112 91 / .34);border-radius:4px;color:color-mix(in srgb,var(--ml-rec) 80%,var(--ml-ink));font-size:11.5px;font-weight:500;line-height:1}.ds-pill i{width:6px;height:6px;border-radius:50%;background:var(--ml-rec);animation:ds-breathe 1.8s ease-in-out infinite}.ds-idle{border-color:var(--ml-line-strong);color:var(--ml-ink-2)}.ds-idle i{background:transparent;box-shadow:inset 0 0 0 1.25px var(--ml-ink-3);animation:none}@keyframes ds-breathe{50%{opacity:.4}}@media (prefers-reduced-motion:reduce){.ds-pill i{animation:none}}"
+    },
+    {
+      "name": "Status Line",
+      "kind": "custom",
+      "refersTo": "status-line",
+      "description": "Signature foot strip: icon-led items, the item needing attention raised as a tinted chip.",
+      "html": "<div class=\"ds-scope\" style=\"padding:0\"><div class=\"ds-sl\"><span class=\"ds-chip ds-busy\">转写中</span><span class=\"ds-chip ds-warn\">识别重连中</span><span class=\"ds-chip\">已保存</span><span class=\"ds-right\">11月7日 15:00</span></div></div>",
+      "css": ".ds-scope{--ml-ground:#1e2220;--ml-sunk:#191c1b;--ml-raise:#262b28;--ml-hover:rgb(220 218 208 / .06);--ml-press:rgb(220 218 208 / .1);--ml-line:#333935;--ml-line-strong:#444b46;--ml-ink:#dcdad0;--ml-ink-2:#a3a79c;--ml-ink-3:#888e85;--ml-accent:#a3b06a;--ml-accent-wash:rgb(163 176 106 / .12);--ml-primary:#e1dbc5;--ml-primary-hover:#ece7d4;--ml-on-primary:#1e2220;--ml-rec:#d9705b;--ml-rec-wash:rgb(217 112 91 / .13);--ml-warn:#d0aa55;--ml-warn-wash:rgb(208 170 85 / .12);font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;background:var(--ml-ground);color:var(--ml-ink);padding:12px;font-size:13px}.ds-sl{display:flex;align-items:center;height:30px;padding:0 12px 0 18px;border-top:1px solid var(--ml-line);background:var(--ml-sunk);color:var(--ml-ink-3);font-size:11.5px}.ds-chip{display:inline-flex;align-items:center;height:20px;margin-right:16px;white-space:nowrap}.ds-busy{color:var(--ml-accent)}.ds-warn{padding:0 7px 0 6px;margin-left:-7px;margin-right:9px;border-radius:4px;background:var(--ml-warn-wash);color:var(--ml-warn)}.ds-right{margin-left:auto;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Transcript Line",
+      "kind": "custom",
+      "refersTo": "transcript-line",
+      "description": "Mono timecode gutter plus body text; accent wash while playing.",
+      "html": "<div class=\"ds-scope\"><div class=\"ds-line\"><button class=\"ds-ts\">00:25</button><div class=\"ds-text\">示例转写文本，占位内容。</div></div><div class=\"ds-line is-playing\"><button class=\"ds-ts\">00:46</button><div class=\"ds-text\">正在播放的一行。</div></div></div>",
+      "css": ".ds-scope{--ml-ground:#1e2220;--ml-sunk:#191c1b;--ml-raise:#262b28;--ml-hover:rgb(220 218 208 / .06);--ml-press:rgb(220 218 208 / .1);--ml-line:#333935;--ml-line-strong:#444b46;--ml-ink:#dcdad0;--ml-ink-2:#a3a79c;--ml-ink-3:#888e85;--ml-accent:#a3b06a;--ml-accent-wash:rgb(163 176 106 / .12);--ml-primary:#e1dbc5;--ml-primary-hover:#ece7d4;--ml-on-primary:#1e2220;--ml-rec:#d9705b;--ml-rec-wash:rgb(217 112 91 / .13);--ml-warn:#d0aa55;--ml-warn-wash:rgb(208 170 85 / .12);font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;background:var(--ml-ground);color:var(--ml-ink);padding:12px;font-size:13px}.ds-line{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;padding:5px 8px;border-radius:5px;transition:background 160ms cubic-bezier(0.22, 1, 0.36, 1)}.ds-line:hover{background:var(--ml-hover)}.ds-line.is-playing{background:var(--ml-accent-wash)}.ds-line.is-playing .ds-ts{color:var(--ml-accent)}.ds-ts{justify-self:start;margin-top:4px;padding:0 4px;border:none;border-radius:4px;background:none;color:var(--ml-ink-3);font:400 11px/1.7 ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;font-variant-numeric:tabular-nums;cursor:pointer}.ds-ts:hover{background:var(--ml-hover);color:var(--ml-accent)}.ds-ts:focus-visible{outline:1.5px solid var(--ml-accent);outline-offset:1px}.ds-text{font-size:14.5px;line-height:1.75}"
+    },
+    {
+      "name": "Meeting Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The docked panel: hairline border, 8px radius, flat ground, header row over the body.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-head\"><b>示例会议</b><span class=\"ds-clock\">00:00:00</span></div><div class=\"ds-body\">卡片内容占位。</div></div>",
+      "css": ".ds-card{--ml-ground:#1e2220;--ml-sunk:#191c1b;--ml-raise:#262b28;--ml-hover:rgb(220 218 208 / .06);--ml-press:rgb(220 218 208 / .1);--ml-line:#333935;--ml-line-strong:#444b46;--ml-ink:#dcdad0;--ml-ink-2:#a3a79c;--ml-ink-3:#888e85;--ml-accent:#a3b06a;--ml-accent-wash:rgb(163 176 106 / .12);--ml-primary:#e1dbc5;--ml-primary-hover:#ece7d4;--ml-on-primary:#1e2220;--ml-rec:#d9705b;--ml-rec-wash:rgb(217 112 91 / .13);--ml-warn:#d0aa55;--ml-warn-wash:rgb(208 170 85 / .12);font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;background:var(--ml-ground);color:var(--ml-ink);padding:12px;font-size:13px}.ds-card{padding:0;border:1px solid var(--ml-line);border-radius:8px;overflow:hidden}.ds-head{display:flex;align-items:center;justify-content:space-between;min-height:52px;padding:8px 10px 8px 18px}.ds-head b{font-size:15px;font-weight:600}.ds-clock{color:var(--ml-ink-2);font:500 14px/1 ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;font-variant-numeric:tabular-nums}.ds-body{padding:14px 18px;border-top:1px solid var(--ml-line);color:var(--ml-ink-2)}"
+    },
+    {
+      "name": "Warn Alert",
+      "kind": "custom",
+      "refersTo": "alert-warn",
+      "description": "Inline degraded-state notice with an olive text action.",
+      "html": "<div class=\"ds-scope\"><div class=\"ds-alert\"><span>语音识别已断开，录音仍在继续。</span><button class=\"ds-link\">重连</button></div></div>",
+      "css": ".ds-scope{--ml-ground:#1e2220;--ml-sunk:#191c1b;--ml-raise:#262b28;--ml-hover:rgb(220 218 208 / .06);--ml-press:rgb(220 218 208 / .1);--ml-line:#333935;--ml-line-strong:#444b46;--ml-ink:#dcdad0;--ml-ink-2:#a3a79c;--ml-ink-3:#888e85;--ml-accent:#a3b06a;--ml-accent-wash:rgb(163 176 106 / .12);--ml-primary:#e1dbc5;--ml-primary-hover:#ece7d4;--ml-on-primary:#1e2220;--ml-rec:#d9705b;--ml-rec-wash:rgb(217 112 91 / .13);--ml-warn:#d0aa55;--ml-warn-wash:rgb(208 170 85 / .12);font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;background:var(--ml-ground);color:var(--ml-ink);padding:12px;font-size:13px}.ds-alert{display:flex;gap:9px;padding:8px 12px;border:1px solid rgb(208 170 85 / .32);border-radius:6px;background:var(--ml-warn-wash);color:color-mix(in srgb,var(--ml-warn) 45%,var(--ml-ink));font-size:12.5px;line-height:1.6}.ds-alert span{flex:1}.ds-link{padding:0;border:none;background:none;color:var(--ml-accent);font:500 12.5px -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;text-underline-offset:3px;cursor:pointer}.ds-link:hover{text-decoration:underline}.ds-link:focus-visible{outline:1.5px solid var(--ml-accent);outline-offset:1px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Docked Instrument Panel",
+    "overview": "Meeting Live renders as a flat panel docked inside a Markdown note, drawn in the grammar of a desktop agent client: a green-grey surface, one-pixel hairlines, compact rows, and one desaturated olive accent. The card has to sit among the user's own writing without competing with it, so at rest it is nearly monochrome. Colour shows up only when something needs saying: brick red means audio is being captured, amber means something is degraded, olive means the plugin is working or something is ready.\n\nDensity is that of a desktop tool, not a web widget. The header is one row: title, status pill, a mono clock, the level meter, and the controls. The transcript is a single reading column with faint mono timecodes in a gutter. Secondary state never crowds the header; it sits in a darker 30px status line at the foot of the card, and the one item that needs attention is raised there as a tinted chip.\n\nThe panel carries its own palette and switches it with Obsidian's light and dark mode, ignoring the theme's accent. Plugin pieces that live inside Obsidian's own modals and settings defer to Obsidian's variables instead, so those surfaces read as native.",
+    "keyCharacteristics": [
+      "Flat surfaces separated by hairlines and tonal steps (ground, sunk, raise), never by shadow.",
+      "One accent (olive), one primary key (cream in dark mode, near-black ink in light mode), two alarm hues (red for recording, amber for degraded).",
+      "System sans for everything the user reads; mono only for time and numeric data.",
+      "Small radii (4–8px), controls 26–28px tall, a 13px UI base.",
+      "State is spoken in the status pill, the clock colour and the foot status line, not by decoration.",
+      "Calm motion: a breathing dot, new lines rising 3px, the caption dropping 4px; reduced motion turns all of it off."
+    ],
+    "rules": [
+      {
+        "name": "The Own Palette Rule",
+        "body": "The card, caption, job bar and status-bar dot use only `--ml-*` colours, defined per mode on `.theme-dark` and `.theme-light`. They never read the Obsidian theme accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Native Modal Rule",
+        "body": "Inside Obsidian modals and the settings tab, plugin pieces use Obsidian's variables (`--text-muted`, `--text-faint`, `--background-modifier-border`, `--background-modifier-hover`, `--text-error`), and main modal actions use Obsidian's own call-to-action button. Shared buttons remap their ink, line and hover roles to those variables when placed in a modal.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Means Recording Rule",
+        "body": "Brick red appears only for active capture and hard failure. Do not use it for emphasis or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Is Data Rule",
+        "body": "Mono is used only for time, durations, rates and counts shown as numbers. Prose, labels and headings are always sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The No Shouting Rule",
+        "body": "No uppercase, no letter-spaced labels, no display sizes. The largest text in the card is the 15px title.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Panel Rule",
+        "body": "Shadows are for elements floating above moving content (the jump pill, the scrubber thumb), never for a resting surface. Separate resting surfaces with a hairline or a tonal step.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** take every card colour from the `--ml-*` roles for the current mode, and add new roles to both `.theme-dark` and `.theme-light` together.",
+      "**Do** use Obsidian variables and Obsidian's call-to-action button for plugin pieces inside modals and settings.",
+      "**Do** keep one filled primary control per context; everything else is ghost or quiet.",
+      "**Do** put secondary state in the foot status line, raising only the item that needs the user as a tinted chip.",
+      "**Do** set times, durations and counts in mono with tabular figures.",
+      "**Do** start every row on the shared 18px gutter (14px narrow).",
+      "**Do** use Lucide icons through `setIcon` at 12–15px with a 1.75 stroke.",
+      "**Do** wrap every animation in the reduced-motion kill switch."
+    ],
+    "donts": [
+      "**Don't** read Obsidian's theme accent inside the card.",
+      "**Don't** use brick red for anything but active recording and hard failure.",
+      "**Don't** put a shadow on a resting surface; shadows are only for the floating jump pill and the scrubber thumb.",
+      "**Don't** add gradient fills or gradient edges to surfaces; gradients appear only as the 2px loading sweep and the scroll fade masks.",
+      "**Don't** use pill-shaped buttons or radii above 8px; circles are only for the play button, dots and the thumb.",
+      "**Don't** add uppercase labels, letter-spaced kickers or text sizes above the 15px title.",
+      "**Don't** add chips back into the header row of the expanded card; it clips the status pill at common note widths."
+    ]
+  }
+}

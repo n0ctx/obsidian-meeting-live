@@ -3,3 +3,5 @@ main.js
 *.log
 data.json
 .DS_Store
+.impeccable/review/
+.impeccable/hook.cache.json
