@@ -5,7 +5,11 @@ import { setLanguage } from "./support/obsidian.ts"
 
 afterEach(() => setLanguage("zh-CN"))
 
-const HAN = /[㐀-鿿豈-﫿]/
+const HAN = new RegExp("[\\u3400-\\u9fff\\uf900-\\ufaff]")
+/** Names of a language in that language, which are the same in every interface language. */
+const ENDONYMS = new Set(["settings.noteLanguage.zh"])
+/** Messages that compute with their arguments (a month number picks a name), so text samples say nothing about them. */
+const COMPUTES = new Set(["format.shortDateTime"])
 const keys = (lang: "zh" | "en") => Object.keys(DICTIONARIES[lang]).sort()
 /** Distinct text for each argument of a message, so what each language does with them can be compared. */
 const sample = (message: (...args: string[]) => string) => message(...Array.from({ length: message.length }, (_, i) => `«${i}»`))
@@ -28,10 +32,10 @@ test("a message takes the same arguments in both languages, and English has no C
     if (typeof zh === "function" && typeof en === "function") {
       assert.equal((en as (...a: string[]) => string).length, zh.length, `${key} takes different arguments`)
       const used = (text: string) => [...text.matchAll(/«\d»/g)].map((m) => m[0]).sort()
-      assert.deepEqual(used(sample(en as (...a: string[]) => string)), used(sample(zh as (...a: string[]) => string)), `${key} shows different values`)
+      if (!COMPUTES.has(key)) assert.deepEqual(used(sample(en as (...a: string[]) => string)), used(sample(zh as (...a: string[]) => string)), `${key} shows different values`)
     }
     const text = typeof en === "function" ? sample(en as (...a: string[]) => string) : (en as string)
-    assert.doesNotMatch(text, HAN, `${key} has Chinese in English`)
+    if (!ENDONYMS.has(key)) assert.doesNotMatch(text, HAN, `${key} has Chinese in English`)
   }
 })
 

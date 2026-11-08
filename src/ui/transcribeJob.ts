@@ -1,8 +1,9 @@
 import { Events, Notice, TFile, type App } from "obsidian"
-import { t, type Key } from "../i18n/index.ts"
+import { t, tr, type Key, type Lang } from "../i18n/index.ts"
 import { transcribeChunks, type ChunkResults } from "../asr/chunked.ts"
 import { renderInterviewRecord, speakerUtterances, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
 import { appendJobBlock, hasJobBlock, newJobId, placeJobResult, removeJobBlock } from "../asr/jobBlock.ts"
+import { providerNameIn } from "../asr/providers/registry.ts"
 import type { Destination } from "../consent.ts"
 import { prepareChunks, type AudioChunk } from "../audio/transcode.ts"
 import type { LlmClient } from "../llm/client.ts"
@@ -32,13 +33,15 @@ export interface TranscribeDeps {
   summaryFocus: () => string
   /** Vault folder for raw transcripts produced by this command. */
   transcriptFolder: () => string
+  /** Language of what is written into notes and files. */
+  noteLang: () => Lang
 }
 
 export type JobStage = "reading" | "uploading" | "recognizing" | "writing" | "done" | "failed"
 
 const STAGE_LABEL = { reading: "job.reading", uploading: "job.uploading", recognizing: "job.recognizing", writing: "job.writing", done: "job.done", failed: "job.failed" } as const satisfies Record<JobStage, Key>
 
-const normalizeFolder = (path: string) => path.trim().replace(/^\/+|\/+$/g, "") || "Meetings/录音转写"
+const normalizeFolder = (path: string, lang: Lang) => path.trim().replace(/^\/+|\/+$/g, "") || `Meetings/${tr(lang, "note.transcriptFolder")}`
 
 /** One recording → raw transcript → interview record, running independently of any modal. */
 export class TranscribeJob {
@@ -86,7 +89,7 @@ export class TranscribeJob {
     return this.stage === "done" || this.stage === "failed"
   }
 
-  /** Status-bar text, e.g. "识别中 01:20". */
+  /** Status-bar text, e.g. "Recognizing 01:20". */
   get label(): string {
     const elapsed = this.stage === "recognizing" || this.stage === "writing" ? ` ${formatClock(Date.now() - this.stageStartedAt)}` : ""
     const part = this.part && this.part.total > 1 && (this.stage === "uploading" || this.stage === "recognizing") ? ` ${this.part.index + 1}/${this.part.total}` : ""
@@ -141,12 +144,14 @@ export class TranscribeJob {
   }
 
   private async saveRawTranscript(result: FileAsrResult): Promise<string> {
-    const folder = normalizeFolder(this.deps.transcriptFolder())
+    const lang = this.deps.noteLang()
+    const folder = normalizeFolder(this.deps.transcriptFolder(), lang)
     if (!this.app.vault.getAbstractFileByPath(folder)) await this.app.vault.createFolder(folder)
-    const base = `${folder}/${this.target.basename} 原始转写`
+    const title = tr(lang, "note.rawTranscript", this.target.basename)
+    const base = `${folder}/${title}`
     let path = `${base}.md`
     for (let n = 2; this.app.vault.getAbstractFileByPath(path); n++) path = `${base} ${n}.md`
-    const body = renderInterviewRecord(result, { title: `${this.target.basename} 原始转写`, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), provider: this.file.name, model: this.file.model }, true)
+    const body = renderInterviewRecord(result, { title, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), lang, provider: providerNameIn(this.file.id, lang), model: this.file.model }, true)
     await this.app.vault.create(path, `---\ntype: audio-transcript\nnote: "[[${this.target.path.replace(/\.md$/, "")}]]"\ndate: ${formatDate(new Date(this.source.modified))}\nsource: "${this.source.name}"\nprovider: ${this.file.id}\n---\n\n${body}`)
     return path
   }
@@ -154,15 +159,16 @@ export class TranscribeJob {
   private async writeRecord(done: { result: FileAsrResult; rawPath: string }): Promise<void> {
     const llm = this.deps.llm()
     if (llm.problem) throw new Error(llm.problem)
+    const lang = this.deps.noteLang()
     this.setStage("writing")
     const notes = stripMeetingBlocks(await this.app.vault.read(this.target))
     const speakerNote = done.result.utterances.some((u) => u.speaker) && (done.result.chunks ?? 1) > 1 ? `Note: the recording was recognized in ${done.result.chunks} separate parts, so speaker numbers may not refer to the same person in different parts.` : undefined
-    const input = { title: this.target.basename, date: formatDate(new Date(this.source.modified)), utterances: speakerUtterances(done.result), summaries: [], notes: notes ? [{ path: this.target.path, content: notes }] : [], speakerNote }
+    const input = { title: this.target.basename, date: formatDate(new Date(this.source.modified)), utterances: speakerUtterances(done.result, lang), summaries: [], notes: notes ? [{ path: this.target.path, content: notes }] : [], speakerNote, lang }
     const text = await writeMinutes(llm, this.deps.prompt(), input, { focus: this.deps.summaryFocus() })
     const raw = done.rawPath.replace(/\.md$/, "")
     const lines = [
-      `> [!info] 访谈记录由 ${llm.model} 根据录音「${this.source.name}」的转写整理（${done.result.durationMs ? `时长 ${formatClock(done.result.durationMs, true)}，` : ""}${formatDateTime(new Date())}）。发布前请对照原始转写核实关键事实与数字。`,
-      `> 原始转写：[[${raw}|${raw.split("/").pop()}]]`,
+      tr(lang, "note.writeUpInfo", llm.model, this.source.name, done.result.durationMs ? formatClock(done.result.durationMs, true) : "", formatDateTime(new Date())),
+      tr(lang, "note.rawLink", `[[${raw}|${raw.split("/").pop()}]]`),
       "",
     ]
     if (this.source.vaultPath) lines.push(`![[${this.source.vaultPath}]]`, "")
@@ -171,9 +177,10 @@ export class TranscribeJob {
   }
 
   private async appendTranscript(result: FileAsrResult): Promise<void> {
+    const lang = this.deps.noteLang()
     const record = renderInterviewRecord(
       result,
-      { title: this.target.basename, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), provider: this.file.name, model: this.file.model },
+      { title: this.target.basename, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), lang, provider: providerNameIn(this.file.id, lang), model: this.file.model },
       false,
     )
     await this.place(record)

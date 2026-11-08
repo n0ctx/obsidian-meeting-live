@@ -1,3 +1,4 @@
+import { tr, uiLang, type Lang } from "../i18n/index.ts"
 import { formatClock, parseClock, type MeetingMeta, type SummaryContent, type SummaryParagraph, type SummaryPoint, type SummaryRecord, type Utterance } from "../meeting/types.ts"
 import type { ChatMessage } from "./client.ts"
 
@@ -264,15 +265,15 @@ export type LineAnchor = (point: SummaryPoint | undefined, first: boolean) => st
 const anchored = (line: string, id: string | undefined) => (id ? `${line} ^${id}` : line)
 
 /** To-dos and open questions, each under its own label. */
-function listMarkdown(content: SummaryContent, link: TimeLink, mark: (line: string, point: SummaryPoint) => string): string[] {
+function listMarkdown(content: SummaryContent, link: TimeLink, mark: (line: string, point: SummaryPoint) => string, lang: Lang): string[] {
   const lines: string[] = []
-  if (content.todos.length) lines.push("**待办**", ...content.todos.map((p) => mark(`- [ ] ${pointMarkdown(p, link)}`, p)), "")
-  if (content.open.length) lines.push("**未决**", ...content.open.map((p) => mark(`- ${pointMarkdown(p, link)}`, p)), "")
+  if (content.todos.length) lines.push(`**${tr(lang, "note.todo")}**`, ...content.todos.map((p) => mark(`- [ ] ${pointMarkdown(p, link)}`, p)), "")
+  if (content.open.length) lines.push(`**${tr(lang, "note.open")}**`, ...content.open.map((p) => mark(`- ${pointMarkdown(p, link)}`, p)), "")
   return lines
 }
 
 /** Stage detail: each topic on its own line with its time, the paragraph below it. */
-function contentMarkdown(content: SummaryContent, link: TimeLink, anchor?: LineAnchor): string[] {
+function contentMarkdown(content: SummaryContent, link: TimeLink, lang: Lang, anchor?: LineAnchor): string[] {
   const lines: string[] = []
   let first = true
   const mark = (line: string, point: SummaryPoint) => {
@@ -284,20 +285,21 @@ function contentMarkdown(content: SummaryContent, link: TimeLink, anchor?: LineA
     const block = p.topic ? `**${p.topic}**${cite(p.t, link)}\n${pointText(p)}` : pointMarkdown(p, link)
     lines.push(mark(block, p), "")
   }
-  lines.push(...listMarkdown(content, link, mark))
+  lines.push(...listMarkdown(content, link, mark, lang))
   return lines
 }
 
-export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##", anchor?: LineAnchor): string {
-  const name = record.content?.title || `阶段 ${record.index}`
+/** A stage as note text, with its fixed labels in `lang`; the model's own wording is kept as it came. */
+export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##", anchor?: LineAnchor, lang: Lang = uiLang()): string {
+  const name = record.content?.title || tr(lang, "note.stage", record.index)
   const lines: string[] = [`${heading} ${name}`, ""]
-  if (record.content) lines.push(...(isEmptySummary(record.content) ? [anchored("本阶段没有可提炼的实质内容。", anchor?.(undefined, true)), ""] : contentMarkdown(record.content, link, anchor)))
+  if (record.content) lines.push(...(isEmptySummary(record.content) ? [anchored(tr(lang, "note.emptyStage"), anchor?.(undefined, true)), ""] : contentMarkdown(record.content, link, lang, anchor)))
   else if (record.raw) lines.push(anchored(record.raw.trimEnd(), anchor?.(undefined, true)), "")
   return lines.join("\n")
 }
 
 /** The overview reads as one scannable list: a line per topic, then to-dos and open questions. */
-export function overviewMarkdown(content: SummaryContent, throughMs: number, link: TimeLink, heading = "##"): string {
-  const topics = content.paragraphs.map((p) => `- ${p.topic ? `**${p.topic}**：` : ""}${pointMarkdown(p, link)}`)
-  return [`${heading} 会议概览 · 截至 ${formatClock(throughMs)}`, "", ...topics, ...(topics.length ? [""] : []), ...listMarkdown(content, link, (line) => line)].join("\n")
+export function overviewMarkdown(content: SummaryContent, throughMs: number, link: TimeLink, heading = "##", lang: Lang = uiLang()): string {
+  const topics = content.paragraphs.map((p) => `- ${p.topic ? `**${p.topic}**${tr(lang, "note.topicSep")}` : ""}${pointMarkdown(p, link)}`)
+  return [`${heading} ${tr(lang, "note.overview", formatClock(throughMs))}`, "", ...topics, ...(topics.length ? [""] : []), ...listMarkdown(content, link, (line) => line, lang)].join("\n")
 }

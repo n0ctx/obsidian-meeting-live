@@ -1,3 +1,5 @@
+import { tr, uiLang, type Lang } from "../i18n/index.ts"
+import { gapReason } from "./gap.ts"
 import { formatClock, type MeetingMeta, type TranscriptGap, type Utterance } from "./types.ts"
 
 // "[00:00:08] text ^t8792-24362", or with the time linking back to the note: "[[note#^anchor|00:00:08]] text ^t8792-24362".
@@ -8,7 +10,8 @@ export function blockId(u: Pick<Utterance, "startMs" | "endMs">): string {
   return `t${Math.round(u.startMs)}-${Math.round(u.endMs)}`
 }
 
-export function transcriptHeader(meta: Pick<MeetingMeta, "id" | "notePath" | "createdAt">, provider: string): string {
+/** The header of a meeting transcript; `provider` is the recognizer's name, already in `lang`. */
+export function transcriptHeader(meta: Pick<MeetingMeta, "id" | "notePath" | "createdAt">, provider: string, lang: Lang = uiLang()): string {
   const note = meta.notePath.replace(/\.md$/, "")
   return [
     "---",
@@ -18,7 +21,7 @@ export function transcriptHeader(meta: Pick<MeetingMeta, "id" | "notePath" | "cr
     `date: ${meta.createdAt.slice(0, 10)}`,
     "---",
     "",
-    `> [!info] 由${provider}实时语音识别生成的原始转写，按录音时间轴记录。时间点链接回会议笔记中对应的 AI 摘要；转写文字不会被改写。`,
+    tr(lang, "note.transcriptHeader", provider),
     "",
     "",
   ].join("\n")
@@ -41,8 +44,8 @@ export function audioLine(path: string): string {
   return `![[${path}]]\n\n`
 }
 
-export function gapLine(gap: TranscriptGap): string {
-  return `> [!warning] 转写缺口 ${formatClock(gap.startMs, true)} – ${formatClock(gap.endMs, true)}：${gap.reason}。录音已保存，可回放该时段。\n\n`
+export function gapLine(gap: TranscriptGap, lang: Lang = uiLang()): string {
+  return `${tr(lang, "note.gapLine", formatClock(gap.startMs, true), formatClock(gap.endMs, true), gapReason(gap, lang))}\n\n`
 }
 
 export function parseTranscript(markdown: string): Utterance[] {

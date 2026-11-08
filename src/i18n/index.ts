@@ -22,6 +22,15 @@ export function uiLang(): Lang {
   return langOf(getLanguage())
 }
 
+/** Which language the plugin writes into notes in: the interface language, or one fixed. */
+export type NoteLanguage = "auto" | Lang
+
+export const NOTE_LANGUAGES: readonly NoteLanguage[] = ["auto", "zh", "en"]
+
+export const isNoteLanguage = (value: unknown): value is NoteLanguage => (NOTE_LANGUAGES as readonly unknown[]).includes(value)
+
+export const resolveNoteLang = (preference: NoteLanguage): Lang => (preference === "auto" ? uiLang() : preference)
+
 /** A message in a given language. */
 export function tr<K extends Key>(lang: Lang, key: K, ...args: Args<K>): string {
   const message = DICTIONARIES[lang][key] as string | ((...values: unknown[]) => string)

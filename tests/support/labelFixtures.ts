@@ -1,4 +1,5 @@
 // A meeting with every kind of written label in it, for tests of what the plugin writes into notes and files.
+import { applyEdit } from "../../src/meeting/noteSummary.ts"
 import { MeetingSession, type SessionEnv } from "../../src/meeting/session.ts"
 import type { MeetingMeta, SummaryRecord } from "../../src/meeting/types.ts"
 import { DEFAULT_SETTINGS, type MeetingLiveSettings } from "../../src/settings.ts"
@@ -50,8 +51,10 @@ export interface FakeEnv {
 }
 
 /** A session over in-memory files; `settings` overrides the defaults and `consented` answers the model-consent check. */
-export function fakeSession(options: { settings?: Partial<MeetingLiveSettings>; meta?: MeetingMeta; transcript?: string; consented?: boolean; complete?: () => Promise<string> } = {}) {
+export function fakeSession(options: { settings?: Partial<MeetingLiveSettings>; meta?: MeetingMeta; transcript?: string; consented?: boolean; note?: string; complete?: () => Promise<string> } = {}) {
   const written: Record<string, string> = {}
+  /** The meeting's note, which summary edits are applied to. */
+  const note = { text: options.note ?? "# 周会\n\n```meeting-live\nid: m-20261027-abc123\n```\n" }
   const llmCalls = { count: 0 }
   const settings = { ...DEFAULT_SETTINGS, ...options.settings }
   const env = {
@@ -62,7 +65,10 @@ export function fakeSession(options: { settings?: Partial<MeetingLiveSettings>; 
       readTranscript: async () => options.transcript ?? TRANSCRIPT,
       write: async (path: string, text: string) => void (written[path] = text),
       uniquePath: async (folder: string, base: string, ext: string) => `${folder}/${base}.${ext}`,
-      editNote: async () => undefined,
+      editNote: async (_path: string, edit: (content: string) => { from: number; to: number; text: string } | undefined) => {
+        const change = edit(note.text)
+        if (change) note.text = applyEdit(note.text, change)
+      },
       renameMeeting: async (folder: string, from: string) => ({ folder, name: from }),
     },
     settings: () => settings,
@@ -82,5 +88,5 @@ export function fakeSession(options: { settings?: Partial<MeetingLiveSettings>; 
     ...(options.consented === undefined ? {} : { llmConsented: () => options.consented }),
   } as unknown as SessionEnv
   const session = new MeetingSession(env, "Meetings/周会", options.meta ?? meetingMeta(), options.transcript ?? TRANSCRIPT)
-  return { session, env, written, llmCalls }
+  return { session, env, written, llmCalls, note, settings }
 }

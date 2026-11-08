@@ -53,6 +53,7 @@ test("a failed write-up retries without re-running recognition, then replaces th
     prompt: () => "系统提示",
     summaryFocus: () => "",
     transcriptFolder: () => "Meetings/录音转写",
+    noteLang: () => "zh",
   }
   const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: Date.parse("2026-10-27"), read: async () => new Uint8Array([1, 2, 3]) }
   const job = new TranscribeJob(app, deps, file("访谈.md"), source, asr, { speakers: true, writeUp: true })
@@ -108,6 +109,7 @@ test("recording to notes asks for consent before anything is uploaded, and only 
     prompt: () => "",
     summaryFocus: () => "",
     transcriptFolder: () => "Meetings/录音转写",
+    noteLang: () => "zh",
   })
   const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: 0, read: async () => new Uint8Array([1, 2, 3]) }
   const jobs = new TranscribeJobs(app, { addClass() {}, addEventListener() {}, toggleClass() {}, empty() {}, setText() {}, setAttr() {} } as never)
@@ -148,6 +150,7 @@ test("retrying a failed write-up asks again about the model's host, which may ha
     prompt: () => "",
     summaryFocus: () => "",
     transcriptFolder: () => "Meetings/录音转写",
+    noteLang: () => "zh",
   }
   const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: 0, read: async () => new Uint8Array([1, 2, 3]) }
   const job = new TranscribeJob(app, deps, file("访谈.md"), source, asr, { speakers: true, writeUp: true })

@@ -437,7 +437,7 @@ export class MeetingCard extends MarkdownRenderChild {
   private summarizeNow(): void {
     const session = this.session!
     if (session.llmProblem) {
-      new Notice(`${session.llmProblem}，请先在设置中配置`)
+      new Notice(t("notice.configureFirst", session.llmProblem))
       return
     }
     if (!session.summarizeNow()) new Notice(t("notice.nothingToSummarize"))

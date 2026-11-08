@@ -1,3 +1,4 @@
+import type { Lang } from "../i18n/index.ts"
 import { formatClock, type SummaryRecord, type Utterance } from "../meeting/types.ts"
 import type { ChatMessage } from "./client.ts"
 import { summaryMarkdown, transcriptLines } from "./summary.ts"
@@ -19,6 +20,8 @@ export interface MinutesInput {
   utterances: Utterance[]
   summaries: SummaryRecord[]
   notes: { path: string; content: string }[]
+  /** Language of the labels in the stage summaries passed along (what the notes themselves are written in). Defaults to the interface language. */
+  lang?: Lang
   /** A caution about the transcript's speaker labels, passed on to the model. */
   speakerNote?: string
   /** The utterances are summaries of the transcript, not the transcript itself (it was too long to send whole). */
@@ -32,7 +35,7 @@ export function buildMinutesMessages(prompt: string, input: MinutesInput): ChatM
   }
   const done = input.summaries.filter((s) => s.status === "done")
   if (done.length) {
-    parts.push("## Stage summaries (for cross-checking only)", ...done.map((s) => summaryMarkdown(s, (ms) => formatClock(ms, true))), "")
+    parts.push("## Stage summaries (for cross-checking only)", ...done.map((s) => summaryMarkdown(s, (ms) => formatClock(ms, true), "##", undefined, input.lang)), "")
   }
   parts.push(input.condensed ? CONDENSED_HEADING : "## Transcript")
   if (input.speakerNote) parts.push(input.speakerNote)

@@ -1,6 +1,6 @@
 // Recorded-file ASR, independent of the provider: the provider interface, the checks and the rendering.
 import type { PreparedAudio } from "../audio/transcode.ts"
-import { t } from "../i18n/index.ts"
+import { t, tr, uiLang, type Lang } from "../i18n/index.ts"
 import { formatClock, type Utterance } from "../meeting/types.ts"
 import type { FileCapabilities } from "./providers/types.ts"
 
@@ -101,10 +101,10 @@ export function groupBySpeaker(utterances: FileUtterance[]): TranscriptBlock[] {
 }
 
 /** Speaker-labelled paragraphs, so the model can tell interviewer and interviewee apart. */
-export function speakerUtterances(result: FileAsrResult): Utterance[] {
+export function speakerUtterances(result: FileAsrResult, lang: Lang = uiLang()): Utterance[] {
   const blocks = groupBySpeaker(result.utterances)
   const labelled = blocks.some((b) => b.speaker)
-  return blocks.map((b) => ({ startMs: b.startMs, endMs: b.startMs, text: labelled ? `说话人${b.speaker ?? "?"}：${b.text}` : b.text }))
+  return blocks.map((b) => ({ startMs: b.startMs, endMs: b.startMs, text: labelled ? tr(lang, "note.speakerLine", b.speaker ?? "?", b.text) : b.text }))
 }
 
 export interface RecordMeta {
@@ -113,27 +113,30 @@ export interface RecordMeta {
   /** Vault path, embedded as a player when present. */
   vaultPath?: string
   transcribedAt: string
-  /** Display name of the provider that recognized the audio. */
+  /** Language the record is written in; the interface language when absent. */
+  lang?: Lang
+  /** Display name of the provider that recognized the audio, in that language. */
   provider: string
   /** Model or resource that recognized it. */
   model: string
 }
 
 export function renderInterviewRecord(result: FileAsrResult, meta: RecordMeta, withHeading: boolean): string {
+  const lang = meta.lang ?? uiLang()
   const blocks = groupBySpeaker(result.utterances)
   const speakers = new Set(blocks.map((b) => b.speaker).filter(Boolean))
   const lines: string[] = []
   if (withHeading) lines.push(`# ${meta.title}`, "")
-  lines.push(`## 访谈记录 · ${meta.source}`, "")
+  lines.push(`## ${tr(lang, "note.interview", meta.source)}`, "")
   if (meta.vaultPath) lines.push(`![[${meta.vaultPath}]]`, "")
-  const facts = [result.durationMs ? `时长 ${formatClock(result.durationMs, true)}` : "", speakers.size ? `${speakers.size} 位说话人` : "", `${result.utterances.length} 句`, `转写于 ${meta.transcribedAt}`].filter(Boolean)
-  lines.push(`> [!info] ${meta.provider}录音文件识别原始转写（${meta.model}）`, `> ${facts.join(" · ")}`)
-  if (speakers.size) lines.push("> 说话人编号由声音自动区分，不代表身份，请按实际人物替换。")
-  if (speakers.size && (result.chunks ?? 1) > 1) lines.push(`> 录音较长，分 ${result.chunks} 段分别识别，说话人编号在各段之间不一定对应同一个人。`)
+  const facts = [result.durationMs ? tr(lang, "note.duration", formatClock(result.durationMs, true)) : "", speakers.size ? tr(lang, "note.speakerCount", speakers.size) : "", tr(lang, "note.sentenceCount", result.utterances.length), tr(lang, "note.transcribedAt", meta.transcribedAt)].filter(Boolean)
+  lines.push(tr(lang, "note.recordInfo", meta.provider, meta.model), `> ${facts.join(" · ")}`)
+  if (speakers.size) lines.push(tr(lang, "note.speakerNote"))
+  if (speakers.size && (result.chunks ?? 1) > 1) lines.push(tr(lang, "note.chunkNote", result.chunks!))
   lines.push("")
   if (blocks.length === 0) lines.push(result.text, "")
   for (const block of blocks) {
-    const who = speakers.size ? `**说话人 ${block.speaker ?? "?"}** ` : ""
+    const who = speakers.size ? tr(lang, "note.speakerHead", block.speaker ?? "?") : ""
     lines.push(`${who}\`${formatClock(block.startMs, true)}\``, block.text, "")
   }
   return lines.join("\n")

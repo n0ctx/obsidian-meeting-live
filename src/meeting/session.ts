@@ -1,5 +1,5 @@
 import { Events } from "obsidian"
-import { t } from "../i18n/index.ts"
+import { t, tr, type Lang } from "../i18n/index.ts"
 import { AudioCapture } from "../audio/capture.ts"
 import { AsrResampler } from "../audio/pcm.ts"
 import { SegmentRecorder, opusSupported, repairSegment } from "../audio/recorder.ts"
@@ -11,7 +11,8 @@ import { buildOverviewMessages, buildSummaryMessages, hasUnverified, isEmptySumm
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
 import { placeSummary } from "./noteSummary.ts"
-import { MINUTES_FILE, TRANSCRIPT_FILE, meetingFile, movedPath, noteName, type MeetingStore } from "./store.ts"
+import { noteLang } from "./labels.ts"
+import { TRANSCRIPT_FILE, meetingFile, movedPath, noteName, type MeetingStore } from "./store.ts"
 import { audioLine, blockId, gapLine, linkTranscript, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
 import { formatClock, formatDate, formatDateTime, totalDuration, type AudioFormat, type AudioSegment, type MeetingMeta, type SummaryRecord, type TranscriptGap, type Utterance } from "./types.ts"
 
@@ -103,6 +104,11 @@ export class MeetingSession extends Events {
 
   get llmProblem(): string | undefined {
     return this.env.llm().problem
+  }
+
+  /** Language of what this meeting writes into notes and files, under the current settings. */
+  get noteLang(): Lang {
+    return noteLang(this.env.settings())
   }
 
   get summaryIntervalMs(): number {
@@ -198,7 +204,7 @@ export class MeetingSession extends Events {
   }
 
   private async openSegment(capture: AudioCapture, format: AudioFormat): Promise<void> {
-    const path = await this.env.store.audioFile(this.folder, this.meta.name, this.meta.segments.length + 1, format)
+    const path = await this.env.store.audioFile(this.folder, this.meta.name, this.meta.segments.length + 1, format, this.noteLang)
     this.recorder = await SegmentRecorder.create(this.env.store.fullPath(path), format, capture.sampleRate, capture.channels, (error) => this.onRecorderError(error))
     this.liveFrames = 0
     this.liveSegment = { file: path, format, startMs: this.durationMs, durationMs: 0, startedAt: new Date().toISOString(), sampleRate: capture.sampleRate, channels: capture.channels }
@@ -249,7 +255,7 @@ export class MeetingSession extends Events {
     this.liveSegment = undefined
     await this.asr?.end()
     this.levels.fill(0)
-    for (const gap of this.meta.gaps.slice(this.runGapStart)) void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, gapLine(gap)))
+    for (const gap of this.meta.gaps.slice(this.runGapStart)) void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, gapLine(gap, this.noteLang)))
     await this.saveNow()
     this.emitChange()
   }
@@ -483,6 +489,7 @@ export class MeetingSession extends Events {
     const anchors = new Map<number, string>()
     const done = this.meta.summaries.filter((s) => s.status === "done")
     if (done.length === 0) return { markdown: "", anchors }
+    const lang = this.noteLang
     const link = (ms: number) => this.summaryLink(ms)
     const cited = new Set<number>()
     const stages = done.map((s) => {
@@ -497,21 +504,21 @@ export class MeetingSession extends Events {
           anchors.set(t, id)
         }
         return id
-      })
+      }, lang)
     })
-    const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link, "###")] : []
+    const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link, "###", lang)] : []
     const unverified = hasUnverified(this.meta.overview?.content) || done.some((s) => hasUnverified(s.content))
-    const caution = `> [!caution] AI 生成，可能有遗漏或误读，以原始转写和录音为准。${unverified ? "==高亮==的数字在转写里没有找到，请核对。" : ""}`
-    const markdown = ["## AI 阶段摘要", "", caution, "", ...overview, ...stages].join("\n")
+    const markdown = [`## ${tr(lang, "note.summaryHeading")}`, "", tr(lang, "note.summaryCaution", unverified), "", ...overview, ...stages].join("\n")
     return { markdown, anchors }
   }
 
   /** Writes the summaries into the meeting's note, right below its block, and links each transcript time back to them. */
   publishSummary(): Promise<unknown> {
+    const lang = this.noteLang
     const { markdown, anchors } = this.noteSummary()
     const note = this.noteLink
     return this.writeIo(async () => {
-      await this.env.store.editNote(this.meta.notePath, (content) => placeSummary(content, this.id, markdown))
+      await this.env.store.editNote(this.meta.notePath, (content) => placeSummary(content, this.id, markdown, lang))
       const path = this.transcriptPath
       const current = await this.env.store.readTranscript(path)
       const linked = linkTranscript(current, (ms) => {
@@ -531,9 +538,10 @@ export class MeetingSession extends Events {
     this.minutes = { status: "running" }
     this.emitChange()
     try {
-      const input = { title: this.meta.title, date: formatDate(new Date(this.meta.createdAt)), utterances: this.utterances, summaries: this.meta.summaries, notes }
+      const lang = this.noteLang
+      const input = { title: this.meta.title, date: formatDate(new Date(this.meta.createdAt)), utterances: this.utterances, summaries: this.meta.summaries, notes, lang }
       const text = await writeMinutes(llm, prompt, input, { focus: this.env.settings().summaryFocus, onProgress })
-      const path = await this.env.store.uniquePath(this.folder, meetingFile(this.meta.name, MINUTES_FILE), "md")
+      const path = await this.env.store.uniquePath(this.folder, meetingFile(this.meta.name, tr(lang, "note.minutesFile")), "md")
       const note = this.meta.notePath.replace(/\.md$/, "")
       const doc = [
         "---",
@@ -546,9 +554,9 @@ export class MeetingSession extends Events {
         `generated: ${formatDateTime(new Date())}`,
         "---",
         "",
-        `# ${this.meta.title} 纪要`,
+        `# ${tr(lang, "note.minutesTitle", this.meta.title)}`,
         "",
-        "> [!caution] 本纪要由 AI 根据原始转写整理，发布前请对照转写与录音核实关键事实与数字。",
+        tr(lang, "note.minutesCaution"),
         "",
         text,
         "",

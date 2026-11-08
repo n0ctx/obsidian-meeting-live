@@ -1,13 +1,17 @@
 import { promises as fs } from "node:fs"
 import { FileSystemAdapter, MarkdownView, TFile, Vault, normalizePath, type App } from "obsidian"
-import { t } from "../i18n/index.ts"
+import { t, tr, uiLang, type Lang } from "../i18n/index.ts"
 import { applyEdit, type TextEdit } from "./noteSummary.ts"
 import { transcriptHeader } from "./transcriptFormat.ts"
 import type { MeetingMeta } from "./types.ts"
 
 export const META_FILE = "meeting.json"
+/**
+ * The raw transcript's file name stays Chinese whatever the note language. It is not stored in meeting.json: every load derives the
+ * path from the meeting's name and this constant, and the summary links in notes point at it. Another name would orphan existing
+ * meetings and make a downgrade to 1.0.x lose track of its transcripts.
+ */
 export const TRANSCRIPT_FILE = "原始转写.md"
-export const MINUTES_FILE = "正式纪要"
 export const AUDIO_DIR = "audio"
 
 export interface IndexEntry {
@@ -16,7 +20,7 @@ export interface IndexEntry {
 }
 
 function sanitize(name: string): string {
-  return name.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) || "会议"
+  return name.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) || t("note.meetingFallback")
 }
 
 /** The name a meeting takes from its note. */
@@ -53,7 +57,7 @@ export class MeetingStore {
 
   private get adapter(): FileSystemAdapter {
     const adapter = this.app.vault.adapter
-    if (!(adapter instanceof FileSystemAdapter)) throw new Error("Meeting Live 需要桌面版 Obsidian")
+    if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("store.desktopOnly"))
     return adapter
   }
 
@@ -86,15 +90,15 @@ export class MeetingStore {
     return entries
   }
 
-  /** Creates the meeting folder; `provider` is the display name of the live recognizer the transcript header credits. */
-  async create(meta: MeetingMeta, provider: string): Promise<string> {
+  /** Creates the meeting folder; `provider` is the display name, in `lang`, of the live recognizer the transcript header credits. */
+  async create(meta: MeetingMeta, provider: string, lang: Lang = uiLang()): Promise<string> {
     const root = normalizePath(this.root())
     if (!(await this.adapter.exists(root))) await this.adapter.mkdir(root)
     meta.name = await this.freeName(root, noteName(meta.notePath))
     const folder = this.path(root, meta.name)
     await this.adapter.mkdir(folder)
     await this.adapter.mkdir(this.path(folder, AUDIO_DIR))
-    await this.adapter.write(this.path(folder, meetingFile(meta.name, TRANSCRIPT_FILE)), transcriptHeader(meta, provider))
+    await this.adapter.write(this.path(folder, meetingFile(meta.name, TRANSCRIPT_FILE)), transcriptHeader(meta, provider, lang))
     await this.saveMeta(folder, meta)
     return folder
   }
@@ -143,11 +147,11 @@ export class MeetingStore {
     await this.adapter.append(path, text)
   }
 
-  async audioFile(folder: string, name: string | undefined, index: number, format: string): Promise<string> {
+  async audioFile(folder: string, name: string | undefined, index: number, format: string, lang: Lang = uiLang()): Promise<string> {
     const dir = this.path(folder, AUDIO_DIR)
     if (!(await this.adapter.exists(dir))) await this.adapter.mkdir(dir)
     const number = String(index).padStart(2, "0")
-    return this.path(dir, `${name ? `${name} 录音 ${number}` : `录音-${number}`}.${format}`)
+    return this.path(dir, `${name ? tr(lang, "note.audioNamed", name, number) : tr(lang, "note.audioBare", number)}.${format}`)
   }
 
   async exists(path: string): Promise<boolean> {

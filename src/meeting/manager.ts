@@ -1,5 +1,7 @@
 import { Events } from "obsidian"
 import { t } from "../i18n/index.ts"
+import { providerNameIn } from "../asr/providers/registry.ts"
+import { noteLang } from "./labels.ts"
 import { upgradeSummaries } from "../llm/summary.ts"
 import { MeetingSession, type SessionEnv } from "./session.ts"
 import { TRANSCRIPT_FILE, meetingFile, newMeetingId, type MeetingStore } from "./store.ts"
@@ -113,7 +115,8 @@ export class MeetingManager extends Events {
       // A new meeting starts folded; it expands on click.
       collapsed: true,
     }
-    const folder = await this.store.create(meta, this.env.asr().name)
+    const lang = noteLang(this.env.settings())
+    const folder = await this.store.create(meta, providerNameIn(this.env.asr().id, lang), lang)
     this.folders.set(meta.id, { folder, notePath })
     const session = await this.get(meta.id)
     if (!session) throw new Error(t("manager.createFailed"))

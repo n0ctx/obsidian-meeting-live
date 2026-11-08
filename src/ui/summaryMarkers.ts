@@ -1,6 +1,7 @@
 import { RangeSetBuilder } from "@codemirror/state"
 import { Decoration, ViewPlugin, WidgetType, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view"
 import { editorLivePreviewField } from "obsidian"
+import { t } from "../i18n/index.ts"
 
 // Live Preview shows Obsidian comments as text; the markers fencing the summary region become a quiet hint instead,
 // and the block ids that transcript times link back to are hidden. Reading view already hides both.
@@ -21,7 +22,7 @@ class MarkerWidget extends WidgetType {
   toDOM(): HTMLElement {
     const el = document.createElement("span")
     el.className = `ml-summary-marker${this.end ? " is-end" : ""}`
-    el.textContent = this.end ? "" : "AI 阶段摘要由 Meeting Live 自动更新，此区域内的修改会被覆盖"
+    el.textContent = this.end ? "" : t("summaryMarker.hint")
     return el
   }
   override ignoreEvent(): boolean {

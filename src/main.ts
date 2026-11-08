@@ -7,6 +7,7 @@ import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import { MeetingManager } from "./meeting/manager.ts"
 import type { MeetingSession } from "./meeting/session.ts"
+import { noteLang, transcriptFolder } from "./meeting/labels.ts"
 import { MeetingStore } from "./meeting/store.ts"
 import { formatClock } from "./meeting/types.ts"
 import { DEFAULT_SETTINGS, llmConfig, loadSettings, storedSettings, type MeetingLiveSettings } from "./settings.ts"
@@ -68,7 +69,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
         new JobBar(el, this.jobs, block, () => {
           const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath)
           if (file instanceof TFile && block.id) void this.app.vault.process(file, (content) => removeJobBlock(content, block.id!))
-        }, () => "录音转写"),
+        }, () => this.transcriptFolder().split("/").pop() ?? ""),
       )
     })
     this.addSettingTab(new MeetingLiveSettingTab(this.app, this))
@@ -210,6 +211,11 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     withSession("minutes", t("cmd.minutes"), "file-pen-line", (s) => this.openMinutes(s), (s) => s.utterances.length > 0)
   }
 
+  /** Where raw transcripts of recordings go: an existing folder keeps its name whatever the note language. */
+  private transcriptFolder(): string {
+    return transcriptFolder(this.settings.folder, noteLang(this.settings), (path) => !!this.app.vault.getFolderByPath(path))
+  }
+
   private openTranscribe(file: TFile): void {
     new TranscribeFileModal(
       this.app,
@@ -220,7 +226,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
         llm: () => this.llm(),
         prompt: () => this.settings.minutesPrompt,
         summaryFocus: () => this.settings.summaryFocus,
-        transcriptFolder: () => `${this.settings.folder}/录音转写`,
+        transcriptFolder: () => this.transcriptFolder(),
+        noteLang: () => noteLang(this.settings),
       },
       this.jobs,
       file,

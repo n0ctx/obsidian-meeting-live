@@ -5,6 +5,7 @@ import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type { AudioFormat } from "./meeting/types.ts"
 import { seedConsent } from "./consent.ts"
 import { isAsrLanguage, type AsrLanguage } from "./asr/language.ts"
+import { isNoteLanguage, type NoteLanguage } from "./i18n/index.ts"
 import { DEFAULT_DEEPGRAM, readDeepgramSettings, type DeepgramSettings } from "./asr/providers/deepgram/settings.ts"
 import { DEFAULT_OPENAI_COMPAT, readOpenAiCompatSettings, type OpenAiCompatSettings } from "./asr/providers/openaiCompat/settings.ts"
 import { DEFAULT_VOLC, VOLC_FLAT_KEYS, readVolcSettings, type VolcSettings } from "./asr/providers/volc/settings.ts"
@@ -26,6 +27,8 @@ export interface MeetingLiveSettings {
   providers: { volc: VolcSettings; deepgram: DeepgramSettings; openaiCompat: OpenAiCompatSettings }
   /** Recognition language for providers that take one. */
   asrLanguage: AsrLanguage
+  /** Language of what the plugin writes into notes; auto follows the interface language. */
+  noteLanguage: NoteLanguage
   hotwords: string
   /** Id of the model service preset, which decides how requests are shaped. */
   llmPreset: string
@@ -57,6 +60,7 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   fileProvider: "volc",
   providers: { volc: DEFAULT_VOLC, deepgram: DEFAULT_DEEPGRAM, openaiCompat: DEFAULT_OPENAI_COMPAT },
   asrLanguage: "auto",
+  noteLanguage: "auto",
   hotwords: "",
   llmPreset: DEFAULT_PRESET_ID,
   llmBaseUrl: "https://api.deepseek.com",
@@ -97,6 +101,11 @@ export function loadSettings(raw: unknown): LoadedSettings {
     if (typeof value === typeof DEFAULT_SETTINGS[key]) (settings[key] as string | number | boolean) = value as string | number | boolean
   }
   if (!isAsrLanguage(settings.asrLanguage)) settings.asrLanguage = DEFAULT_SETTINGS.asrLanguage
+  // Notes written by 1.0.x are in Chinese whatever the interface language, so settings from before the choice existed keep writing
+  // Chinese; otherwise opening an old note would rewrite its summary region in another language. A fresh install follows the interface.
+  const hadNoteLanguage = "noteLanguage" in stored
+  if (!isNoteLanguage(settings.noteLanguage)) settings.noteLanguage = DEFAULT_SETTINGS.noteLanguage
+  if (!hadNoteLanguage && Object.keys(stored).length > 0) settings.noteLanguage = "zh"
   // Settings from before presets existed are placed by their base URL, which is how requests were shaped then.
   const hadPreset = isPresetId(stored.llmPreset)
   if (!hadPreset) settings.llmPreset = presetForUrl(settings.llmBaseUrl).id
@@ -110,7 +119,7 @@ export function loadSettings(raw: unknown): LoadedSettings {
   if (settings.consent.length === 0 && stored.consentAccepted === true) settings.consent = seedConsent(settings)
   const legacy: Record<string, unknown> = {}
   for (const key of LEGACY_KEYS) if (key in stored) legacy[key] = stored[key]
-  return { settings, legacy, migrated: Object.keys(stored).length > 0 && (!current || !hadPreset) }
+  return { settings, legacy, migrated: Object.keys(stored).length > 0 && (!current || !hadPreset || !hadNoteLanguage) }
 }
 
 /** What goes into data.json: the legacy keys exactly as they were found, and the current settings. */

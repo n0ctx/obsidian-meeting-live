@@ -3,7 +3,7 @@ import { ASR_LANGUAGES, asrLanguageName, type AsrLanguage } from "./asr/language
 import { asrProvider, fileProviders, liveProviders } from "./asr/providers/registry.ts"
 import type { AsrProvider } from "./asr/providers/types.ts"
 import { listInputDevices } from "./audio/capture.ts"
-import { t } from "./i18n/index.ts"
+import { isNoteLanguage, t } from "./i18n/index.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { LLM_PRESETS, presetById } from "./llm/presets.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
@@ -42,6 +42,21 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName(t("settings.recording")).setHeading()
     textField(new Setting(containerEl).setName(t("settings.folder.name")).setDesc(t("settings.folder.desc")), this.s, "folder", () => this.save(), "Meetings")
+    new Setting(containerEl)
+      .setName(t("settings.noteLanguage.name"))
+      .setDesc(t("settings.noteLanguage.desc"))
+      .addDropdown((d) =>
+        d
+          .addOption("auto", t("settings.noteLanguage.auto"))
+          .addOption("zh", t("settings.noteLanguage.zh"))
+          .addOption("en", t("settings.noteLanguage.en"))
+          .setValue(this.s.noteLanguage)
+          .onChange((v) => {
+            if (!isNoteLanguage(v)) return
+            this.s.noteLanguage = v
+            this.save()
+          }),
+      )
     new Setting(containerEl)
       .setName(t("settings.format.name"))
       .setDesc(t("settings.format.desc"))

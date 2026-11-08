@@ -1,3 +1,5 @@
+import { tr, uiLang, type Lang } from "../i18n/index.ts"
+
 export type MeetingStatus = "idle" | "recording" | "paused" | "stopping" | "ended" | "interrupted"
 
 export type AudioFormat = "ogg" | "wav"
@@ -142,8 +144,8 @@ export function formatDateTime(date: Date): string {
   return `${formatDate(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-export function formatShortDateTime(date: Date): string {
-  return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`
+export function formatShortDateTime(date: Date, lang: Lang = uiLang()): string {
+  return tr(lang, "format.shortDateTime", date.getMonth() + 1, date.getDate(), `${pad(date.getHours())}:${pad(date.getMinutes())}`)
 }
 
 export function parseClock(text: string): number | undefined {
