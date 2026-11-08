@@ -12,6 +12,8 @@ export const noteLang = (settings: Pick<MeetingLiveSettings, "noteLanguage">): L
  */
 export function transcriptFolder(root: string, lang: Lang, exists: (path: string) => boolean): string {
   const other: Lang = lang === "zh" ? "en" : "zh"
-  const candidates = [lang, other].map((l) => `${root}/${tr(l, "note.transcriptFolder")}`)
+  // A folder setting written as "Meetings/" must find the same folder as "Meetings".
+  const base = root.replace(/^\/+|\/+$/g, "")
+  const candidates = [lang, other].map((l) => [base, tr(l, "note.transcriptFolder")].filter(Boolean).join("/"))
   return candidates.find(exists) ?? candidates[0]
 }

@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
+import { MarkdownView, Notice, Plugin, TFile, normalizePath, requestUrl, type Editor } from "obsidian"
 import { ensureConsentFor, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
 import { t } from "./i18n/index.ts"
 import { resolveFile, resolveLive } from "./asr/providers/registry.ts"
@@ -233,7 +233,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
 
   /** Where raw transcripts of recordings go: an existing folder keeps its name whatever the note language. */
   private transcriptFolder(): string {
-    return transcriptFolder(this.settings.folder, noteLang(this.settings), (path) => !!this.app.vault.getFolderByPath(path))
+    return transcriptFolder(normalizePath(this.settings.folder), noteLang(this.settings), (path) => !!this.app.vault.getFolderByPath(path))
   }
 
   private openTranscribe(file: TFile): void {

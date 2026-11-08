@@ -11,6 +11,12 @@ export interface TextEdit {
 
 const START = "meeting-live-summary"
 
+/**
+ * A line holding either marker of a summary region, whatever language the text after the id is in; group 1 is "/" for the end marker.
+ * Live Preview uses it to replace the marker with a hint (see summaryMarkers.ts).
+ */
+export const SUMMARY_MARKER_LINE = /^%% (\/?)meeting-live-summary m-[\w-]+\b.*%%[ \t]*$/
+
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }

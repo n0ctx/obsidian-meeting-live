@@ -6,7 +6,7 @@ import { appendJobBlock, hasJobBlock, newJobId, placeJobResult } from "../src/as
 import { resolveNoteLang } from "../src/i18n/index.ts"
 import { stripMeetingBlocks } from "../src/llm/minutes.ts"
 import { noteLang, transcriptFolder } from "../src/meeting/labels.ts"
-import { applyEdit, placeSummary } from "../src/meeting/noteSummary.ts"
+import { SUMMARY_MARKER_LINE, applyEdit, placeSummary, summaryRegion } from "../src/meeting/noteSummary.ts"
 import { gapLine, linkTranscript, parseTranscript, transcriptHeader, utteranceLine } from "../src/meeting/transcriptFormat.ts"
 import { formatShortDateTime } from "../src/meeting/types.ts"
 import { loadSettings } from "../src/settings.ts"
@@ -180,4 +180,27 @@ test("a to-do ticked while the highlight sat beside the currency symbol stays ti
   assert.match(next, /- \[x\] 交方案 ==¥500万== /)
   assert.match(next, /- \[ \] 补数据/)
   assert.equal(count(next, "%% meeting-live-summary "), 1)
+})
+
+test("Live Preview recognizes the region markers of every version and language, and the end marker alone", () => {
+  const start = (suffix: string) => `%% meeting-live-summary ${ID} · ${suffix} %%`
+  assert.ok(SUMMARY_MARKER_LINE.test(LEGACY_START), "1.0.1 start marker")
+  assert.ok(SUMMARY_MARKER_LINE.test(start("Maintained by Meeting Live; edits inside this region are overwritten")), "English start marker")
+  assert.ok(SUMMARY_MARKER_LINE.test(`${start("anything")}  `), "trailing spaces")
+  const end = `%% /meeting-live-summary ${ID} %%`
+  assert.equal(SUMMARY_MARKER_LINE.exec(end)?.[1], "/")
+  assert.equal(SUMMARY_MARKER_LINE.exec(LEGACY_START)?.[1], "")
+  for (const other of ["%% a comment %%", `%% meeting-live-summary x-1 · text %%`, `text %% meeting-live-summary ${ID} %%`]) assert.ok(!SUMMARY_MARKER_LINE.test(other), other)
+  // The markers the plugin writes now, in either language, are what the pattern was made for.
+  for (const lang of ["zh", "en"] as const) {
+    const region = summaryRegion(ID, "body", lang).split("\n")
+    assert.ok(SUMMARY_MARKER_LINE.test(region[0]) && SUMMARY_MARKER_LINE.test(region.at(-1)!))
+  }
+})
+
+test("a folder setting with a trailing slash finds the existing transcript folder", () => {
+  const exists = (...folders: string[]) => (path: string) => folders.includes(path)
+  assert.equal(transcriptFolder("Meetings/", "en", exists("Meetings/录音转写")), "Meetings/录音转写")
+  assert.equal(transcriptFolder("/Meetings//", "en", exists()), "Meetings/Recording transcripts")
+  assert.equal(transcriptFolder("", "zh", exists()), "录音转写")
 })
