@@ -17,9 +17,15 @@ test("client and server frames round-trip", () => {
   assert.deepEqual(error, { kind: "error", code: 45000081, message: "timeout" })
 })
 
+test("the transcript header credits the provider by its display name", () => {
+  const header = transcriptHeader({ id: "m-1", notePath: "a.md", createdAt: "2026-10-27T14:30:00+08:00" }, "示例服务")
+  assert.match(header, /> \[!info\] 由示例服务实时语音识别生成的原始转写/)
+  assert.doesNotMatch(header, /火山/)
+})
+
 test("transcript markdown round-trips and ignores other lines", () => {
   const md =
-    transcriptHeader({ id: "m-1", notePath: "Interview/a.md", createdAt: "2026-10-27T14:30:00+08:00" }) +
+    transcriptHeader({ id: "m-1", notePath: "Interview/a.md", createdAt: "2026-10-27T14:30:00+08:00" }, "火山引擎") +
     audioLine("Meetings/a/audio/a 录音 01.ogg") +
     utteranceLine({ startMs: 3200, endMs: 5600, text: "公司去年收入 3 亿，\n毛利 40%" }) +
     gapLine({ startMs: 6000, endMs: 9000, reason: "网络中断" }) +

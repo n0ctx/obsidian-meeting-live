@@ -48,7 +48,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     const store = new MeetingStore(this.app, () => this.settings.folder)
     this.manager = new MeetingManager(store, {
       settings: () => this.settings,
-      asrConnector: () => resolveLive(this.providerEnv()),
+      asr: () => resolveLive(this.providerEnv()),
       llm: () => this.llm(),
     })
 
@@ -110,8 +110,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     return { secrets: this.app.secretStorage, settings: this.settings }
   }
 
-  asrProblem(): string | undefined {
-    return resolveLive(this.providerEnv()).problem
+  asr(): { name: string; problem?: string } {
+    return resolveLive(this.providerEnv())
   }
 
   /** The configured model provider; rebuilt per call so setting changes apply immediately. */

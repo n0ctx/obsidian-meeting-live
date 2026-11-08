@@ -12,6 +12,8 @@ export interface AudioSegment {
   startedAt: string
   sampleRate: number
   channels: number
+  /** Id of the speech-recognition provider this stretch of audio was sent to; absent when no recognizer ran or before this was recorded. */
+  asrProvider?: string
 }
 
 export interface TranscriptGap {

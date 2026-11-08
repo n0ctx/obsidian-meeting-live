@@ -74,6 +74,8 @@ test("a failed write-up retries without re-running recognition, then replaces th
   assert.equal(asrCalls, 2)
   assert.deepEqual(created, ["Meetings/录音转写/访谈 原始转写.md"])
   assert.match(files["Meetings/录音转写/访谈 原始转写.md"], /^---\ntype: audio-transcript\nnote: "\[\[访谈\]\]"\ndate: 2026-10-27\n/)
+  assert.match(files["Meetings/录音转写/访谈 原始转写.md"], /\nsource: "访谈.mp3"\nprovider: volc\n---\n/)
+  assert.match(files["Meetings/录音转写/访谈 原始转写.md"], /> \[!info\] 火山引擎录音文件识别原始转写（volc.seedasr.auc）/)
   assert.match(files["访谈.md"], /```meeting-live-job\nid: j-/)
 
   done = finished()

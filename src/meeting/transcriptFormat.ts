@@ -8,7 +8,7 @@ export function blockId(u: Pick<Utterance, "startMs" | "endMs">): string {
   return `t${Math.round(u.startMs)}-${Math.round(u.endMs)}`
 }
 
-export function transcriptHeader(meta: Pick<MeetingMeta, "id" | "notePath" | "createdAt">): string {
+export function transcriptHeader(meta: Pick<MeetingMeta, "id" | "notePath" | "createdAt">, provider: string): string {
   const note = meta.notePath.replace(/\.md$/, "")
   return [
     "---",
@@ -18,7 +18,7 @@ export function transcriptHeader(meta: Pick<MeetingMeta, "id" | "notePath" | "cr
     `date: ${meta.createdAt.slice(0, 10)}`,
     "---",
     "",
-    "> [!info] 由火山引擎实时语音识别生成的原始转写，按录音时间轴记录。时间点链接回会议笔记中对应的 AI 摘要；转写文字不会被改写。",
+    `> [!info] 由${provider}实时语音识别生成的原始转写，按录音时间轴记录。时间点链接回会议笔记中对应的 AI 摘要；转写文字不会被改写。`,
     "",
     "",
   ].join("\n")

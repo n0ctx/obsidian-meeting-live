@@ -85,14 +85,15 @@ export class MeetingStore {
     return entries
   }
 
-  async create(meta: MeetingMeta): Promise<string> {
+  /** Creates the meeting folder; `provider` is the display name of the live recognizer the transcript header credits. */
+  async create(meta: MeetingMeta, provider: string): Promise<string> {
     const root = normalizePath(this.root())
     if (!(await this.adapter.exists(root))) await this.adapter.mkdir(root)
     meta.name = await this.freeName(root, noteName(meta.notePath))
     const folder = this.path(root, meta.name)
     await this.adapter.mkdir(folder)
     await this.adapter.mkdir(this.path(folder, AUDIO_DIR))
-    await this.adapter.write(this.path(folder, meetingFile(meta.name, TRANSCRIPT_FILE)), transcriptHeader(meta))
+    await this.adapter.write(this.path(folder, meetingFile(meta.name, TRANSCRIPT_FILE)), transcriptHeader(meta, provider))
     await this.saveMeta(folder, meta)
     return folder
   }

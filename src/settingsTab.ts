@@ -30,7 +30,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
 
     const privacy = containerEl.createDiv({ cls: "ml-settings-privacy" })
     privacy.createEl("strong", { text: "数据去向" })
-    privacy.createSpan({ text: "：原始录音和转写只保存在本库。录音时音频实时上传至火山引擎识别；摘要和纪要会把转写文本发送到下方配置的 LLM 服务。凭证保存在 Obsidian 的密钥存储中，不写入笔记、会议文件或插件配置。" })
+    privacy.createSpan({ text: `：原始录音和转写只保存在本库。录音时音频实时上传至${asrProvider(this.s.liveProvider)?.name ?? this.s.liveProvider}识别；摘要和纪要会把转写文本发送到下方配置的 LLM 服务。凭证保存在 Obsidian 的密钥存储中，不写入笔记、会议文件或插件配置。` })
 
     new Setting(containerEl).setName("录音").setHeading()
     textField(new Setting(containerEl).setName("会议数据目录").setDesc("每场会议一个子文件夹，包含录音、原始转写、AI 摘要与元数据。"), this.s, "folder", () => this.save(), "Meetings")

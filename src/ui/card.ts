@@ -12,7 +12,8 @@ export interface CardHost {
   app: App
   manager: MeetingManager
   settings: MeetingLiveSettings
-  asrProblem(): string | undefined
+  /** The live recognizer under the current settings: its display name and why it cannot be used, if it cannot. */
+  asr(): { name: string; problem?: string }
   llm(): LlmClient
   ensureConsent(): Promise<boolean>
   openMinutes(session: MeetingSession): void
@@ -261,7 +262,7 @@ export class MeetingCard extends MarkdownRenderChild {
     intro.createDiv({ cls: "ml-hero-sub", text: "开始后录音和实时转写同步进行，阶段摘要会写在组件下方。可以在组件上下方继续写速记。" })
     const checks = hero.createDiv({ cls: "ml-checks" })
     const settings = this.host.settings
-    const asrProblem = this.host.asrProblem()
+    const asr = this.host.asr()
     const llmProblem = this.session!.llmProblem
     const check = (ok: boolean, icon: string, title: string, detail: string) => {
       const row = checks.createDiv({ cls: `ml-check ${ok ? "is-ok" : "is-off"}` })
@@ -277,9 +278,9 @@ export class MeetingCard extends MarkdownRenderChild {
       }
     }
     check(true, "mic", "本地录音", `${settings.audioFormat === "ogg" ? "Opus 高码率" : "WAV 无损"} · 保存在 ${settings.folder}/`)
-    check(!asrProblem, "captions", "实时转写", asrProblem ? `${asrProblem}；不影响录音` : "火山引擎豆包流式识别")
+    check(!asr.problem, "captions", "实时转写", asr.problem ? `${asr.problem}；不影响录音` : `${asr.name}流式识别`)
     check(!llmProblem, "list", "阶段摘要", llmProblem ? `${llmProblem}；可稍后补生成` : `每 ${settings.summaryIntervalMin} 分钟写入笔记 · ${this.host.llm().model}`)
-    hero.createDiv({ cls: "ml-privacy", text: "录音时音频会实时上传至火山引擎识别，转写文本会发送到你配置的 LLM 服务生成摘要。原始录音与转写只保存在本库。" })
+    hero.createDiv({ cls: "ml-privacy", text: `录音时音频会实时上传至${asr.name}识别，转写文本会发送到你配置的 LLM 服务生成摘要。原始录音与转写只保存在本库。` })
   }
 
   private iconButton(parent: HTMLElement, icon: string, label: string, action: () => void): HTMLButtonElement {
@@ -481,7 +482,7 @@ export class MeetingCard extends MarkdownRenderChild {
       actions.push(["重试", () => session.retryAsr()], ["设置", () => this.host.openSettings()])
     } else if (session.isLive && session.asrState === "reconnecting") {
       tone = "warn"
-      text = `与火山引擎的连接中断，正在自动重连。期间的音频已缓存，连上后会补发识别${session.asrDetail ? `（${session.asrDetail}）` : ""}。`
+      text = `与${session.asrName || "识别服务"}的连接中断，正在自动重连。期间的音频已缓存，连上后会补发识别${session.asrDetail ? `（${session.asrDetail}）` : ""}。`
       actions.push(["立即重连", () => session.retryAsr()])
     } else if (!session.llmProblem) {
       const failed = session.meta.summaries.filter((s) => s.status === "failed")

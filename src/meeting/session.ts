@@ -2,7 +2,7 @@ import { Events } from "obsidian"
 import { AudioCapture } from "../audio/capture.ts"
 import { AsrResampler } from "../audio/pcm.ts"
 import { SegmentRecorder, opusSupported, repairSegment } from "../audio/recorder.ts"
-import type { AsrConnect } from "../asr/contract.ts"
+import type { ResolvedLive } from "../asr/providers/registry.ts"
 import { AsrStreamer, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { buildMinutesMessages } from "../llm/minutes.ts"
@@ -17,7 +17,8 @@ import { formatClock, formatDate, formatDateTime, totalDuration, type AudioForma
 export interface SessionEnv {
   store: MeetingStore
   settings: () => MeetingLiveSettings
-  asrConnector: () => { connect: AsrConnect | null; problem?: string }
+  /** The live recognizer under the current settings; asked afresh for every recording run. */
+  asr: () => ResolvedLive
   llm: () => LlmClient
   /** Ensures only one meeting records at a time; returns an error message if blocked. */
   claim: (session: MeetingSession) => string | undefined
@@ -46,7 +47,7 @@ export class MeetingSession extends Events {
   asrState: AsrState = "idle"
   asrDetail: string | undefined
   /** Why the current run has no recognizer, if it has none. */
-  private asrProblem: string | undefined
+  private asrRun: ResolvedLive | undefined
   saveState: SaveState = "saved"
   savedAt = Date.now()
   minutes: MinutesState = { status: "idle" }
@@ -112,6 +113,11 @@ export class MeetingSession extends Events {
     return this.meta.lastCutoffMs + this.summaryIntervalMs - this.durationMs
   }
 
+  /** Display name of the recognizer of the current or latest run. */
+  get asrName(): string {
+    return this.asrRun?.name ?? ""
+  }
+
   get asrBacklogMs(): number {
     return this.asr?.backlogMs ?? 0
   }
@@ -161,6 +167,7 @@ export class MeetingSession extends Events {
     const blocked = this.env.claim(this)
     if (blocked) throw new Error(blocked)
     const settings = this.env.settings()
+    this.asrRun = this.env.asr()
     this.error = undefined
     let capture: AudioCapture | undefined
     try {
@@ -193,14 +200,14 @@ export class MeetingSession extends Events {
     this.recorder = await SegmentRecorder.create(this.env.store.fullPath(path), format, capture.sampleRate, capture.channels, (error) => this.onRecorderError(error))
     this.liveFrames = 0
     this.liveSegment = { file: path, format, startMs: this.durationMs, durationMs: 0, startedAt: new Date().toISOString(), sampleRate: capture.sampleRate, channels: capture.channels }
+    if (this.asrRun?.connect) this.liveSegment.asrProvider = this.asrRun.id
     this.meta.segments.push(this.liveSegment)
     void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, audioLine(path)))
   }
 
-  /** Resolves the recognizer afresh for every run, so settings changed between runs apply to the next one. */
+  /** Starts recognition with the recognizer resolved for this run, so settings changed between runs apply to the next one. */
   private startAsr(): void {
-    const { connect, problem } = this.env.asrConnector()
-    this.asrProblem = problem
+    const { connect, problem } = this.asrRun ?? { connect: null, problem: undefined }
     this.asrDetail = problem
     if (!this.asr) {
       this.asr = new AsrStreamer({
@@ -212,7 +219,7 @@ export class MeetingSession extends Events {
         onGap: (gap) => this.onGap(gap),
         onState: (state, detail) => {
           this.asrState = state
-          this.asrDetail = detail ?? (state === "disabled" ? this.asrProblem : undefined)
+          this.asrDetail = detail ?? (state === "disabled" ? this.asrRun?.problem : undefined)
           this.emitChange()
         },
         onLogId: (id) => {

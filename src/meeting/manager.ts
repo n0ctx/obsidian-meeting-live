@@ -112,7 +112,7 @@ export class MeetingManager extends Events {
       // A new meeting starts folded; it expands on click.
       collapsed: true,
     }
-    const folder = await this.store.create(meta)
+    const folder = await this.store.create(meta, this.env.asr().name)
     this.folders.set(meta.id, { folder, notePath })
     const session = await this.get(meta.id)
     if (!session) throw new Error("会议创建失败")

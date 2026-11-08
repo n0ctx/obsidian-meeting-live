@@ -1,11 +1,12 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import type { AsrConnect, AsrUtterance } from "../src/asr/contract.ts"
+import type { ResolvedLive } from "../src/asr/providers/registry.ts"
+import { AudioCapture } from "../src/audio/capture.ts"
+import { SegmentRecorder } from "../src/audio/recorder.ts"
 import { MeetingSession, type SessionEnv } from "../src/meeting/session.ts"
 import type { MeetingMeta } from "../src/meeting/types.ts"
 import { DEFAULT_SETTINGS } from "../src/settings.ts"
-
-type Resolution = { connect: AsrConnect | null; problem?: string }
 
 /** A connector whose connections answer the end of stream at once and can be fed results by the test. */
 function connector() {
@@ -26,59 +27,73 @@ function connector() {
   return { connect, sent, emit: (utterances: AsrUtterance[]) => emit(utterances) }
 }
 
-function setup(resolve: () => Resolution) {
-  const appended: string[] = []
+function setup(resolve: () => ResolvedLive) {
   const env = {
     store: {
       path: (folder: string, name: string) => `${folder}/${name}`,
-      appendTranscript: async (_path: string, text: string) => void appended.push(text),
+      audioFile: async (folder: string, _name: string | undefined, n: number, format: string) => `${folder}/audio/${n}.${format}`,
+      fullPath: (path: string) => `/vault/${path}`,
+      appendTranscript: async () => undefined,
       saveMeta: async () => undefined,
     },
-    settings: () => DEFAULT_SETTINGS,
-    asrConnector: resolve,
+    settings: () => ({ ...DEFAULT_SETTINGS, audioFormat: "wav" as const }),
+    asr: resolve,
     llm: () => ({ problem: "未配置", model: "", target: "", complete: async () => "" }),
+    claim: () => undefined,
+    release: () => undefined,
   } as unknown as SessionEnv
   const meta = { id: "m-1", title: "访谈", notePath: "访谈.md", createdAt: "2026-10-27T14:30:00+08:00", summaries: [], gaps: [], segments: [], lastCutoffMs: 0 } as unknown as MeetingMeta
-  const session = new MeetingSession(env, "m", meta, "")
-  // The audio side of a run needs a microphone; the recognizer side is what is under test.
-  const run = {
-    start: () => (session as unknown as { startAsr(): void }).startAsr(),
-    end: () => (session as unknown as { asr: { end(): Promise<void> } }).asr.end(),
-  }
-  return { session, run, appended }
+  return new MeetingSession(env, "m", meta, "")
 }
 
-test("the recognizer is resolved at every run, so settings changed between runs apply to the next one", async () => {
+const settle = () => new Promise((r) => setImmediate(r))
+
+test("the recognizer is resolved at every run and each audio segment records the provider that heard it", async (t) => {
+  // The microphone and the encoder are the parts that need a real device; the recognizer side is under test.
+  t.mock.method(AudioCapture, "open", async () => ({ sampleRate: 16000, channels: 1, deviceLabel: "测试麦克风", close: async () => undefined }))
+  t.mock.method(SegmentRecorder, "create", async () => ({ write: () => undefined, close: async () => undefined }))
   const a = connector()
   const b = connector()
-  const plan: Resolution[] = [{ connect: a.connect }, { connect: null, problem: "未配置凭证" }, { connect: b.connect }]
+  const plan: ResolvedLive[] = [
+    { id: "volc", name: "火山引擎", connect: a.connect },
+    { id: "volc", name: "火山引擎", connect: null, problem: "未配置凭证" },
+    { id: "other", name: "其他服务", connect: b.connect },
+  ]
   let calls = 0
-  const { session, run } = setup(() => plan[calls++])
+  const session = setup(() => plan[calls++])
 
-  run.start()
-  await new Promise((r) => setImmediate(r))
+  await session.start()
+  await settle()
+  assert.equal(calls, 1)
   assert.equal(session.asrState, "live")
+  assert.equal(session.asrName, "火山引擎")
   const streamer = (session as unknown as { asr: unknown }).asr
   a.emit([{ text: "第一段。", startMs: 0, endMs: 800, final: true }])
   assert.equal(session.utterances.length, 1)
-  await run.end()
+  await session.pause()
   assert.equal(a.sent.connections, 1)
 
   // No recognizer this time: the card must read "disabled" with the reason, not keep showing "idle".
-  run.start()
+  await session.start()
+  assert.equal(calls, 2)
   assert.equal(session.asrState, "disabled")
   assert.equal(session.asrDetail, "未配置凭证")
-  await run.end()
+  await session.pause()
 
-  // Credentials fixed: the next run connects, and the reason is gone.
-  run.start()
-  await new Promise((r) => setImmediate(r))
+  // Credentials fixed and another provider chosen: the next run connects through it, and the reason is gone.
+  await session.start()
+  await settle()
   assert.equal(calls, 3)
   assert.equal(session.asrState, "live")
   assert.equal(session.asrDetail, undefined)
+  assert.equal(session.asrName, "其他服务")
   assert.equal(b.sent.connections, 1)
   assert.equal(a.sent.connections, 1)
   // The streamer, with its buffer and the finals it has seen, outlives the runs.
   assert.equal((session as unknown as { asr: unknown }).asr, streamer)
-  await run.end()
+  await session.pause()
+  await session.stop()
+
+  assert.deepEqual(session.meta.segments.map((s) => s.asrProvider), ["volc", undefined, "other"])
+  assert.equal("asrProvider" in session.meta.segments[1], false)
 })

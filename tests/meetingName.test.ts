@@ -44,21 +44,21 @@ const meeting = (notePath: string) => ({ id: "m-1", title: notePath.slice(6, -3)
 test("a meeting folder and its files are named after the note, numbered when the name is taken", async () => {
   const { store, list } = tempVault()
   const first = meeting("Daily/2026年10月30日.md")
-  assert.equal(await store.create(first), "Meetings/2026年10月30日")
+  assert.equal(await store.create(first, "火山引擎"), "Meetings/2026年10月30日")
   assert.equal(first.name, "2026年10月30日")
   assert.deepEqual(list("Meetings/2026年10月30日"), ["2026年10月30日 原始转写.md", "audio", "meeting.json"])
   assert.equal(await store.audioFile("Meetings/2026年10月30日", first.name, 1, "ogg"), "Meetings/2026年10月30日/audio/2026年10月30日 录音 01.ogg")
 
   const second = meeting("Daily/2026年10月30日.md")
-  assert.equal(await store.create(second), "Meetings/2026年10月30日 2")
+  assert.equal(await store.create(second, "火山引擎"), "Meetings/2026年10月30日 2")
   assert.deepEqual(list("Meetings/2026年10月30日 2"), ["2026年10月30日 2 原始转写.md", "audio", "meeting.json"])
 })
 
 test("renaming a meeting moves its folder and named files and leaves the rest", async () => {
   const { store, list, renames, put } = tempVault()
-  await store.create(meeting("Daily/2026年10月30日甲公司.md"))
+  await store.create(meeting("Daily/2026年10月30日甲公司.md"), "火山引擎")
   const meta = meeting("Daily/2026年10月30日.md")
-  const old = await store.create(meta)
+  const old = await store.create(meta, "火山引擎")
   put(`${old}/audio/2026年10月30日 录音 01.ogg`)
   put(`${old}/2026年10月30日 正式纪要.md`)
 
