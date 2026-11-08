@@ -126,6 +126,7 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
       const timer = window.setTimeout(() => fail(new AsrError("连接 Deepgram 超时", false)), HANDSHAKE_TIMEOUT_MS + 5000)
 
       socket.on("upgrade", (response) => {
+        // The request id header name is from memory of Deepgram's responses, not from the documentation; without it the log id is simply absent.
         const value = response.headers["dg-request-id"]
         logId = Array.isArray(value) ? value[0] : value
       })
