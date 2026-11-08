@@ -320,8 +320,23 @@ export class MeetingSession extends Events {
     this.trigger("tick")
   }
 
+  /**
+   * "Retry now" for a failed or waiting recognizer. The recognizer is resolved afresh, as `doStart` does, so a key corrected after a
+   * fatal error applies without pausing; the buffered audio and the finals carry over. Settings that no longer resolve to a
+   * recognizer leave the old connector in place and show why.
+   */
   retryAsr(): void {
-    this.asr?.retryNow()
+    if (!this.asr) return
+    const resolved = this.env.asr()
+    if (!resolved.connect) {
+      this.asrDetail = resolved.problem
+      this.emitChange()
+      return
+    }
+    if (!this.asr.retryNow(resolved.connect)) return
+    this.asrRun = resolved
+    // A stretch of audio is tagged with the provider it is sent to, which may be another one from here on.
+    if (this.liveSegment) this.liveSegment.asrProvider = resolved.id
   }
 
   // ---------------------------------------------------------------- transcript

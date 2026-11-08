@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import type { AsrConnect, AsrUtterance } from "../src/asr/contract.ts"
+import { AsrError, type AsrConnect, type AsrUtterance } from "../src/asr/contract.ts"
 import type { ResolvedLive } from "../src/asr/providers/registry.ts"
 import { AudioCapture } from "../src/audio/capture.ts"
 import { SegmentRecorder } from "../src/audio/recorder.ts"
@@ -97,4 +97,66 @@ test("the recognizer is resolved at every run and each audio segment records the
 
   assert.deepEqual(session.meta.segments.map((s) => s.asrProvider), ["volc", undefined, "other"])
   assert.equal("asrProvider" in session.meta.segments[1], false)
+})
+
+test("retry now in the failed state resolves the recognizer afresh and loses neither the buffer nor the finals", async (t) => {
+  t.mock.method(AudioCapture, "open", async () => ({ sampleRate: 16000, channels: 1, deviceLabel: "测试麦克风", close: async () => undefined }))
+  t.mock.method(SegmentRecorder, "create", async () => ({ write: () => undefined, close: async () => undefined }))
+  const rejected: ResolvedLive = {
+    id: "volc",
+    name: "火山引擎",
+    connect: async () => {
+      throw new AsrError("鉴权失败", true)
+    },
+  }
+  const sent: number[] = []
+  const fixed: ResolvedLive = {
+    id: "other",
+    name: "其他服务",
+    connect: async () => ({ connection: { sendAudio: (pcm) => void sent.push(pcm.length), close: () => undefined } }),
+  }
+  const plan = [rejected, fixed]
+  let calls = 0
+  const session = setup(() => plan[Math.min(calls++, plan.length - 1)])
+  await session.start()
+  await settle()
+  assert.equal(session.asrState, "failed")
+  assert.equal(calls, 1)
+  const streamer = (session as unknown as { asr: { push(pcm: Int16Array): void; tick(): void } }).asr
+  streamer.push(new Int16Array(16000))
+
+  session.retryAsr()
+  await settle()
+  assert.equal(calls, 2, "the recognizer is resolved again")
+  assert.equal(session.asrState, "live")
+  assert.equal(session.asrName, "其他服务")
+  assert.equal(session.meta.segments[0].asrProvider, "other")
+  assert.equal((session as unknown as { asr: unknown }).asr, streamer)
+  streamer.tick()
+  assert.ok(sent.length > 0, "audio from before the retry is sent")
+  await session.pause()
+  await session.stop()
+})
+
+test("retry now with settings that no longer resolve to a recognizer shows why and keeps the old one", async (t) => {
+  t.mock.method(AudioCapture, "open", async () => ({ sampleRate: 16000, channels: 1, deviceLabel: "测试麦克风", close: async () => undefined }))
+  t.mock.method(SegmentRecorder, "create", async () => ({ write: () => undefined, close: async () => undefined }))
+  const rejected: ResolvedLive = {
+    id: "volc",
+    name: "火山引擎",
+    connect: async () => {
+      throw new AsrError("鉴权失败", true)
+    },
+  }
+  const plan: ResolvedLive[] = [rejected, { id: "volc", name: "火山引擎", connect: null, problem: "未配置凭证" }]
+  let calls = 0
+  const session = setup(() => plan[calls++])
+  await session.start()
+  await settle()
+  session.retryAsr()
+  await settle()
+  assert.equal(session.asrState, "failed")
+  assert.equal(session.asrDetail, "未配置凭证")
+  await session.pause()
+  await session.stop()
 })

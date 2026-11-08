@@ -448,12 +448,17 @@ export class MeetingCard extends MarkdownRenderChild {
     void withLlmConsent((kinds) => this.host.ensureConsent(kinds), action)
   }
 
+  /** Retries the recognizer, which may now be another service than the one the run began with: its host needs the user's agreement first. */
+  private retryAsr(): void {
+    void this.host.ensureConsent(["live"]).then((agreed) => agreed && this.session?.retryAsr())
+  }
+
   private openMenu(event: MouseEvent): void {
     const session = this.session!
     const menu = new Menu()
     menu.addItem((i) => i.setTitle(t("card.menu.summarize")).setIcon("list").onClick(() => this.summarizeNow()))
     if (session.isLive && (session.asrState === "failed" || session.asrState === "reconnecting")) {
-      menu.addItem((i) => i.setTitle(t("card.menu.reconnect")).setIcon("refresh-cw").onClick(() => session.retryAsr()))
+      menu.addItem((i) => i.setTitle(t("card.menu.reconnect")).setIcon("refresh-cw").onClick(() => this.retryAsr()))
     }
     menu.addItem((i) => i.setTitle(t("card.menu.minutes")).setIcon("file-pen-line").onClick(() => void this.host.openMinutes(session)))
     menu.addSeparator()
@@ -486,11 +491,11 @@ export class MeetingCard extends MarkdownRenderChild {
     } else if (session.isLive && session.asrState === "failed") {
       tone = "error"
       text = t("card.alert.asrStopped", session.asrDetail ?? t("common.unknownError"))
-      actions.push([t("common.retry"), () => session.retryAsr()], [t("card.alert.settings"), () => this.host.openSettings()])
+      actions.push([t("common.retry"), () => this.retryAsr()], [t("card.alert.settings"), () => this.host.openSettings()])
     } else if (session.isLive && session.asrState === "reconnecting") {
       tone = "warn"
       text = t("card.alert.reconnecting", session.asrName, session.asrDetail ?? "")
-      actions.push([t("card.alert.reconnectNow"), () => session.retryAsr()])
+      actions.push([t("card.alert.reconnectNow"), () => this.retryAsr()])
     } else if (!session.llmProblem && !session.llmConsented && (session.meta.summaries.some((s) => s.status === "pending") || (session.isLive && this.host.settings.autoSummary))) {
       tone = "warn"
       text = t("card.alert.consent", this.host.llm().target)

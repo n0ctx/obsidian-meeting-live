@@ -165,12 +165,17 @@ export class AsrStreamer {
     this.setState(this.connect ? "idle" : "disabled")
   }
 
-  /** Immediately retries a failed or waiting connection. */
-  retryNow(): void {
-    if (!this.running || !this.connect || this.state === "live" || this.connecting) return
+  /**
+   * Immediately retries a failed or waiting connection, through `connect` when given (the recognizer resolved afresh, so settings fixed
+   * since the failure apply). The buffer and the finals stay. Returns whether a retry started: not while live or already connecting.
+   */
+  retryNow(connect?: AsrConnect): boolean {
+    if (!this.running || !this.connect || this.state === "live" || this.connecting) return false
+    if (connect) this.connect = connect
     this.clearRetry()
     this.retryIndex = 0
     void this.open("reconnecting")
+    return true
   }
 
   dispose(): void {
