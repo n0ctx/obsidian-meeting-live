@@ -1062,9 +1062,6 @@
 
 .markdown-rendered .block-language-meeting-live.ml-host { margin: 0.6em 0 1.2em; }
 
-/* Summary region markers in Live Preview (see summaryMarkers.ts). */
-.ml-summary-marker { color: var(--text-faint); font-size: var(--font-ui-smaller); cursor: text; }
-
 /* ------------------------------------------------------------------ Obsidian status bar */
 
 .ml-statusbar { display: none; gap: 6px; font-variant-numeric: tabular-nums; }
