@@ -3,30 +3,21 @@
 // the loader stands in for the obsidian module that the shared protocol code reaches through its messages)
 //   Volcengine streaming ASR:     ws://127.0.0.1:<port>/asr
 //   Deepgram live:                ws://127.0.0.1:<port>/v1/listen   (Authorization: Token <key>; the key "bad" gets a 401)
+//   DashScope realtime ASR:       ws://127.0.0.1:<port>/api-ws/v1/inference   (Authorization: Bearer <key>; the key "bad" gets a 401)
 //   OpenAI-style transcription:   http://127.0.0.1:<port>/v1   (POST /audio/transcriptions; the key "bad" gets a 401)
 //   OpenAI-compatible LLM:        http://127.0.0.1:<port>/v1   (POST /chat/completions)
 //   POST /drop closes every ASR socket to simulate a network failure.
-//   GET /stats counts what the Deepgram route has seen, for tests.
+//   GET /stats counts what the streaming routes have seen, for tests.
 import { createServer, type IncomingMessage } from "node:http"
 import type { AddressInfo } from "node:net"
 import { WebSocketServer, type WebSocket } from "ws"
 import { decodeClientFrame, encodeServerResult } from "../src/asr/providers/volc/protocol.ts"
+import { DASHSCOPE_PATH, dashscopeSession } from "./mock/dashscope.ts"
+import { SENTENCES, SENTENCE_MS, stats } from "./mock/shared.ts"
 
 const port = Number(process.argv[2] ?? 8790)
-const SENTENCES = [
-  "我们今年的收入预计在三点二亿元左右，去年是两亿一千万。",
-  "毛利率大概维持在百分之四十二，主要是材料成本下降了。",
-  "目前在手订单有一点五亿，其中头部客户占比接近六成。",
-  "产能方面，二期产线计划明年三月投产，届时年产能翻倍。",
-  "融资这一轮我们希望估值在二十亿，老股东会继续跟投。",
-  "竞争对手主要是两家日本企业，他们的价格比我们高百分之二十左右。",
-  "团队现在一共一百二十人，研发占了一半以上。",
-  "关于上市，我们初步考虑二零二八年申报科创板，但还要看业绩情况。",
-]
-const SENTENCE_MS = 4200
 /** OpenAI documents 25 MB per upload; the mock refuses more with the same status. */
 const UPLOAD_LIMIT = 25 * 1024 * 1024
-const stats = { deepgramConnections: 0, keepAlives: 0, binaryFrames: 0, emptyFrames: 0, closeStreams: 0 }
 
 /** The text fields of a multipart body and the size of its file part. */
 function parseMultipart(body: Buffer, contentType: string): { fields: Record<string, string>; fileBytes: number } | undefined {
@@ -140,7 +131,8 @@ const server = createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true })
 server.on("upgrade", (req, socket, head) => {
   const deepgram = req.url?.startsWith("/v1/listen")
-  const key = deepgram ? req.headers.authorization?.replace(/^Token /, "") : (req.headers["x-api-key"] ?? req.headers["x-api-access-key"])
+  const bearer = req.url?.startsWith(DASHSCOPE_PATH)
+  const key = deepgram ? req.headers.authorization?.replace(/^Token /, "") : bearer ? req.headers.authorization?.replace(/^Bearer /, "") : (req.headers["x-api-key"] ?? req.headers["x-api-access-key"])
   if (key === "bad") {
     socket.end("HTTP/1.1 401 Unauthorized\r\nContent-Length: 12\r\n\r\ninvalid key\n")
     return
@@ -194,6 +186,7 @@ function deepgramSession(ws: WebSocket): void {
 
 wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
   if (req.url?.startsWith("/v1/listen")) return deepgramSession(ws)
+  if (req.url?.startsWith(DASHSCOPE_PATH)) return dashscopeSession(ws)
   let sequence = 1
   let receivedMs = 0
   let index = Math.floor(Math.random() * SENTENCES.length)

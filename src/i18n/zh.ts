@@ -203,6 +203,28 @@ export const zh = {
   "openai.settings.limit.name": "文件大小上限（MB）",
   "openai.settings.limit.desc": (mb: number) => `单次上传的上限。留空使用默认的 ${mb} MB；本地服务或 Groq 开发者档（100 MB）可以调高。超过上限的录音会先压缩，仍然过大则按时间切段依次识别。`,
 
+  // ---- Alibaba Cloud Bailian (DashScope)
+  "provider.dashscope": "阿里云百炼",
+  "dashscope.noKey": "未配置阿里云百炼 API Key",
+  "dashscope.noModel": "未填写阿里云百炼识别模型",
+  "dashscope.badEndpoint": "阿里云百炼地址格式不正确",
+  "dashscope.auth": (detail: string) => `阿里云百炼鉴权失败（HTTP 401），请检查 API Key 是否属于所选地域${detail ? `：${detail}` : ""}`,
+  "dashscope.forbidden": (detail: string) => `阿里云百炼拒绝访问（HTTP 403），请检查账户是否欠费、是否已开通该模型${detail ? `：${detail}` : ""}`,
+  "dashscope.badRequest": (status: number, detail: string) => `阿里云百炼拒绝了请求（HTTP ${status}）${detail ? `：${detail}` : ""}`,
+  "dashscope.refused": (status: number, detail: string) => `阿里云百炼拒绝连接（HTTP ${status}）${detail ? `：${detail}` : ""}`,
+  "dashscope.timeout": "连接阿里云百炼超时",
+  "dashscope.socketClosed": "阿里云百炼连接已关闭",
+  "dashscope.closed": (code: number) => `阿里云百炼连接断开（${code}）`,
+  "dashscope.taskFailed": (code: string, message: string) => `阿里云百炼识别任务失败${code ? ` ${code}` : ""}${message ? `：${message}` : ""}`,
+  "dashscope.settings.heading": (name: string) => name,
+  "dashscope.settings.note": "只需填写 API Key 并选择它所属的地域。录音时音频实时发送到阿里云，语言跟随上方的「识别语言」，自动检测时由服务判断。",
+  "dashscope.settings.region.name": "地域",
+  "dashscope.settings.region.desc": "两个地域的账号和 API Key 互不通用，请选择创建 Key 的那一个。",
+  "dashscope.settings.region.cn": "中国内地（北京）",
+  "dashscope.settings.region.intl": "国际（新加坡）",
+  "dashscope.settings.model.name": "实时识别模型",
+  "dashscope.settings.model.desc": "默认使用文档为会议推荐的 qwen-audio-3.1-asr-flash-streaming，支持热词。改用 fun-asr-realtime 等模型时热词不生效。",
+
   // ---- what differs by operating system
   "hint.systemAudio.mac": "普通麦克风只能录到现场声音。线上会议的远端声音需要通过 BlackHole 等虚拟声卡或聚合设备接入后在此选择。",
   "hint.systemAudio.win": "普通麦克风只能录到现场声音。线上会议的远端声音需要启用系统的「立体声混音」，或安装 VB-CABLE 等虚拟声卡，接入后在此选择。",

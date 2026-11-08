@@ -4,8 +4,9 @@ import assert from "node:assert/strict"
 import { spawn, type ChildProcess } from "node:child_process"
 import { after, before, test } from "node:test"
 import { transcribeChunks } from "../src/asr/chunked.ts"
-import type { AsrError } from "../src/asr/contract.ts"
+import type { AsrConnect, AsrError } from "../src/asr/contract.ts"
 import type { FileAsrPost } from "../src/asr/fileAsr.ts"
+import { dashScopeConnector } from "../src/asr/providers/dashscope/live.ts"
 import { deepgramConnector } from "../src/asr/providers/deepgram/live.ts"
 import { openAiFileProvider } from "../src/asr/providers/openaiCompat/file.ts"
 import { volcConnector } from "../src/asr/providers/volc/live.ts"
@@ -31,7 +32,7 @@ before(async () => {
 })
 after(() => server.kill())
 
-const stats = async () => (await (await fetch(`${base}/stats`)).json()) as { deepgramConnections: number; keepAlives: number; binaryFrames: number; emptyFrames: number; closeStreams: number }
+const stats = async () => (await (await fetch(`${base}/stats`)).json()) as { deepgramConnections: number; keepAlives: number; binaryFrames: number; emptyFrames: number; closeStreams: number; dashscopeConnections: number; dashscopeFinishTasks: number }
 const wsBase = () => base.replace("http", "ws")
 const flush = () => new Promise((r) => setTimeout(r, 5))
 async function waitFor(condition: () => boolean, ms = 8000) {
@@ -42,6 +43,7 @@ async function waitFor(condition: () => boolean, ms = 8000) {
   }
 }
 
+const dashscope = (apiKey = "k") => dashScopeConnector({ endpoint: `${wsBase()}/api-ws/v1/inference`, apiKey, model: "qwen-audio-3.1-asr-flash-streaming", language: "zh", hotwords: [] })
 const deepgram = (apiKey = "k") => deepgramConnector({ endpoint: `${wsBase()}/v1/listen`, apiKey, model: "nova-3", language: "zh", diarize: false })
 
 function recorder() {
@@ -53,11 +55,15 @@ function recorder() {
   return { events, finals, gaps, states, interims: () => interims }
 }
 
-test("Deepgram through the streamer: a forced drop mid-meeting recovers with no duplicate and no lost final", async () => {
-  const before = await stats()
+/**
+ * A meeting through the streamer against a mock route: a drop mid-meeting while audio keeps arriving, then recovery with every
+ * second of audio covered exactly once. `connections` reads how many times the route has been connected to.
+ */
+async function recoversFromDrop(connect: AsrConnect, connections: () => Promise<number>): Promise<Utterance[]> {
+  const first = await connections()
   const rec = recorder()
   const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
-  asr.begin(0, deepgram())
+  asr.begin(0, connect)
   await waitFor(() => asr.currentState === "live")
 
   const TOTAL_S = 14
@@ -85,7 +91,7 @@ test("Deepgram through the streamer: a forced drop mid-meeting recovers with no 
   assert.deepEqual(rec.gaps, [], "nothing was lost to a gap")
   assert.ok(rec.states.includes("reconnecting") && rec.states.at(-1) === "idle")
   assert.deepEqual(rec.interims(), [])
-  assert.ok((await stats()).deepgramConnections - before.deepgramConnections >= 2, "the drop forced a second connection")
+  assert.ok((await connections()) - first >= 2, "the drop forced a second connection")
 
   // No duplicates: each final starts after the previous ended, and no start repeats.
   const starts = rec.finals.map((u) => Math.round(u.startMs))
@@ -95,6 +101,17 @@ test("Deepgram through the streamer: a forced drop mid-meeting recovers with no 
   for (let i = 1; i < rec.finals.length; i++) assert.ok(Math.abs(rec.finals[i].startMs - rec.finals[i - 1].endMs) <= 2, `final ${i} starts at ${rec.finals[i].startMs}, the one before ended at ${rec.finals[i - 1].endMs}`)
   assert.ok(Math.abs(rec.finals.at(-1)!.endMs - TOTAL_S * 1000) <= 2, `last final ends at ${rec.finals.at(-1)!.endMs}`)
   for (const u of rec.finals) assert.ok(u.text.length > 0)
+  return rec.finals
+}
+
+test("Deepgram through the streamer: a forced drop mid-meeting recovers with no duplicate and no lost final", async () => {
+  await recoversFromDrop(deepgram(), async () => (await stats()).deepgramConnections)
+})
+
+test("DashScope through the streamer: a forced drop mid-meeting recovers with no duplicate and no lost final, and the run ends with finish-task", async () => {
+  const before = await stats()
+  await recoversFromDrop(dashscope(), async () => (await stats()).dashscopeConnections)
+  assert.equal((await stats()).dashscopeFinishTasks - before.dashscopeFinishTasks, 1, "the end of the run is a finish-task")
 })
 
 test("Deepgram end of stream: CloseStream makes the server send the last final and close, and no empty frame is sent", async () => {
@@ -124,6 +141,21 @@ test("Deepgram connection errors come back as the fatal kind the streamer stops 
   failing.begin(0, deepgram("bad"))
   await waitFor(() => failing.currentState === "failed")
   failing.dispose()
+})
+
+test("DashScope: a refused key is fatal and stops the streamer, and the test button's check passes and reports it", async () => {
+  const error = (await dashscope("bad")({ onResult: () => undefined, onClose: () => undefined }).catch((e: unknown) => e)) as AsrError
+  assert.equal(error.fatal, true)
+  assert.match(error.message, /鉴权失败/)
+  const failing = new AsrStreamer(recorder().events, { manualTicks: true })
+  failing.begin(0, dashscope("bad"))
+  await waitFor(() => failing.currentState === "failed")
+  failing.dispose()
+
+  assert.deepEqual(await runLiveTest(dashscope()), { ok: true, logId: undefined })
+  const refused = await runLiveTest(dashscope("bad"))
+  assert.equal(refused.ok, false)
+  assert.match(refused.message ?? "", /鉴权失败/)
 })
 
 test("the test button's connection check passes against the mock and reports a refused key", async () => {

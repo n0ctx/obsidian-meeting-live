@@ -203,6 +203,28 @@ export const en: Dictionary = {
   "openai.settings.limit.name": "File size limit (MB)",
   "openai.settings.limit.desc": (mb) => `The most one upload may carry. Leave empty for the default, ${mb} MB; raise it for a local server or Groq's developer tier (100 MB). A longer recording is compressed first, and if still too large it is cut into timed pieces and recognized in turn.`,
 
+  // ---- Alibaba Cloud Bailian (DashScope)
+  "provider.dashscope": "Alibaba Cloud Bailian",
+  "dashscope.noKey": "The Alibaba Cloud Bailian API key is not set",
+  "dashscope.noModel": "The Alibaba Cloud Bailian recognition model is empty",
+  "dashscope.badEndpoint": "The Alibaba Cloud Bailian address is not valid",
+  "dashscope.auth": (detail) => `Alibaba Cloud Bailian rejected the credentials (HTTP 401). Check that the API key belongs to the chosen region${detail ? `: ${detail}` : ""}`,
+  "dashscope.forbidden": (detail) => `Alibaba Cloud Bailian denied access (HTTP 403). Check that the account is in good standing and the model is activated${detail ? `: ${detail}` : ""}`,
+  "dashscope.badRequest": (status, detail) => `Alibaba Cloud Bailian rejected the request (HTTP ${status})${detail ? `: ${detail}` : ""}`,
+  "dashscope.refused": (status, detail) => `Alibaba Cloud Bailian refused the connection (HTTP ${status})${detail ? `: ${detail}` : ""}`,
+  "dashscope.timeout": "Timed out connecting to Alibaba Cloud Bailian",
+  "dashscope.socketClosed": "The Alibaba Cloud Bailian connection is closed",
+  "dashscope.closed": (code) => `The Alibaba Cloud Bailian connection dropped (${code})`,
+  "dashscope.taskFailed": (code, message) => `The Alibaba Cloud Bailian recognition task failed${code ? ` ${code}` : ""}${message ? `: ${message}` : ""}`,
+  "dashscope.settings.heading": (name) => name,
+  "dashscope.settings.note": "Fill in the API key and pick the region it belongs to. While recording, audio is streamed to Alibaba Cloud. The language follows Recognition language above; with auto-detect the service decides.",
+  "dashscope.settings.region.name": "Region",
+  "dashscope.settings.region.desc": "Accounts and API keys of the two regions are separate: choose the one the key was created in.",
+  "dashscope.settings.region.cn": "Mainland China (Beijing)",
+  "dashscope.settings.region.intl": "International (Singapore)",
+  "dashscope.settings.model.name": "Live recognition model",
+  "dashscope.settings.model.desc": "Defaults to qwen-audio-3.1-asr-flash-streaming, the model the documentation recommends for meetings, which takes hotwords. Models such as fun-asr-realtime ignore the hotwords.",
+
   // ---- what differs by operating system
   "hint.systemAudio.mac": "A normal microphone only captures the room. To capture the far side of an online call, route system audio through a virtual device such as BlackHole (or an aggregate device) and select it here.",
   "hint.systemAudio.win": "A normal microphone only captures the room. To capture the far side of an online call, enable Stereo Mix in Windows sound settings, or install a virtual device such as VB-CABLE, and select it here.",
