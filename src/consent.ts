@@ -21,8 +21,8 @@ export function destinations(settings: MeetingLiveSettings): Destination[] {
   const file = asrProvider(settings.fileProvider)
   const llmHost = hostOf(chatCompletionsUrl(settings.llmBaseUrl))
   const list: Destination[] = [
-    { kind: "live", name: live?.name ?? settings.liveProvider, host: live?.liveHost(settings) ?? "" },
-    { kind: "file", name: file?.name ?? settings.fileProvider, host: file?.fileHost(settings) ?? "" },
+    { kind: "live", name: live?.name ?? settings.liveProvider, host: live?.live?.host(settings) ?? "" },
+    { kind: "file", name: file?.name ?? settings.fileProvider, host: file?.file?.host(settings) ?? "" },
     { kind: "llm", name: llmHost, host: llmHost, detail: settings.llmModel.trim() || undefined },
   ]
   return list.filter((d) => d.host)

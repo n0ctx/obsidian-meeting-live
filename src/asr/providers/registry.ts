@@ -11,6 +11,7 @@ export function asrProvider(id: string): AsrProvider | undefined {
 }
 
 const unknownProblem = (id: string) => `未知的语音识别服务「${id}」，请在设置中重新选择`
+const unsupportedProblem = (name: string, what: string) => `${name}不支持${what}，请在设置中重新选择`
 
 export interface ResolvedLive {
   id: string
@@ -24,22 +25,28 @@ export function resolveLive(env: ProviderEnv): ResolvedLive {
   const id = env.settings.liveProvider
   const provider = asrProvider(id)
   if (!provider) return { id, name: id, connect: null, problem: unknownProblem(id) }
-  return { id, name: provider.name, ...provider.live(env) }
+  if (!provider.live) return { id, name: provider.name, connect: null, problem: unsupportedProblem(provider.name, "实时识别") }
+  return { id, name: provider.name, ...provider.live.resolve(env) }
 }
 
 /** The recorded-file recognizer under the current settings. */
 export function resolveFile(env: ProviderEnv): FileAsrProvider {
   const id = env.settings.fileProvider
   const provider = asrProvider(id)
-  if (provider) return provider.file(env)
+  if (provider?.file) return provider.file.resolve(env)
+  const problem = provider ? unsupportedProblem(provider.name, "录音文件识别") : unknownProblem(id)
   return {
     id,
-    name: id,
+    name: provider?.name ?? id,
     host: "",
     model: "",
-    capabilities: { hotwords: false, endWindow: false, diarization: false, fileSizeLimit: 0 },
+    capabilities: { language: false, diarization: false, fileSizeLimit: 0 },
     directFormats: {},
-    problem: unknownProblem(id),
-    transcribe: () => Promise.reject(new Error(unknownProblem(id))),
+    problem,
+    transcribe: () => Promise.reject(new Error(problem)),
   }
 }
+
+/** Providers that can do the job, for the settings page's choices. */
+export const liveProviders = (): AsrProvider[] => ASR_PROVIDERS.filter((p) => p.live)
+export const fileProviders = (): AsrProvider[] => ASR_PROVIDERS.filter((p) => p.file)

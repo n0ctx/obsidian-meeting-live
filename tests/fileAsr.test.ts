@@ -24,7 +24,7 @@ function multipartProvider(seen: { body?: string | ArrayBuffer; headers?: Record
     name: "示例",
     host: "api.example.com",
     model: "m",
-    capabilities: { hotwords: false, endWindow: false, diarization: false, fileSizeLimit: 1024 },
+    capabilities: { language: false, diarization: false, fileSizeLimit: 1024 },
     directFormats: { mp3: "mp3" },
     transcribe: async (audio, call) => {
       const head = new TextEncoder().encode("--b\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\n")

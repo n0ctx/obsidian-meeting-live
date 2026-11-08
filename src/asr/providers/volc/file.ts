@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto"
 import type { PreparedAudio } from "../../../audio/transcode.ts"
 import type { FileAsrCall, FileAsrProvider, FileAsrResponse, FileAsrResult } from "../../fileAsr.ts"
-import { VOLC_CAPABILITIES, VOLC_ID, VOLC_NAME } from "./info.ts"
+import { VOLC_FILE_CAPABILITIES, VOLC_ID, VOLC_NAME } from "./info.ts"
 
 export const FILE_ASR_BASE = "https://openspeech.bytedance.com"
 export const FILE_ASR_HOST = new URL(FILE_ASR_BASE).host
@@ -144,7 +144,7 @@ export function volcFileProvider(auth: FileAsrAuth): FileAsrProvider {
     name: VOLC_NAME,
     host: FILE_ASR_HOST,
     model: auth.resourceId,
-    capabilities: VOLC_CAPABILITIES,
+    capabilities: VOLC_FILE_CAPABILITIES,
     directFormats: VOLC_DIRECT_FORMATS,
     problem: missing ? "未配置火山引擎凭证，请先在插件设置中填写" : undefined,
     transcribe: (audio, call) => volcTranscribeFile(auth, audio, call),

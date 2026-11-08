@@ -1,5 +1,6 @@
 import { Notice, PluginSettingTab, Setting, type App } from "obsidian"
-import { asrProvider } from "./asr/providers/registry.ts"
+import { asrProvider, fileProviders, liveProviders } from "./asr/providers/registry.ts"
+import type { AsrProvider } from "./asr/providers/types.ts"
 import { listInputDevices } from "./audio/capture.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
@@ -72,11 +73,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
         }),
       )
 
-    for (const id of new Set([this.s.liveProvider, this.s.fileProvider])) {
-      const provider = asrProvider(id)
-      if (provider) provider.renderSettings({ app: this.app, containerEl, settings: this.s, save: () => this.save() })
-      else containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: `未知的语音识别服务「${id}」。` })
-    }
+    this.asrSettings(containerEl)
 
     new Setting(containerEl).setName("LLM").setHeading()
     this.compatibleSettings(containerEl)
@@ -105,6 +102,46 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("正式纪要").setHeading()
     this.promptSetting("纪要 Prompt", "生成正式纪要时使用的系统提示词，每次生成前也可以临时修改。", "minutesPrompt", DEFAULT_MINUTES_PROMPT, 12)
+  }
+
+  private asrSettings(containerEl: HTMLElement): void {
+    const s = this.s
+    new Setting(containerEl).setName("语音识别").setHeading()
+    this.providerChoice(containerEl, "实时识别服务", "录音时实时转写。", liveProviders(), "liveProvider")
+    this.providerChoice(containerEl, "录音文件识别服务", "命令「录音生成访谈记录」使用。", fileProviders(), "fileProvider")
+    if (asrProvider(s.liveProvider)?.live?.capabilities(s).hotwords) {
+      new Setting(containerEl)
+        .setName("热词")
+        .setDesc("公司名、人名、产品名等，一行一个，最多 100 个，提升专有名词识别准确率。")
+        .addTextArea((t) => {
+          t.inputEl.rows = 4
+          t.setValue(s.hotwords).onChange((v) => {
+            s.hotwords = v
+            this.save()
+          })
+        })
+    }
+    for (const id of new Set([s.liveProvider, s.fileProvider])) {
+      const provider = asrProvider(id)
+      if (provider) provider.renderSettings({ app: this.app, containerEl, settings: s, save: () => this.save(), roles: { live: id === s.liveProvider && !!provider.live, file: id === s.fileProvider && !!provider.file } })
+      else containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: `未知的语音识别服务「${id}」。` })
+    }
+  }
+
+  /** A dropdown of the providers able to do the job; an id that is no longer available stays visible so the page tells the truth. */
+  private providerChoice(containerEl: HTMLElement, name: string, desc: string, providers: AsrProvider[], key: "liveProvider" | "fileProvider"): void {
+    new Setting(containerEl)
+      .setName(name)
+      .setDesc(desc)
+      .addDropdown((d) => {
+        for (const p of providers) d.addOption(p.id, p.name)
+        if (!providers.some((p) => p.id === this.s[key])) d.addOption(this.s[key], `${this.s[key]}（不可用）`)
+        d.setValue(this.s[key]).onChange((v) => {
+          this.s[key] = v
+          this.save()
+          this.display()
+        })
+      })
   }
 
   private compatibleSettings(containerEl: HTMLElement): void {

@@ -1,7 +1,7 @@
 // Recorded-file ASR, independent of the provider: the provider interface, the checks and the rendering.
 import type { PreparedAudio } from "../audio/transcode.ts"
 import { formatClock, type Utterance } from "../meeting/types.ts"
-import type { AsrCapabilities } from "./providers/types.ts"
+import type { FileCapabilities } from "./providers/types.ts"
 
 /** Transcripts must reach this share of the audio; the service can truncate silently. */
 export const MIN_COVERAGE = 0.8
@@ -47,7 +47,7 @@ export interface FileAsrProvider {
   readonly host: string
   /** Model or resource that recognizes the audio, recorded in notes. */
   readonly model: string
-  readonly capabilities: AsrCapabilities
+  readonly capabilities: FileCapabilities
   /** Formats the service takes as they are: lower-case file extension → the service's format name. */
   readonly directFormats: Record<string, string>
   /** Why it cannot be used right now, such as missing credentials. */
