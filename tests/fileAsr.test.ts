@@ -51,7 +51,7 @@ test("a provider can post a binary body, and the result still goes through the c
   const out = await transcribeFile(multipartProvider(seen), audio, { speakers: false, post })
   assert.ok(sent[0] instanceof ArrayBuffer)
   assert.equal(sent[0], seen.body)
-  assert.ok(Buffer.from(sent[0] as ArrayBuffer).includes(Buffer.from([1, 2, 3])))
+  assert.ok(Buffer.from(sent[0]).includes(Buffer.from([1, 2, 3])))
   assert.equal(out.utterances[0].text, "你好")
 
   const empty: FileAsrProvider = { ...multipartProvider({}), transcribe: async () => ({ durationMs: 1000, text: "", utterances: [] }) }

@@ -78,7 +78,7 @@ export function migrateAccounts(stored: Record<string, unknown>, nested: boolean
 
   // Language model: the flat llm* keys, placed on a preset the way requests have always been shaped.
   const baseUrl = text(stored.llmBaseUrl, OLD_LLM.baseUrl)
-  const preset = nested && isPresetId(stored.llmPreset) ? presetById(stored.llmPreset as string) : presetForUrl(baseUrl)
+  const preset = nested && isPresetId(stored.llmPreset) ? presetById(stored.llmPreset) : presetForUrl(baseUrl)
   const key = text(stored.llmApiKeySecret, "")
   const placed = serviceForPreset(preset.id)
   if (placed && (key || !preset.keyRequired || !sameUrl(baseUrl, OLD_LLM.baseUrl))) {

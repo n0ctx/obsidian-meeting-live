@@ -1,5 +1,5 @@
 // Local stand-in for the speech and language services, for testing without paid APIs or keys.
-// Run: node --import ./tests/support/register.mjs dev/mock-server.ts [port]   (port 0 picks a free one; the URL is printed;
+// Run: node --import ./tests/support/register.mjs scripts/mock-server.ts [port]   (port 0 picks a free one; the URL is printed;
 // the loader stands in for the obsidian module that the shared protocol code reaches through its messages)
 //   Volcengine streaming ASR:     ws://127.0.0.1:<port>/asr
 //   Deepgram live:                ws://127.0.0.1:<port>/v1/listen   (Authorization: Token <key>; the key "bad" gets a 401)

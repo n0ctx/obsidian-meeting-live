@@ -190,10 +190,12 @@ Windows（未测试）：从 [发布页](https://github.com/ggml-org/whisper.cpp
 npm ci
 npm test        # 单元测试
 npm run build   # 类型检查与生产构建
-node --import ./tests/support/register.mjs dev/mock-server.ts 8790   # 本地模拟语音和模型服务
+node --import ./tests/support/register.mjs scripts/mock-server.ts 8790   # 本地模拟语音和模型服务
 ```
 
 模拟服务器说火山引擎、阿里云百炼、AssemblyAI、Deepgram、OpenAI 风格转写和 OpenAI 兼容模型的协议，也包括设置页调用的模型列表和密钥检查（密钥 `bad` 会被拒绝；`key-1.0-only` 会被拒绝使用火山引擎的 2.0 资源），因此不需要任何付费密钥。其中的加载器代替 Obsidian 的模块，共享代码会引用它。
+
+发布（维护者）：在干净的 `main` 上运行 `npm version patch`（或 `minor`，或直接写 `x.y.z`）。`version-bump.mjs` 里的 `version` 脚本会让 `manifest.json`、`versions.json` 和 `package.json` 一起变；`.npmrc` 让标签是不带 `v` 的 `x.y.z`，这是 Obsidian 的要求。然后推送提交和标签。[发布工作流](.github/workflows/release.yml)会从打标签的那次提交构建、运行测试，标签与 `manifest.json` 的版本不一致或 `versions.json` 里没有该版本就中止，为 `main.js`、`manifest.json`、`styles.css` 生成构建来源证明，并用这三个文件发布。描述等内容要在打标签之前改好：发布里的文件就是标签那一刻的样子，之后对 `manifest.json` 的修改要等下一次发布才会到用户手里。
 
 ## 许可
 

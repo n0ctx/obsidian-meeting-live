@@ -1,0 +1,68 @@
+# Publishes a release when a version tag (x.y.z, no "v" prefix, as Obsidian requires) is pushed.
+# Everything is built from the tagged commit, so the release files cannot differ from the repository at that tag.
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check that the tag matches the manifest and versions.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          manifest_version=$(node -p 'JSON.parse(require("fs").readFileSync("manifest.json", "utf8")).version')
+          package_version=$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')
+          if [ "$TAG" != "$manifest_version" ]; then
+            echo "::error::Tag $TAG does not equal manifest.json version $manifest_version"
+            exit 1
+          fi
+          if [ "$TAG" != "$package_version" ]; then
+            echo "::error::Tag $TAG does not equal package.json version $package_version"
+            exit 1
+          fi
+          if ! TAG="$TAG" node -e 'process.exit(process.env.TAG in JSON.parse(require("fs").readFileSync("versions.json", "utf8")) ? 0 : 1)'; then
+            echo "::error::versions.json has no entry for $TAG"
+            exit 1
+          fi
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" main.js manifest.json styles.css --verify-tag --title "$TAG" --generate-notes

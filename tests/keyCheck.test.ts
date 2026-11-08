@@ -1,4 +1,4 @@
-// Checking a pasted key, against dev/mock-server.ts and fakes: nothing here can reach a paid service or needs a real key.
+// Checking a pasted key, against scripts/mock-server.ts and fakes: nothing here can reach a paid service or needs a real key.
 import assert from "node:assert/strict"
 import { spawn, type ChildProcess } from "node:child_process"
 import { after, before, test } from "node:test"
@@ -15,7 +15,7 @@ let server: ChildProcess
 let base = ""
 
 before(async () => {
-  server = spawn(process.execPath, ["--import", "./tests/support/register.mjs", "dev/mock-server.ts", "0"], { stdio: ["ignore", "pipe", "inherit"] })
+  server = spawn(process.execPath, ["--import", "./tests/support/register.mjs", "scripts/mock-server.ts", "0"], { stdio: ["ignore", "pipe", "inherit"] })
   base = await new Promise<string>((resolve, reject) => {
     server.stdout!.on("data", (chunk: Buffer) => {
       const match = /mock server on (http:\/\/127\.0\.0\.1:\d+)/.exec(chunk.toString())
