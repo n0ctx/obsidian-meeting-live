@@ -3,6 +3,7 @@ import { test } from "node:test"
 import { destinations, needsConsent } from "../src/consent.ts"
 import { chatRequestBody } from "../src/llm/client.ts"
 import { SETTINGS_VERSION, llmConfig, loadSettings, storedSettings } from "../src/settings.ts"
+import { withAccount } from "./support/accounts.ts"
 
 /** The author's 1.0.1 shape with placeholder prompts: Volcengine 1.0 streaming and 2.0 files, DeepSeek with low effort, one accepted consent. */
 const author101 = () => ({
@@ -110,6 +111,21 @@ test("the same key at the same service is one account, but a different key or re
   assert.deepEqual(split.accounts.map((a) => [a.service, a.apiKeySecret]), [["dashscope", "a"], ["dashscope", "b"]])
   const otherRegion = loadSettings({ version: 2, liveProvider: "dashscope", providers: { dashscope: { region: "intl", apiKeySecret: "a" } }, llmBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", llmApiKeySecret: "a", llmModel: "qwen-plus" }).settings
   assert.equal(otherRegion.accounts.length, 2)
+})
+
+test("the 1.0.1 yes seeds consent once, while migrating, and never again for an account added later", () => {
+  // Accepted under 1.0.1 but with nothing configured: there was nothing then to agree to, so nothing is seeded.
+  const first = loadSettings({ consentAccepted: true })
+  assert.deepEqual(first.settings.consent, [])
+  const saved = () => JSON.parse(JSON.stringify(storedSettings(first.settings, first.legacy)))
+  assert.equal(saved().consentAccepted, true, "the legacy key stays in the file")
+  // The user adds a Volcengine account; after a restart the old yes must not stand in for it.
+  withAccount(first.settings, "volc", { key: "k" })
+  withAccount(first.settings, "deepseek", { key: "k" })
+  const reloaded = loadSettings(saved())
+  assert.deepEqual(reloaded.settings.consent, [])
+  assert.equal(needsConsent(reloaded.settings), true)
+  assert.equal(needsConsent(loadSettings(saved()).settings, ["llm"]), true)
 })
 
 test("migrating never turns the old settings into secrets or changes the key ids", () => {

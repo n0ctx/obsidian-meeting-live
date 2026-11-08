@@ -96,8 +96,9 @@ export function loadSettings(raw: unknown): LoadedSettings {
     Object.assign(settings, migrateAccounts(stored, version >= 2))
   }
   if (Array.isArray(stored.consent)) settings.consent = stored.consent.filter((entry): entry is string => typeof entry === "string")
-  // The single yes of 1.0.x covered the destinations configured at the time, which are the ones to be seeded.
-  if (settings.consent.length === 0 && stored.consentAccepted === true) settings.consent = seedConsent(settings)
+  // The single yes of 1.0.x covered the destinations configured at the time, which are the ones to be seeded. Only while migrating: the
+  // legacy key stays in the file, and seeding on every load would agree for the user to whatever account they add later.
+  if (!current && settings.consent.length === 0 && stored.consentAccepted === true) settings.consent = seedConsent(settings)
   const legacy: Record<string, unknown> = {}
   for (const key of LEGACY_KEYS) if (key in stored) legacy[key] = stored[key]
   return { settings, legacy, migrated: Object.keys(stored).length > 0 && (!current || !hadNoteLanguage) }

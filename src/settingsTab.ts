@@ -335,6 +335,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           d.setValue(draft.region).onChange((v) => {
             draft.region = v
             changed()
+            // The key page and the default address belong to the region, so the form is drawn again.
+            this.renderAccounts()
           })
         })
     }

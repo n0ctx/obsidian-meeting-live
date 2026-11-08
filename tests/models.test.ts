@@ -80,6 +80,13 @@ test("each outcome is told apart: refused key, no list, an unreachable server, a
   assert.equal(broken.state, "failed")
 })
 
+test("DashScope's 403 is not taken for a bad key, since a good key can lack access to the list", async () => {
+  const config = configFor("dashscope", "cn")
+  const url = "https://dashscope.aliyuncs.com/api/v1/models?page_size=100"
+  assert.deepEqual(await listModels("qwen", config, fake({ [url]: { status: 401 } }).get), { state: "rejected", status: 401 })
+  assert.deepEqual(await listModels("qwen", config, fake({ [url]: { status: 403 } }).get), { state: "none" })
+})
+
 test("a service with no documented list is never called, and falls back to the short list", async () => {
   for (const id of ["glm", "glm-intl", "ark", "minimax"]) {
     assert.equal(hasListing(id), false, id)

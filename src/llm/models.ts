@@ -17,6 +17,8 @@ interface Listing {
   strip?: RegExp
   /** The list tells nothing the picker can use, as Azure's names base models while requests name deployments; it only checks the key. */
   checkOnly?: true
+  /** Only 401 means the key is bad; a 403 is a valid key without access to the list, which says nothing about the key (DashScope's error codes). */
+  forbiddenIsNotRejection?: true
   /** The list does not need a valid key, so the key is checked at this path instead (OpenRouter's /models is not authenticated). */
   checkPath?: string
 }
@@ -33,8 +35,8 @@ const LISTINGS: Record<string, Listing | undefined> = {
   // https://openrouter.ai/docs/api-reference/limits (GET /api/v1/key answers only for a valid key) and https://openrouter.ai/docs/api/api-reference/models/get-models
   openrouter: { from: "base", path: "/models", shape: "openai", checkPath: "/key" },
   // https://help.aliyun.com/en/model-studio/list-models (GET /api/v1/models, Bearer; the compatible-mode path documents no /models)
-  qwen: { from: "origin", path: "/api/v1/models?page_size=100", shape: "dashscope", exclude: /embedding|asr|tts|wan|image|video|rerank|paraformer|cosyvoice|sambert|vision-ocr/i },
-  "qwen-intl": { from: "origin", path: "/api/v1/models?page_size=100", shape: "dashscope", exclude: /embedding|asr|tts|wan|image|video|rerank|paraformer|cosyvoice|sambert|vision-ocr/i },
+  qwen: { from: "origin", path: "/api/v1/models?page_size=100", shape: "dashscope", forbiddenIsNotRejection: true, exclude: /embedding|asr|tts|wan|image|video|rerank|paraformer|cosyvoice|sambert|vision-ocr/i },
+  "qwen-intl": { from: "origin", path: "/api/v1/models?page_size=100", shape: "dashscope", forbiddenIsNotRejection: true, exclude: /embedding|asr|tts|wan|image|video|rerank|paraformer|cosyvoice|sambert|vision-ocr/i },
   // https://platform.kimi.ai/docs/api/list-models and https://platform.kimi.com/docs/api/list-models.md
   kimi: { from: "base", path: "/models", shape: "openai" },
   "kimi-intl": { from: "base", path: "/models", shape: "openai" },
@@ -134,8 +136,8 @@ export async function listModels(presetId: string, config: LlmConfig, get: HttpG
       if (checked.status >= 400) return { state: "failed", status: checked.status, message: checked.text.slice(0, 120) }
     }
     const response = await get(url, headers)
-    if (response.status === 401 || response.status === 403) return { state: "rejected", status: response.status }
-    if (response.status === 404 || response.status === 405) return { state: "none" }
+    if (response.status === 401 || (response.status === 403 && !listing.forbiddenIsNotRejection)) return { state: "rejected", status: response.status }
+    if (response.status === 404 || response.status === 405 || response.status === 403) return { state: "none" }
     if (response.status >= 400) return { state: "failed", status: response.status, message: response.text.slice(0, 120) }
     let json: unknown
     try {
