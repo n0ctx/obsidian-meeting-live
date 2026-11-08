@@ -2,6 +2,7 @@ import { Notice, Setting } from "obsidian"
 import type { SecretReader } from "../../../secrets.ts"
 import type { MeetingLiveSettings } from "../../../settings.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
+import { testLiveConnection } from "../liveTest.ts"
 import type { ProviderSettingsContext } from "../types.ts"
 import { VOLC_LIVE_CAPABILITIES, VOLC_NAME } from "./info.ts"
 import { volcConfigProblem, volcConnector } from "./live.ts"
@@ -45,33 +46,13 @@ export function renderVolcSettings({ app, containerEl, settings, save, roles }: 
     new Setting(containerEl)
       .setName("测试识别连接")
       .setDesc("建立一次连接并发送 1 秒静音，会产生极少量计费时长。")
-      .addButton((b) => b.setButtonText("测试").onClick(() => void testConnection(app.secretStorage, settings, b.buttonEl)))
+      .addButton((b) => b.setButtonText("测试").onClick(() => testConnection(app.secretStorage, settings, b.buttonEl)))
   }
 }
 
-async function testConnection(secrets: SecretReader, settings: MeetingLiveSettings, button: HTMLButtonElement): Promise<void> {
+function testConnection(secrets: SecretReader, settings: MeetingLiveSettings, button: HTMLButtonElement): void {
   const config = volcConfig(secrets, settings.providers.volc, settings.hotwords)
   const problem = volcConfigProblem(config)
   if (problem) return void new Notice(problem)
-  button.disabled = true
-  try {
-    let resolveFinal: () => void = () => undefined
-    const final = new Promise<void>((r) => (resolveFinal = r))
-    const { connection, logId } = await volcConnector(config)({
-      onResult: (_update, last) => last && resolveFinal(),
-      onClose: (error) => {
-        new Notice(error.message)
-        resolveFinal()
-      },
-    })
-    for (let i = 0; i < 5; i++) connection.sendAudio(new Int16Array(3200), false)
-    connection.sendAudio(new Int16Array(0), true)
-    await Promise.race([final, new Promise((r) => window.setTimeout(r, 8000))])
-    connection.close()
-    new Notice(`${VOLC_NAME}连接成功${logId ? `（logid ${logId}）` : ""}`)
-  } catch (error) {
-    new Notice((error as Error).message, 10000)
-  } finally {
-    button.disabled = false
-  }
+  void testLiveConnection(volcConnector(config), VOLC_NAME, button)
 }

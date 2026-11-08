@@ -3,7 +3,7 @@
 //   https://developers.openai.com/api/docs/guides/speech-to-text
 //   https://console.groq.com/docs/speech-to-text
 import type { PreparedAudio } from "../../../audio/transcode.ts"
-import { hostOf } from "../../../url.ts"
+import { hostOf, isLocalHost } from "../../../url.ts"
 import type { FileAsrCall, FileAsrProvider, FileAsrResponse, FileAsrResult, FileUtterance } from "../../fileAsr.ts"
 import { OPENAI_COMPAT_ID, OPENAI_COMPAT_NAME } from "./info.ts"
 
@@ -145,11 +145,6 @@ export async function openAiTranscribeFile(config: OpenAiFileConfig, audio: Prep
   }
   if (response.status >= 400) throw errorOf(response)
   return parseTranscription(response.text, call.speakers && format === "diarized_json")
-}
-
-export const isLocalHost = (host: string): boolean => {
-  const name = host.replace(/:\d+$/, "").toLowerCase()
-  return name === "localhost" || name === "[::1]" || name.endsWith(".local") || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(name)
 }
 
 export function openAiFileProvider(config: OpenAiFileConfig): FileAsrProvider {

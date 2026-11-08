@@ -4,8 +4,9 @@ import { assertCoverage, renderInterviewRecord, transcribeFile, type FileAsrPost
 import { resolveFile } from "../src/asr/providers/registry.ts"
 import { OPENAI_FILE_LIMIT } from "../src/asr/providers/openaiCompat/info.ts"
 import { asrProvider } from "../src/asr/providers/registry.ts"
-import { buildMultipart, errorOf, isLocalHost, parseTranscription, responseFormatFor, transcriptionsUrl, type OpenAiFileConfig, openAiFileProvider } from "../src/asr/providers/openaiCompat/file.ts"
+import { buildMultipart, errorOf, parseTranscription, responseFormatFor, transcriptionsUrl, type OpenAiFileConfig, openAiFileProvider } from "../src/asr/providers/openaiCompat/file.ts"
 import { loadSettings, type MeetingLiveSettings } from "../src/settings.ts"
+import { isLocalHost } from "../src/url.ts"
 
 const audio = { data: new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0, 255, 10, 13]), format: "ogg", transcoded: true, bytes: 8 }
 const config = (patch: Partial<OpenAiFileConfig> = {}): OpenAiFileConfig => ({ baseUrl: "http://127.0.0.1:9/v1", model: "whisper-1", apiKey: "k", language: undefined, fileSizeLimit: OPENAI_FILE_LIMIT, ...patch })
