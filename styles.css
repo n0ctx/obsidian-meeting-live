@@ -25,6 +25,12 @@
   --ml-warn-wash: rgb(208 170 85 / 0.12);
   --ml-ok: #a3b06a;
   --ml-select: rgb(163 176 106 / 0.28);
+  --ml-speaker-1: #8fb4c9;
+  --ml-speaker-2: #d0a15c;
+  --ml-speaker-3: #b79ad0;
+  --ml-speaker-4: #7fbfa0;
+  --ml-speaker-5: #d98d8d;
+  --ml-speaker-6: #9aa5d6;
 }
 
 .theme-light {
@@ -49,6 +55,12 @@
   --ml-warn-wash: rgb(176 124 22 / 0.11);
   --ml-ok: #5a6a26;
   --ml-select: rgb(90 106 38 / 0.2);
+  --ml-speaker-1: #2f6b8a;
+  --ml-speaker-2: #8f5f12;
+  --ml-speaker-3: #6a4a8f;
+  --ml-speaker-4: #2e7458;
+  --ml-speaker-5: #a24646;
+  --ml-speaker-6: #4a54a0;
 }
 
 .ml-host,
@@ -478,6 +490,30 @@
   overflow-wrap: anywhere;
   user-select: text;
 }
+
+/* Who spoke, by voice. The colour of a speaker never changes during a meeting. */
+.ml-spk {
+  margin-right: 6px;
+  color: var(--ml-ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ml-spk-1 { color: var(--ml-speaker-1); }
+.ml-spk-2 { color: var(--ml-speaker-2); }
+.ml-spk-3 { color: var(--ml-speaker-3); }
+.ml-spk-4 { color: var(--ml-speaker-4); }
+.ml-spk-5 { color: var(--ml-speaker-5); }
+.ml-spk-6 { color: var(--ml-speaker-6); }
+
+.ml-speaker-note {
+  display: none;
+  padding: 4px var(--ml-pad) 0;
+  color: var(--ml-ink-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.ml-speaker-note.is-visible { display: block; }
 
 .ml-line.is-interim { margin: 0 10px 0 calc(var(--ml-pad) - 8px); }
 .ml-line.is-interim:not(.is-visible) { display: none !important; }
