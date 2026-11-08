@@ -1,10 +1,11 @@
 // Every speech-recognition provider the plugin knows. Adding one is a new folder under providers/ and a line here.
 import type { AsrConnect } from "../contract.ts"
 import type { FileAsrProvider } from "../fileAsr.ts"
+import { openAiCompatProvider } from "./openaiCompat/index.ts"
 import { volcProvider } from "./volc/index.ts"
 import type { AsrProvider, ProviderEnv } from "./types.ts"
 
-export const ASR_PROVIDERS: readonly AsrProvider[] = [volcProvider]
+export const ASR_PROVIDERS: readonly AsrProvider[] = [volcProvider, openAiCompatProvider]
 
 export function asrProvider(id: string): AsrProvider | undefined {
   return ASR_PROVIDERS.find((p) => p.id === id)

@@ -13,7 +13,7 @@ const settings = (patch: (s: MeetingLiveSettings) => void = () => undefined) => 
 }
 
 test("the registry lists Volcengine with its capabilities and destinations", () => {
-  assert.deepEqual(ASR_PROVIDERS.map((p) => p.id), ["volc"])
+  assert.deepEqual(ASR_PROVIDERS.map((p) => p.id), ["volc", "openai-compat"])
   const volc = asrProvider("volc")!
   assert.equal(volc.name, "火山引擎")
   assert.deepEqual(volc.live!.capabilities(settings()), { hotwords: true, endWindow: true, language: false, diarization: false })
@@ -89,7 +89,7 @@ test("a provider may be live-only or file-only: the choices list only capable on
   providers.push(liveOnly, fileOnly)
   try {
     assert.deepEqual(liveProviders().map((p) => p.id), ["volc", "live-only"])
-    assert.deepEqual(fileProviders().map((p) => p.id), ["volc", "file-only"])
+    assert.deepEqual(fileProviders().map((p) => p.id), ["volc", "openai-compat", "file-only"])
 
     const mixed = settings((s) => {
       s.liveProvider = "live-only"
