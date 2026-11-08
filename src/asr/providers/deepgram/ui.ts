@@ -1,14 +1,14 @@
 import { Notice, Setting } from "obsidian"
+import { t } from "../../../i18n/index.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
 import { testLiveConnection } from "../liveTest.ts"
 import type { ProviderSettingsContext } from "../types.ts"
-import { DEEPGRAM_NAME } from "./info.ts"
 import { deepgramConfigProblem, deepgramConnector } from "./live.ts"
 import { deepgramConfig } from "./settings.ts"
 
 export function renderDeepgramSettings({ app, containerEl, settings, save }: ProviderSettingsContext): void {
   const deepgram = settings.providers.deepgram
-  new Setting(containerEl).setName(`${DEEPGRAM_NAME}实时识别`).setHeading()
+  new Setting(containerEl).setName(`${t("provider.deepgram")}实时识别`).setHeading()
   containerEl.createDiv({
     cls: "setting-item-description ml-settings-note",
     text: "录音时把音频实时发送到 Deepgram。语言跟随上方的「识别语言」；选自动检测时使用 Deepgram 的多语言模式（multi），已知语言是中文或英文时建议直接指定。",
@@ -33,7 +33,7 @@ export function renderDeepgramSettings({ app, containerEl, settings, save }: Pro
         const config = deepgramConfig(app.secretStorage, deepgram, settings.asrLanguage)
         const problem = deepgramConfigProblem(config)
         if (problem) return void new Notice(problem)
-        void testLiveConnection(deepgramConnector(config), DEEPGRAM_NAME, b.buttonEl)
+        void testLiveConnection(deepgramConnector(config), t("provider.deepgram"), b.buttonEl)
       }),
     )
 }

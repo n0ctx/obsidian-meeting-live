@@ -1,4 +1,5 @@
 import type { App } from "obsidian"
+import type { Lang } from "../../i18n/index.ts"
 import type { SecretReader } from "../../secrets.ts"
 import type { MeetingLiveSettings } from "../../settings.ts"
 import type { AsrConnect } from "../contract.ts"
@@ -68,8 +69,10 @@ export interface FileService {
  */
 export interface AsrProvider {
   readonly id: string
-  /** Display name for the interface, notices and notes. */
+  /** Display name in the language of the interface. */
   readonly name: string
+  /** Display name in a given language, for text written into notes in the language chosen for them; a provider without it has one name in every language. */
+  nameIn?(lang: Lang): string
   readonly live?: LiveService
   readonly file?: FileService
   /** Draws the provider's section of the settings page, including its connection test. */

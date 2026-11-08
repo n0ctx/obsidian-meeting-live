@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.ts"
 import { cutPoints } from "./chunking.ts"
 import { OggOpusMuxer, opusHead } from "./ogg.ts"
 
@@ -59,7 +60,7 @@ async function splitSpeechOpus(mono: Mono, wholeBytes: number, maxBytes: number)
     // The encoder ran above its usual rate on some stretch: cut smaller.
     size = Math.floor(size * 0.8)
   }
-  throw new Error("录音太长，无法切成符合服务大小限制的分段")
+  throw new Error(t("audio.tooLong"))
 }
 
 type Mono = Float32Array<ArrayBuffer>
@@ -69,7 +70,7 @@ async function decodeMono(data: Uint8Array): Promise<Mono> {
   try {
     decoded = await new OfflineAudioContext(1, 1, RATE).decodeAudioData(data.slice().buffer)
   } catch {
-    throw new Error("无法解码这个音频文件，请先转换为 mp3、m4a 或 wav")
+    throw new Error(t("audio.undecodable"))
   }
   const length = decoded.length
   const mono: Mono = new Float32Array(length)
@@ -99,7 +100,7 @@ async function encodeSpeechOpus(mono: Mono, from: number, to: number): Promise<U
       const page = muxer.addPacket(packet, chunk.duration ? (chunk.duration * 48) / 1000 : 960)
       if (page) parts.push(page)
     },
-    error: (error) => (failure = new Error(`音频压缩失败：${error.message}`)),
+    error: (error) => (failure = new Error(t("audio.compress", error.message))),
   })
   encoder.configure({ codec: "opus", sampleRate: RATE, numberOfChannels: 1, bitrate: BITRATE })
   for (let offset = from; offset < to && !failure; offset += RATE) {

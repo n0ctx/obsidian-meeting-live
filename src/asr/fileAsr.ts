@@ -1,5 +1,6 @@
 // Recorded-file ASR, independent of the provider: the provider interface, the checks and the rendering.
 import type { PreparedAudio } from "../audio/transcode.ts"
+import { t } from "../i18n/index.ts"
 import { formatClock, type Utterance } from "../meeting/types.ts"
 import type { FileCapabilities } from "./providers/types.ts"
 
@@ -61,12 +62,12 @@ export interface FileAsrProvider {
 
 /** Rejects empty or silently truncated results instead of passing them on as complete. */
 export function assertCoverage(result: FileAsrResult): void {
-  if (!result.text && result.utterances.length === 0) throw new Error("识别结果为空：接口报告成功，但没有返回任何文字")
+  if (!result.text && result.utterances.length === 0) throw new Error(t("asr.empty"))
   if (!result.durationMs || result.utterances.length === 0) return
   const covered = Math.max(...result.utterances.map((u) => u.endMs))
   const ratio = covered / result.durationMs
   if (ratio < MIN_COVERAGE) {
-    throw new Error(`识别结果不完整：录音 ${formatClock(result.durationMs)}，结果只到 ${formatClock(covered)}（${Math.round(ratio * 100)}%）。接口未报错，属于静默截断，已中止`)
+    throw new Error(t("asr.truncated", formatClock(result.durationMs), formatClock(covered), Math.round(ratio * 100)))
   }
 }
 

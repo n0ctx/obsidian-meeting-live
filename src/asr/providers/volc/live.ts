@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import WebSocket, { type RawData } from "ws"
+import { t } from "../../../i18n/index.ts"
 import { AsrError, type AsrConnect, type AsrConnection } from "../../contract.ts"
 import { volcResultSink } from "./normalize.ts"
 import { decodeServerFrame, encodeAudio, encodeFullRequest } from "./protocol.ts"
@@ -18,9 +19,9 @@ export interface VolcConfig {
 const HANDSHAKE_TIMEOUT_MS = 10_000
 
 export function volcConfigProblem(config: VolcConfig): string | undefined {
-  if (!config.endpoint.trim()) return "未填写火山引擎 WebSocket 地址"
-  if (!config.resourceId.trim()) return "未填写火山引擎 Resource ID"
-  if (!config.apiKey && !(config.appId && config.accessToken)) return "未配置火山引擎凭证（API Key，或 App ID + Access Token）"
+  if (!config.endpoint.trim()) return t("volc.noEndpoint")
+  if (!config.resourceId.trim()) return t("volc.noResource")
+  if (!config.apiKey && !(config.appId && config.accessToken)) return t("volc.noCredentials")
   return undefined
 }
 
@@ -80,7 +81,7 @@ export function volcConnector(config: VolcConfig): AsrConnect {
         else reject(error)
         socket.terminate()
       }
-      const timer = window.setTimeout(() => fail(new AsrError("连接火山引擎超时", false)), HANDSHAKE_TIMEOUT_MS + 5000)
+      const timer = window.setTimeout(() => fail(new AsrError(t("volc.timeout"), false)), HANDSHAKE_TIMEOUT_MS + 5000)
 
       socket.on("upgrade", (response) => {
         const value = response.headers["x-tt-logid"]
@@ -92,8 +93,7 @@ export function volcConnector(config: VolcConfig): AsrConnect {
         response.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")))
         response.on("end", () => {
           const fatal = status === 401 || status === 403 || status === 400
-          const hint = fatal ? "，请检查凭证与 Resource ID 是否匹配" : ""
-          fail(new AsrError(`火山引擎拒绝连接（HTTP ${status}${hint}）${body ? `：${body.slice(0, 200)}` : ""}`, fatal))
+          fail(new AsrError(t("volc.refused", status, fatal, body.slice(0, 200)), fatal))
         })
       })
       socket.on("open", () => socket.send(encodeFullRequest(buildVolcRequest(config)), { binary: true }))
@@ -107,7 +107,7 @@ export function volcConnector(config: VolcConfig): AsrConnect {
           return
         }
         if (frame.kind === "error") {
-          fail(new AsrError(`火山引擎 ASR 错误 ${frame.code}：${frame.message}`, isFatalCode(frame.code)))
+          fail(new AsrError(t("volc.asrError", frame.code, frame.message), isFatalCode(frame.code)))
           return
         }
         if (!ready) {
@@ -115,7 +115,7 @@ export function volcConnector(config: VolcConfig): AsrConnect {
           window.clearTimeout(timer)
           const connection: AsrConnection = {
             sendAudio(pcm, last) {
-              if (socket.readyState !== WebSocket.OPEN) throw new AsrError("火山引擎连接已关闭", false)
+              if (socket.readyState !== WebSocket.OPEN) throw new AsrError(t("volc.socketClosed"), false)
               socket.send(encodeAudio(Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength), last), { binary: true })
             },
             close() {
@@ -130,10 +130,10 @@ export function volcConnector(config: VolcConfig): AsrConnect {
         }
         feed(frame.data, frame.last)
       })
-      socket.on("error", (error) => fail(new AsrError(`网络错误：${error.message}`, false)))
+      socket.on("error", (error) => fail(new AsrError(t("asr.network", error.message), false)))
       socket.on("close", (code) => {
         window.clearTimeout(timer)
-        if (!closedLocally) fail(new AsrError(`火山引擎连接断开（${code}）`, false))
+        if (!closedLocally) fail(new AsrError(t("volc.closed", code), false))
       })
     })
 }

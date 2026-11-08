@@ -235,7 +235,7 @@ test("fatal errors stop retrying; missing config records the whole run as a gap"
   disabled.begin(10_000, null)
   disabled.push(second())
   await disabled.end()
-  assert.deepEqual(offline.gaps, [{ startMs: 10_000, endMs: 11_000, reason: "未配置语音识别，该时段未转写" }])
+  assert.deepEqual(offline.gaps, [{ startMs: 10_000, endMs: 11_000, reason: "未配置语音识别，该时段未转写", code: "unconfigured" }])
   asr.dispose()
 })
 

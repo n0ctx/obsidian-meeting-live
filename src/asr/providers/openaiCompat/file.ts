@@ -3,9 +3,10 @@
 //   https://developers.openai.com/api/docs/guides/speech-to-text
 //   https://console.groq.com/docs/speech-to-text
 import type { PreparedAudio } from "../../../audio/transcode.ts"
+import { t } from "../../../i18n/index.ts"
 import { hostOf, isLocalHost } from "../../../url.ts"
 import type { FileAsrCall, FileAsrProvider, FileAsrResponse, FileAsrResult, FileUtterance } from "../../fileAsr.ts"
-import { OPENAI_COMPAT_ID, OPENAI_COMPAT_NAME } from "./info.ts"
+import { OPENAI_COMPAT_ID } from "./info.ts"
 
 export interface OpenAiFileConfig {
   baseUrl: string
@@ -75,13 +76,12 @@ function detail(response: FileAsrResponse): string {
 export function errorOf(response: FileAsrResponse): Error {
   const status = response.status
   const why = detail(response)
-  const suffix = why ? `：${why}` : ""
-  if (status === 401 || status === 403) return new Error(`鉴权失败（HTTP ${status}）：API Key 无效，或没有这个模型的权限${suffix}`)
-  if (status === 404) return new Error(`接口不存在（HTTP 404）：请确认 API 地址正确，通常以 /v1 结尾，模型名称也要存在${suffix}`)
-  if (status === 413) return new Error("录音太大被服务拒收（HTTP 413）：超过了服务的文件大小限制，可在设置中调低「文件大小上限」")
-  if (status === 429) return new Error(`请求过于频繁或额度不足（HTTP 429）${suffix}`)
-  if (status >= 500) return new Error(`识别服务出错（HTTP ${status}）${suffix}`)
-  return new Error(`识别请求被拒绝（HTTP ${status}）${suffix}`)
+  if (status === 401 || status === 403) return new Error(t("openai.auth", status, why))
+  if (status === 404) return new Error(t("openai.notFound", why))
+  if (status === 413) return new Error(t("openai.tooLarge"))
+  if (status === 429) return new Error(t("openai.rate", why))
+  if (status >= 500) return new Error(t("openai.server", status, why))
+  return new Error(t("openai.rejected", status, why))
 }
 
 const seconds = (value: unknown): number => {
@@ -127,7 +127,7 @@ function fields(config: OpenAiFileConfig, format: ResponseFormat): [string, stri
 
 export async function openAiTranscribeFile(config: OpenAiFileConfig, audio: PreparedAudio, call: FileAsrCall): Promise<FileAsrResult> {
   const send = (format: ResponseFormat) => {
-    if (call.signal?.aborted) throw new Error("已取消")
+    if (call.signal?.aborted) throw new Error(t("asr.cancelled"))
     const form = buildMultipart(fields(config, format), { name: `audio.${audio.format}`, mime: MIME[audio.format] ?? "application/octet-stream", data: audio.data })
     const headers: Record<string, string> = { "Content-Type": form.contentType }
     if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`
@@ -150,10 +150,10 @@ export async function openAiTranscribeFile(config: OpenAiFileConfig, audio: Prep
 
 export function openAiFileProvider(config: OpenAiFileConfig): FileAsrProvider {
   const host = hostOf(config.baseUrl)
-  const problem = !config.baseUrl ? "未填写 API 地址" : !host ? "API 地址格式不正确" : !config.model ? "未填写模型名称" : !config.apiKey && !isLocalHost(host) ? "未配置 API Key" : undefined
+  const problem = !config.baseUrl ? t("openai.noBaseUrl") : !host ? t("openai.badBaseUrl") : !config.model ? t("openai.noModel") : !config.apiKey && !isLocalHost(host) ? t("openai.noKey") : undefined
   return {
     id: OPENAI_COMPAT_ID,
-    name: OPENAI_COMPAT_NAME,
+    name: t("provider.openaiCompat"),
     host,
     model: config.model,
     capabilities: { language: true, diarization: isDiarizeModel(config.model), fileSizeLimit: config.fileSizeLimit },

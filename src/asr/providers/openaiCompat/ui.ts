@@ -1,11 +1,12 @@
 import { Setting } from "obsidian"
+import { t } from "../../../i18n/index.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
 import type { ProviderSettingsContext } from "../types.ts"
-import { OPENAI_COMPAT_NAME, OPENAI_FILE_LIMIT } from "./info.ts"
+import { OPENAI_FILE_LIMIT } from "./info.ts"
 
 export function renderOpenAiCompatSettings({ app, containerEl, settings, save }: ProviderSettingsContext): void {
   const openai = settings.providers.openaiCompat
-  new Setting(containerEl).setName(`${OPENAI_COMPAT_NAME}录音文件识别`).setHeading()
+  new Setting(containerEl).setName(`${t("provider.openaiCompat")}录音文件识别`).setHeading()
   containerEl.createDiv({
     cls: "setting-item-description ml-settings-note",
     text: "OpenAI、Groq 或本地 Whisper 服务，只要提供 /audio/transcriptions 接口即可。OpenAI 填 https://api.openai.com/v1，Groq 填 https://api.groq.com/openai/v1。whisper-1、Groq 的 whisper-large-v3 返回带时间的分段；gpt-*-transcribe 只返回文本，转写没有时间点；gpt-4o-transcribe-diarize 可区分说话人。",

@@ -1,5 +1,6 @@
 import { ASR_RATE, PcmRing, msToSamples, samplesToMs } from "../audio/pcm.ts"
-import type { TranscriptGap, Utterance } from "../meeting/types.ts"
+import { newGap } from "../meeting/gap.ts"
+import type { GapCode, TranscriptGap, Utterance } from "../meeting/types.ts"
 import { AsrError, type AsrConnect, type AsrConnection, type AsrUpdate, type AsrUtterance } from "./contract.ts"
 
 export type AsrState = "disabled" | "idle" | "connecting" | "live" | "reconnecting" | "failed"
@@ -116,7 +117,7 @@ export class AsrStreamer {
     if (!this.running) return
     this.ring.push(samples)
     if (this.cursor < this.ring.start) {
-      this.emitGap(this.cursor, this.ring.start, "网络中断超过缓冲时长，该时段未能转写")
+      this.emitGap(this.cursor, this.ring.start, "overflow")
       this.cursor = this.ring.start
     }
   }
@@ -156,8 +157,7 @@ export class AsrStreamer {
     for (const u of this.interims) this.acceptFinal(u)
     this.setInterims([])
     if (this.cursor < this.ring.end) {
-      const reason = this.connect ? "ASR 未连接，该时段未能转写" : "未配置语音识别，该时段未转写"
-      this.emitGap(this.cursor, this.ring.end, reason)
+      this.emitGap(this.cursor, this.ring.end, this.connect ? "disconnected" : "unconfigured")
       this.cursor = this.ring.end
     }
     this.running = false
@@ -285,9 +285,9 @@ export class AsrStreamer {
     this.events.onInterim(list)
   }
 
-  private emitGap(from: number, to: number, reason: string): void {
+  private emitGap(from: number, to: number, code: GapCode): void {
     if (to <= from) return
-    this.events.onGap({ startMs: samplesToMs(from), endMs: samplesToMs(to), reason })
+    this.events.onGap(newGap(samplesToMs(from), samplesToMs(to), code))
   }
 
   private dropConnection(): void {

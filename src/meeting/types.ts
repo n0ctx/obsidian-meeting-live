@@ -16,10 +16,16 @@ export interface AudioSegment {
   asrProvider?: string
 }
 
+/** Why a stretch of audio was not transcribed, for wording the reason in whichever language it is read. */
+export type GapCode = "overflow" | "disconnected" | "unconfigured"
+
 export interface TranscriptGap {
   startMs: number
   endMs: number
+  /** The reason in the language of the interface when the gap was recorded. */
   reason: string
+  /** Absent from gaps recorded before reasons had codes. */
+  code?: GapCode
 }
 
 export interface Utterance {

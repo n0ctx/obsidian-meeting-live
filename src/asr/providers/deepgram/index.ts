@@ -1,6 +1,7 @@
+import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
-import { DEEPGRAM_ID, DEEPGRAM_LIVE_CAPABILITIES, DEEPGRAM_NAME } from "./info.ts"
+import { DEEPGRAM_ID, DEEPGRAM_LIVE_CAPABILITIES } from "./info.ts"
 import { deepgramConfigProblem, deepgramConnector } from "./live.ts"
 import { deepgramConfig } from "./settings.ts"
 import { renderDeepgramSettings } from "./ui.ts"
@@ -9,7 +10,10 @@ const configOf = ({ secrets, settings }: ProviderEnv) => deepgramConfig(secrets,
 
 export const deepgramProvider: AsrProvider = {
   id: DEEPGRAM_ID,
-  name: DEEPGRAM_NAME,
+  get name() {
+    return t("provider.deepgram")
+  },
+  nameIn: (lang: Lang) => tr(lang, "provider.deepgram"),
   live: {
     capabilities: () => DEEPGRAM_LIVE_CAPABILITIES,
     host: (settings) => hostOf(settings.providers.deepgram.endpoint.replace(/^ws/, "http")),

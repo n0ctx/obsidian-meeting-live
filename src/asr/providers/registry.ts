@@ -1,4 +1,5 @@
 // Every speech-recognition provider the plugin knows. Adding one is a new folder under providers/ and a line here.
+import { t, type Lang } from "../../i18n/index.ts"
 import type { AsrConnect } from "../contract.ts"
 import type { FileAsrProvider } from "../fileAsr.ts"
 import { deepgramProvider } from "./deepgram/index.ts"
@@ -12,8 +13,8 @@ export function asrProvider(id: string): AsrProvider | undefined {
   return ASR_PROVIDERS.find((p) => p.id === id)
 }
 
-const unknownProblem = (id: string) => `未知的语音识别服务「${id}」，请在设置中重新选择`
-const unsupportedProblem = (name: string, what: string) => `${name}不支持${what}，请在设置中重新选择`
+const unknownProblem = (id: string) => t("asr.unknownProvider", id)
+const unsupportedProblem = (name: string, what: string) => t("asr.unsupported", name, what)
 
 export interface ResolvedLive {
   id: string
@@ -27,7 +28,7 @@ export function resolveLive(env: ProviderEnv): ResolvedLive {
   const id = env.settings.liveProvider
   const provider = asrProvider(id)
   if (!provider) return { id, name: id, connect: null, problem: unknownProblem(id) }
-  if (!provider.live) return { id, name: provider.name, connect: null, problem: unsupportedProblem(provider.name, "实时识别") }
+  if (!provider.live) return { id, name: provider.name, connect: null, problem: unsupportedProblem(provider.name, t("asr.role.live")) }
   return { id, name: provider.name, ...provider.live.resolve(env) }
 }
 
@@ -36,7 +37,7 @@ export function resolveFile(env: ProviderEnv): FileAsrProvider {
   const id = env.settings.fileProvider
   const provider = asrProvider(id)
   if (provider?.file) return provider.file.resolve(env)
-  const problem = provider ? unsupportedProblem(provider.name, "录音文件识别") : unknownProblem(id)
+  const problem = provider ? unsupportedProblem(provider.name, t("asr.role.file")) : unknownProblem(id)
   return {
     id,
     name: provider?.name ?? id,
@@ -47,6 +48,12 @@ export function resolveFile(env: ProviderEnv): FileAsrProvider {
     problem,
     transcribe: () => Promise.reject(new Error(problem)),
   }
+}
+
+/** A provider's display name in `lang`, or its id when no such provider is known. */
+export function providerNameIn(id: string, lang: Lang): string {
+  const provider = asrProvider(id)
+  return provider ? (provider.nameIn?.(lang) ?? provider.name) : id
 }
 
 /** Providers that can do the job, for the settings page's choices. */

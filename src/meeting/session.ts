@@ -1,4 +1,5 @@
 import { Events } from "obsidian"
+import { t } from "../i18n/index.ts"
 import { AudioCapture } from "../audio/capture.ts"
 import { AsrResampler } from "../audio/pcm.ts"
 import { SegmentRecorder, opusSupported, repairSegment } from "../audio/recorder.ts"
@@ -274,7 +275,7 @@ export class MeetingSession extends Events {
 
   private async onDeviceLost(): Promise<void> {
     if (this.meta.status !== "recording") return
-    this.error = "麦克风已断开，会议已暂停。重新连接设备后点击继续"
+    this.error = t("session.micLost")
     await this.pause()
   }
 
@@ -285,7 +286,7 @@ export class MeetingSession extends Events {
     const broken = this.recorder
     this.recorder = undefined
     const capture = this.capture
-    this.error = `${error.message}，已切换为 WAV 录音继续`
+    this.error = t("session.wavFallback", error.message)
     void (async () => {
       await broken?.close().catch(() => undefined)
       if (this.liveSegment) this.liveSegment = undefined
@@ -448,7 +449,7 @@ export class MeetingSession extends Events {
         try {
           const text = await llm.complete(buildOverviewMessages(this.meta.title, this.env.settings().summaryFocus, overview.content, substantive), { json: true })
           const content = parseSummary(text, this.utterances)
-          if (!content) throw new Error("模型返回的概览格式无法识别")
+          if (!content) throw new Error(t("session.overviewUnreadable"))
           this.meta.overview = { stages: merged, content, createdAt: new Date().toISOString(), model: llm.model }
         } catch (error) {
           this.meta.overview = { ...overview, error: (error as Error).message }
@@ -526,7 +527,7 @@ export class MeetingSession extends Events {
   async generateMinutes(prompt: string, notes: { path: string; content: string }[], onProgress?: (text: string) => void): Promise<string> {
     const llm = this.env.llm()
     if (llm.problem) throw new Error(llm.problem)
-    if (this.utterances.length === 0) throw new Error("还没有可用的转写内容")
+    if (this.utterances.length === 0) throw new Error(t("session.noTranscript"))
     this.minutes = { status: "running" }
     this.emitChange()
     try {
@@ -620,7 +621,7 @@ export class MeetingSession extends Events {
       })
       .catch((error: Error) => {
         this.saveState = "error"
-        this.error = `保存失败：${error.message}`
+        this.error = t("session.saveFailed", error.message)
         console.error("[meeting-live]", error)
         this.emitChange()
       })
@@ -666,7 +667,7 @@ export class MeetingSession extends Events {
             const duration = await repairSegment(store.fullPath(segment.file), segment.format, segment.sampleRate, segment.channels)
             if (duration > 0) segment.durationMs = duration
           } catch (error) {
-            console.error("[meeting-live] 录音修复失败", error)
+            console.error("[meeting-live] could not repair the recording", error)
           }
         }
         if (segment.durationMs > 0) {

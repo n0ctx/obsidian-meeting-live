@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs"
+import { t } from "../i18n/index.ts"
 import { OPUS_DEFAULT_PRESKIP, OggOpusMuxer, oggDurationMs, opusHead, scanOgg } from "./ogg.ts"
 import { WAV_HEADER_BYTES, interleavePcm16, repairWav, wavHeader } from "./wav.ts"
 import type { AudioFormat } from "../meeting/types.ts"
@@ -77,7 +78,7 @@ export class SegmentRecorder {
         const page = this.muxer!.addPacket(packet, samples)
         if (page) this.pending.push(page)
       },
-      error: (error) => this.onError(new Error(`Opus 编码失败：${error.message}`)),
+      error: (error) => this.onError(new Error(t("recorder.opus", error.message))),
     })
     this.encoder.configure({ codec: "opus", sampleRate: this.sampleRate, numberOfChannels: this.channels, bitrate: opusBitrate(this.channels) })
   }
@@ -126,7 +127,7 @@ export class SegmentRecorder {
         await this.handle.write(buffer, 0, total, position)
         if (this.format === "wav") await this.handle.write(wavHeader(this.sampleRate, this.channels, dataBytes), 0, WAV_HEADER_BYTES, 0)
       })
-      .catch((error: Error) => this.onError(new Error(`录音写入失败：${error.message}`)))
+      .catch((error: Error) => this.onError(new Error(t("recorder.write", error.message))))
     return this.chain
   }
 

@@ -5,6 +5,7 @@
 //   https://developers.deepgram.com/docs/close-stream  (CloseStream: remaining finals, a Metadata message, then the server closes)
 //   https://developers.deepgram.com/docs/stt-troubleshooting-websocket-data-and-net-errors  (close codes; never send an empty frame)
 import WebSocket, { type RawData } from "ws"
+import { t } from "../../../i18n/index.ts"
 import { AsrError, type AsrConnect, type AsrConnection } from "../../contract.ts"
 import { isLocalHost, hostOf } from "../../../url.ts"
 import { parseDeepgramMessage } from "./normalize.ts"
@@ -31,11 +32,11 @@ const KEEP_ALIVE_MS = 3000
 const ENDPOINTING_MS = 300
 
 export function deepgramConfigProblem(config: DeepgramConfig): string | undefined {
-  if (!config.endpoint.trim()) return "未填写 Deepgram WebSocket 地址"
+  if (!config.endpoint.trim()) return t("deepgram.noEndpoint")
   const host = hostOf(config.endpoint.replace(/^ws/, "http"))
-  if (!host) return "Deepgram WebSocket 地址格式不正确"
-  if (!config.model.trim()) return "未填写 Deepgram 模型名称"
-  if (!config.apiKey && !isLocalHost(host)) return "未配置 Deepgram API Key"
+  if (!host) return t("deepgram.badEndpoint")
+  if (!config.model.trim()) return t("deepgram.noModel")
+  if (!config.apiKey && !isLocalHost(host)) return t("deepgram.noKey")
   return undefined
 }
 
@@ -61,18 +62,18 @@ const text = (data: RawData): string => (Buffer.isBuffer(data) ? data : Array.is
 
 /** Errors the user has to fix: retrying a bad key, a model the project cannot use or a rejected parameter only repeats them. */
 function upgradeError(status: number, body: string): AsrError {
-  const detail = body ? `：${body.slice(0, 200)}` : ""
+  const detail = body.slice(0, 200)
   switch (status) {
     case 401:
-      return new AsrError(`Deepgram 鉴权失败（HTTP 401），请检查 API Key${detail}`, true)
+      return new AsrError(t("deepgram.auth", detail), true)
     case 402:
-      return new AsrError(`Deepgram 账户余额不足（HTTP 402）${detail}`, true)
+      return new AsrError(t("deepgram.balance", detail), true)
     case 403:
-      return new AsrError(`Deepgram 拒绝访问（HTTP 403），当前项目可能无权使用这个模型${detail}`, true)
+      return new AsrError(t("deepgram.forbidden", detail), true)
     case 400:
-      return new AsrError(`Deepgram 拒绝了连接参数（HTTP 400），请检查模型和语言设置${detail}`, true)
+      return new AsrError(t("deepgram.badParams", detail), true)
     default:
-      return new AsrError(`Deepgram 拒绝连接（HTTP ${status}）${detail}`, false)
+      return new AsrError(t("deepgram.refused", status, detail), false)
   }
 }
 
@@ -81,8 +82,7 @@ function upgradeError(status: number, body: string): AsrError {
  * Everything else (1011 NET-0000/0001/0002 timeouts, a dropped network) is worth another try.
  */
 function closeError(code: number, reason: string): AsrError {
-  const why = reason ? ` ${reason}` : ""
-  return new AsrError(`Deepgram 连接断开（${code}）${why}`, code === 1008)
+  return new AsrError(t("deepgram.closed", code, reason), code === 1008)
 }
 
 /** An `Error` message names a variant; schema and permission problems come from our own request and cannot be retried away. */
@@ -123,7 +123,7 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
         endAnnounced = true
         handlers.onResult({ utterances: [], keepInterims: true }, true)
       }
-      const timer = window.setTimeout(() => fail(new AsrError("连接 Deepgram 超时", false)), HANDSHAKE_TIMEOUT_MS + 5000)
+      const timer = window.setTimeout(() => fail(new AsrError(t("deepgram.timeout"), false)), HANDSHAKE_TIMEOUT_MS + 5000)
 
       socket.on("upgrade", (response) => {
         // The request id header name is from memory of Deepgram's responses, not from the documentation; without it the log id is simply absent.
@@ -146,7 +146,7 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
         }, Math.max(10, Math.floor(keepAliveMs / 3)))
         const connection: AsrConnection = {
           sendAudio(pcm, last) {
-            if (socket.readyState !== WebSocket.OPEN) throw new AsrError("Deepgram 连接已关闭", false)
+            if (socket.readyState !== WebSocket.OPEN) throw new AsrError(t("deepgram.socketClosed"), false)
             // An empty binary frame makes the server close the stream, so the end of the audio is a message, not an empty frame.
             if (pcm.length > 0) {
               socket.send(Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength))
@@ -173,9 +173,9 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
         const event = parseDeepgramMessage(text(data), config.diarize)
         if (event.kind === "results") handlers.onResult(event.update, false)
         else if (event.kind === "end" && endRequested) announceEnd()
-        else if (event.kind === "error") fail(new AsrError(`Deepgram 错误 ${event.variant}：${event.description}`, FATAL_VARIANT.test(event.variant)))
+        else if (event.kind === "error") fail(new AsrError(t("deepgram.error", event.variant, event.description), FATAL_VARIANT.test(event.variant)))
       })
-      socket.on("error", (error) => fail(new AsrError(`网络错误：${error.message}`, false)))
+      socket.on("error", (error) => fail(new AsrError(t("asr.network", error.message), false)))
       socket.on("close", (code, reason) => {
         window.clearTimeout(timer)
         stopKeepAlive()

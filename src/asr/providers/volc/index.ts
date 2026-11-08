@@ -1,7 +1,8 @@
+import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { FILE_ASR_HOST, volcFileProvider } from "./file.ts"
-import { VOLC_FILE_CAPABILITIES, VOLC_ID, VOLC_LIVE_CAPABILITIES, VOLC_NAME } from "./info.ts"
+import { VOLC_FILE_CAPABILITIES, VOLC_ID, VOLC_LIVE_CAPABILITIES } from "./info.ts"
 import { volcConfigProblem, volcConnector } from "./live.ts"
 import { volcConfig } from "./settings.ts"
 import { renderVolcSettings } from "./ui.ts"
@@ -10,7 +11,10 @@ const configOf = ({ secrets, settings }: ProviderEnv) => volcConfig(secrets, set
 
 export const volcProvider: AsrProvider = {
   id: VOLC_ID,
-  name: VOLC_NAME,
+  get name() {
+    return t("provider.volc")
+  },
+  nameIn: (lang: Lang) => tr(lang, "provider.volc"),
   live: {
     capabilities: () => VOLC_LIVE_CAPABILITIES,
     host: (settings) => hostOf(settings.providers.volc.endpoint),

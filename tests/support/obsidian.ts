@@ -16,6 +16,13 @@ export class Events {
   }
 }
 
+// The language of Obsidian's interface and the platform it runs on, which tests set. Chinese on macOS is what the plugin was written for.
+let language = "zh-CN"
+export const getLanguage = () => language
+export const setLanguage = (code: string) => void (language = code)
+export const Platform = { isMacOS: true, isWin: false, isLinux: false }
+export const setPlatform = (os: "mac" | "win" | "linux") => Object.assign(Platform, { isMacOS: os === "mac", isWin: os === "win", isLinux: os === "linux" })
+
 // Settings-page classes: only imported by modules under test, never constructed.
 export class Setting {}
 export class SecretComponent {}

@@ -1,6 +1,7 @@
 // Binary frame codec for the Volcengine big-model streaming ASR (v3 WebSocket).
 // Adapted from obsidian-voice2text by chenxuan (MIT), see THIRD_PARTY_NOTICES.md.
 import zlib from "node:zlib"
+import { t } from "../../../i18n/index.ts"
 
 const HEADER = 0x11
 export const MSG_FULL_CLIENT_REQUEST = 0x1
@@ -31,7 +32,7 @@ export function encodeAudio(pcm: Buffer, last: boolean): Buffer {
 }
 
 export function decodeServerFrame(message: Buffer): ServerFrame {
-  if (message.length < 8) throw new Error("火山引擎返回了无效的数据帧")
+  if (message.length < 8) throw new Error(t("volc.badFrame"))
   const headerSize = (message[0] & 0x0f) * 4
   const type = message[1] >> 4
   const flags = message[1] & 0x0f
@@ -54,7 +55,7 @@ export function decodeServerFrame(message: Buffer): ServerFrame {
   }
 
   if (flags & 0x1) offset += 4
-  if (offset + 4 > message.length) throw new Error("火山引擎响应缺少数据长度")
+  if (offset + 4 > message.length) throw new Error(t("volc.noLength"))
   const size = message.readUInt32BE(offset)
   offset += 4
   const body = unpack(message.subarray(offset, offset + size))

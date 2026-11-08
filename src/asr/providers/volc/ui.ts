@@ -1,16 +1,17 @@
 import { Notice, Setting } from "obsidian"
+import { t } from "../../../i18n/index.ts"
 import type { SecretReader } from "../../../secrets.ts"
 import type { MeetingLiveSettings } from "../../../settings.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
 import { testLiveConnection } from "../liveTest.ts"
 import type { ProviderSettingsContext } from "../types.ts"
-import { VOLC_LIVE_CAPABILITIES, VOLC_NAME } from "./info.ts"
+import { VOLC_LIVE_CAPABILITIES } from "./info.ts"
 import { volcConfigProblem, volcConnector } from "./live.ts"
 import { volcConfig } from "./settings.ts"
 
 export function renderVolcSettings({ app, containerEl, settings, save, roles }: ProviderSettingsContext): void {
   const volc = settings.providers.volc
-  new Setting(containerEl).setName(`${VOLC_NAME}语音识别`).setHeading()
+  new Setting(containerEl).setName(`${t("provider.volc")}语音识别`).setHeading()
   containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: "新版控制台只需 API Key；旧版控制台填写 App ID 与 Access Token。Resource ID 需与控制台开通的服务一致：2.0 小时版 volc.seedasr.sauc.duration，1.0 小时版 volc.bigasr.sauc.duration。" })
   secretField(app, new Setting(containerEl).setName("API Key（新版控制台）"), volc, "apiKeySecret", save)
   textField(new Setting(containerEl).setName("App ID（旧版控制台）"), volc, "appId", save)
@@ -54,5 +55,5 @@ function testConnection(secrets: SecretReader, settings: MeetingLiveSettings, bu
   const config = volcConfig(secrets, settings.providers.volc, settings.hotwords)
   const problem = volcConfigProblem(config)
   if (problem) return void new Notice(problem)
-  void testLiveConnection(volcConnector(config), VOLC_NAME, button)
+  void testLiveConnection(volcConnector(config), t("provider.volc"), button)
 }

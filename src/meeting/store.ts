@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs"
 import { FileSystemAdapter, MarkdownView, TFile, Vault, normalizePath, type App } from "obsidian"
+import { t } from "../i18n/index.ts"
 import { applyEdit, type TextEdit } from "./noteSummary.ts"
 import { transcriptHeader } from "./transcriptFormat.ts"
 import type { MeetingMeta } from "./types.ts"
@@ -79,7 +80,7 @@ export class MeetingStore {
       try {
         entries.push({ folder, meta: JSON.parse(await this.adapter.read(metaPath)) as MeetingMeta })
       } catch (error) {
-        console.error(`[meeting-live] 无法读取 ${metaPath}`, error)
+        console.error(`[meeting-live] could not read ${metaPath}`, error)
       }
     }
     return entries
@@ -115,7 +116,7 @@ export class MeetingStore {
     const name = await this.freeName(parent, base, from)
     if (name === from) return { folder, name }
     const dir = this.app.vault.getFolderByPath(folder)
-    if (!dir) throw new Error(`找不到会议文件夹「${folder}」`)
+    if (!dir) throw new Error(t("store.noFolder", folder))
     const files: TFile[] = []
     Vault.recurseChildren(dir, (file) => {
       if (file instanceof TFile && file.name.startsWith(`${from} `)) files.push(file)

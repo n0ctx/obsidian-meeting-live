@@ -1,4 +1,5 @@
 import { Events } from "obsidian"
+import { t } from "../i18n/index.ts"
 import { upgradeSummaries } from "../llm/summary.ts"
 import { MeetingSession, type SessionEnv } from "./session.ts"
 import { TRANSCRIPT_FILE, meetingFile, newMeetingId, type MeetingStore } from "./store.ts"
@@ -43,7 +44,7 @@ export class MeetingManager extends Events {
       ...this.env,
       store: this.store,
       claim: (session) => {
-        if (this.active && this.active !== session) return `「${this.active.meta.title}」正在录音，请先结束该会议`
+        if (this.active && this.active !== session) return t("manager.busy", this.active.meta.title)
         this.active = session
         this.trigger("active")
         return undefined
@@ -115,7 +116,7 @@ export class MeetingManager extends Events {
     const folder = await this.store.create(meta, this.env.asr().name)
     this.folders.set(meta.id, { folder, notePath })
     const session = await this.get(meta.id)
-    if (!session) throw new Error("会议创建失败")
+    if (!session) throw new Error(t("manager.createFailed"))
     return session
   }
 

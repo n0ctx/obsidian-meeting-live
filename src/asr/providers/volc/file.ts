@@ -1,8 +1,9 @@
 // Volcengine big-model recorded-file ASR (submit + query).
 import { randomUUID } from "node:crypto"
 import type { PreparedAudio } from "../../../audio/transcode.ts"
+import { t } from "../../../i18n/index.ts"
 import type { FileAsrCall, FileAsrProvider, FileAsrResponse, FileAsrResult } from "../../fileAsr.ts"
-import { VOLC_FILE_CAPABILITIES, VOLC_ID, VOLC_NAME } from "./info.ts"
+import { VOLC_FILE_CAPABILITIES, VOLC_ID } from "./info.ts"
 
 export const FILE_ASR_BASE = "https://openspeech.bytedance.com"
 export const FILE_ASR_HOST = new URL(FILE_ASR_BASE).host
@@ -54,15 +55,15 @@ function header(response: FileAsrResponse, name: string): string {
 export function statusOf(response: FileAsrResponse): { code: string; message: string; body: Record<string, unknown> } {
   const text = response.text.trim()
   if (response.status === 401 || response.status === 403) {
-    throw new Error(`火山引擎鉴权失败（HTTP ${response.status}）：Key 无效，或没有开通录音文件识别资源。${text.slice(0, 160)}`)
+    throw new Error(t("volc.fileAuth", response.status, text.slice(0, 160)))
   }
-  if (response.status === 413) throw new Error("录音太大被接口拒收（HTTP 413）")
+  if (response.status === 413) throw new Error(t("volc.fileTooLarge"))
   let body: Record<string, unknown> = {}
   if (text) {
     try {
       body = JSON.parse(text) as Record<string, unknown>
     } catch {
-      throw new Error(`火山引擎返回的不是 JSON（HTTP ${response.status}）：${text.slice(0, 160)}`)
+      throw new Error(t("volc.notJson", response.status, text.slice(0, 160)))
     }
   }
   const inner = (body.header ?? {}) as { code?: unknown; message?: unknown }
@@ -74,8 +75,8 @@ export function statusOf(response: FileAsrResponse): { code: string; message: st
 }
 
 function fail(code: string, message: string): never {
-  const detail = [code || "无状态码", message].filter(Boolean).join(" ")
-  throw new Error(code === "45000001" ? `识别参数无效（${detail}）` : `火山引擎录音文件识别失败（${detail}）`)
+  const detail = [code || t("volc.noStatus"), message].filter(Boolean).join(" ")
+  throw new Error(code === "45000001" ? t("volc.badParams", detail) : t("volc.fileFailed", detail))
 }
 
 export function buildFileRequest(base64: string, format: string, speakers: boolean): Record<string, unknown> {
@@ -123,14 +124,14 @@ export async function volcTranscribeFile(auth: FileAsrAuth, audio: PreparedAudio
   let waited = 0
   let delay = POLL_START_MS
   for (;;) {
-    if (options.signal?.aborted) throw new Error("已取消")
+    if (options.signal?.aborted) throw new Error(t("asr.cancelled"))
     options.onStage?.({ stage: "recognizing", waitedMs: waited })
     const polled = statusOf(await options.post(FILE_ASR_BASE + QUERY_PATH, headers(auth, requestId), "{}"))
     if (!STATUS_PENDING.has(polled.code)) {
       if (polled.code !== STATUS_OK) fail(polled.code, polled.message)
       return parseFileResult(polled.body)
     }
-    if (waited >= MAX_WAIT_MS) throw new Error(`识别超时：已等待 ${Math.round(waited / 60000)} 分钟仍未完成`)
+    if (waited >= MAX_WAIT_MS) throw new Error(t("volc.fileTimeout", Math.round(waited / 60000)))
     await sleep(delay)
     waited += delay
     delay = Math.min(delay * 2, POLL_MAX_MS)
@@ -141,12 +142,12 @@ export function volcFileProvider(auth: FileAsrAuth): FileAsrProvider {
   const missing = !auth.apiKey && !(auth.appId && auth.accessToken)
   return {
     id: VOLC_ID,
-    name: VOLC_NAME,
+    name: t("provider.volc"),
     host: FILE_ASR_HOST,
     model: auth.resourceId,
     capabilities: VOLC_FILE_CAPABILITIES,
     directFormats: VOLC_DIRECT_FORMATS,
-    problem: missing ? "未配置火山引擎凭证，请先在插件设置中填写" : undefined,
+    problem: missing ? t("volc.fileNoCredentials") : undefined,
     transcribe: (audio, call) => volcTranscribeFile(auth, audio, call),
   }
 }

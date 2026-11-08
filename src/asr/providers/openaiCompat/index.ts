@@ -1,7 +1,8 @@
+import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { openAiFileProvider, isDiarizeModel } from "./file.ts"
-import { OPENAI_COMPAT_ID, OPENAI_COMPAT_NAME } from "./info.ts"
+import { OPENAI_COMPAT_ID } from "./info.ts"
 import { fileSizeLimit, openAiFileConfig } from "./settings.ts"
 import { renderOpenAiCompatSettings } from "./ui.ts"
 
@@ -9,7 +10,10 @@ const configOf = ({ secrets, settings }: ProviderEnv) => openAiFileConfig(secret
 
 export const openAiCompatProvider: AsrProvider = {
   id: OPENAI_COMPAT_ID,
-  name: OPENAI_COMPAT_NAME,
+  get name() {
+    return t("provider.openaiCompat")
+  },
+  nameIn: (lang: Lang) => tr(lang, "provider.openaiCompat"),
   file: {
     capabilities: (settings) => ({ language: true, diarization: isDiarizeModel(settings.providers.openaiCompat.model), fileSizeLimit: fileSizeLimit(settings.providers.openaiCompat) }),
     host: (settings) => hostOf(settings.providers.openaiCompat.baseUrl),

@@ -1,4 +1,5 @@
 import { Notice } from "obsidian"
+import { t } from "../../i18n/index.ts"
 import type { AsrConnect } from "../contract.ts"
 
 const SECOND_OF_AUDIO = 16_000
@@ -44,8 +45,8 @@ export async function testLiveConnection(connect: AsrConnect, name: string, butt
   button.disabled = true
   try {
     const outcome = await runLiveTest(connect)
-    if (outcome.ok) new Notice(`${name}连接成功${outcome.logId ? `（logid ${outcome.logId}）` : ""}`)
-    else new Notice(outcome.message ?? `${name}连接失败`, 10000)
+    if (outcome.ok) new Notice(t("liveTest.ok", name, outcome.logId ?? ""))
+    else new Notice(outcome.message ?? t("liveTest.failed", name), 10000)
   } finally {
     button.disabled = false
   }

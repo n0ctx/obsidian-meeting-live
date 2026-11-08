@@ -1,6 +1,7 @@
 // Keeps a minutes request within the model's input limit. A transcript that is too long is condensed part by part
 // with the existing stage-summary prompt (map); the notes are then written from those parts (reduce). The timestamps
 // the summaries cite stay on the lines, so the notes can still point back into the transcript.
+import { t } from "../i18n/index.ts"
 import type { Utterance } from "../meeting/types.ts"
 import type { ChatMessage, LlmClient } from "./client.ts"
 import { buildMinutesMessages, type MinutesInput } from "./minutes.ts"
@@ -33,7 +34,7 @@ export interface GuardOptions {
   onProgress?: (text: string) => void
 }
 
-const tooSmall = (limit: number) => new Error(`输入上限（约 ${limit.toLocaleString()} tokens）太小，装不下提示词和手动笔记，无法分段整理。请在设置中调高输入上限，或减少手动笔记`)
+const tooSmall = (limit: number) => new Error(t("llm.tooSmall", limit.toLocaleString()))
 
 /** Sequential groups of utterances of at most `budget` estimated tokens; a group always holds at least one. */
 function parts(utterances: Utterance[], budget: number): Utterance[][] {
@@ -81,16 +82,16 @@ export async function writeMinutes(llm: LlmClient, prompt: string, input: Minute
       summaries = []
       continue
     }
-    if (rounds++ >= MAX_ROUNDS) throw new Error(`转写太长：压缩 ${MAX_ROUNDS} 次后仍超过输入上限（约 ${limit.toLocaleString()} tokens）。请在设置中调高输入上限，或换用上下文更长的模型`)
+    if (rounds++ >= MAX_ROUNDS) throw new Error(t("llm.tooLong", MAX_ROUNDS, limit.toLocaleString()))
     const groups = parts(utterances, budget)
     const next: Utterance[] = []
     for (const [i, part] of groups.entries()) {
-      options.onProgress?.(`正在分段压缩转写（${i + 1}/${groups.length}）`)
+      options.onProgress?.(t("minutes.condensing", i + 1, groups.length))
       next.push(...(await condensePart(llm, input, part, options)))
     }
     utterances = next
     condensed = true
   }
-  options.onProgress?.("正在根据压缩后的内容撰写纪要")
+  options.onProgress?.(t("minutes.writing"))
   return llm.complete(build(utterances, summaries, condensed))
 }

@@ -1,6 +1,7 @@
 // Recognizing a recording that had to be cut into pieces, whatever the provider: pieces go up one after another and
 // their times are moved to where each piece sits in the recording.
 import type { AudioChunk } from "../audio/transcode.ts"
+import { t } from "../i18n/index.ts"
 import { assertCoverage, transcribeFile, type FileAsrCall, type FileAsrProvider, type FileAsrResult } from "./fileAsr.ts"
 
 export interface ChunkedCall extends FileAsrCall {
@@ -24,7 +25,7 @@ export async function transcribeChunks(provider: FileAsrProvider, chunks: AudioC
       done.push(await transcribeFile(provider, chunks[i], call))
     } catch (error) {
       if (chunks.length === 1) throw error
-      throw new Error(`第 ${i + 1}/${chunks.length} 段：${(error as Error).message}`)
+      throw new Error(t("asr.part", i + 1, chunks.length, (error as Error).message))
     }
   }
   const merged = mergeChunks(done.slice(0, chunks.length), chunks)

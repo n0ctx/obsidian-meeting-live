@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.ts"
 import type { LlmPreset } from "./presets.ts"
 
 export type CompatibleEffort = "off" | "low" | "medium" | "high"
@@ -34,10 +35,10 @@ export interface HttpResponse {
 export type HttpPost = (url: string, headers: Record<string, string>, body: string) => Promise<HttpResponse>
 
 export function llmConfigProblem(config: LlmConfig): string | undefined {
-  if (!config.baseUrl.trim()) return "未填写 LLM API 地址"
-  if (!config.model.trim()) return "未填写 LLM 模型名称"
-  if (config.preset.baseUrl.includes("YOUR-") && config.baseUrl.includes("YOUR-")) return "请把 LLM API 地址改成你自己的资源地址"
-  if (config.preset.keyRequired && !config.apiKey) return "未配置 LLM API Key"
+  if (!config.baseUrl.trim()) return t("llm.noBaseUrl")
+  if (!config.model.trim()) return t("llm.noModel")
+  if (config.preset.baseUrl.includes("YOUR-") && config.baseUrl.includes("YOUR-")) return t("llm.placeholderUrl")
+  if (config.preset.keyRequired && !config.apiKey) return t("llm.noKey")
   return undefined
 }
 
@@ -75,11 +76,11 @@ function errorMessage(status: number, text: string): string {
     const data = JSON.parse(text) as JsonRecord
     const error = data.error
     const message = typeof error === "string" ? error : asRecord(error)?.message
-    if (typeof message === "string" && message) return `LLM 请求失败（HTTP ${status}）：${message}`
+    if (typeof message === "string" && message) return t("llm.failed", status, message)
   } catch {
     // Not JSON; fall through to the raw text.
   }
-  return `LLM 请求失败（HTTP ${status}）${text ? `：${text.slice(0, 200)}` : ""}`
+  return t("llm.failed", status, text.slice(0, 200))
 }
 
 /** Whether a JSON reply may be requested from this service under this configuration. */
@@ -129,13 +130,13 @@ async function chatOnce(config: LlmConfig, messages: ChatMessage[], post: HttpPo
   try {
     data = JSON.parse(response.text)
   } catch {
-    throw new ChatError("LLM 返回的不是 JSON，请检查 API 地址")
+    throw new ChatError(t("llm.notJson"))
   }
   const text = extractCompletionText(data)
   if (!text) {
     const finish = asRecord(asRecord(data)?.choices && (asRecord(data)!.choices as unknown[])[0])?.finish_reason
-    if (finish === "length") throw new ChatError("LLM 输出被截断（finish_reason=length）")
-    throw new ChatError("LLM 返回内容为空或格式不受支持", undefined, true)
+    if (finish === "length") throw new ChatError(t("llm.truncated"))
+    throw new ChatError(t("llm.empty"), undefined, true)
   }
   return text
 }
@@ -166,9 +167,9 @@ export interface LlmClient {
 }
 
 export function compatibleClient(config: LlmConfig, post: HttpPost): LlmClient {
-  let target = config.baseUrl || "（尚未配置）"
+  let target = config.baseUrl || t("llm.unconfigured")
   try {
-    target = `${new URL(chatCompletionsUrl(config.baseUrl)).host} · ${config.model || "未填写模型"}`
+    target = `${new URL(chatCompletionsUrl(config.baseUrl)).host} · ${config.model || t("llm.noModelShort")}`
   } catch {
     // Keep the raw value for display.
   }
