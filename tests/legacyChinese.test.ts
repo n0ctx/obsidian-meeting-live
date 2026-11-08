@@ -1,5 +1,5 @@
-// Output of 1.0.1 for a fixed meeting, kept exactly: labels written in Chinese must not drift, because opening a note
-// rewrites its summary region whenever the text differs, and these labels are what older notes already contain.
+// Output of 1.0.1 for a fixed meeting, kept exactly (except the summary region, see below): labels written in Chinese must not drift,
+// because opening a note rewrites its summary region whenever the text differs, and these labels are what older notes already contain.
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { renderInterviewRecord } from "../src/asr/fileAsr.ts"
@@ -8,62 +8,59 @@ import { gapLine, transcriptHeader, utteranceLine } from "../src/meeting/transcr
 import { formatShortDateTime } from "../src/meeting/types.ts"
 import { fakeSession, meetingMeta } from "./support/labelFixtures.ts"
 
-// One deliberate difference from 1.0.1: a currency symbol is now inside the highlight of a figure (==¥500万==, where 1.0.1 wrote ¥==500万==).
-// Opening an old note rewrites that region once; ticked to-dos are matched without the highlight, so they stay ticked (see noteLanguage.test.ts).
+// The summary region has a new layout since 1.1 (overview as an index, to-dos listed once, one header and one foot line); this pins what
+// it now writes for a fixed meeting, so labels written in Chinese cannot drift. Notes written by 1.0.1 are rewritten into it on the next publish,
+// and their ticked to-dos stay ticked (see noteLanguage.test.ts). Also different from 1.0.1: a currency symbol is inside the highlight of a
+// figure (==¥500万==, where 1.0.1 wrote ¥==500万==).
 const NOTE_SUMMARY = [
-  "## AI 阶段摘要",
-  "",
-  "> [!caution] AI 生成，可能有遗漏或误读，以原始转写和录音为准。==高亮==的数字在转写里没有找到，请核对。",
-  "",
-  "### 会议概览 · 截至 00:30",
+  "AI 阶段摘要 · 截至 00:30 · 由 Meeting Live 自动更新，区域内的修改会被覆盖",
   "",
   "- **预算**：收入 3 亿，毛利 ==40%==。 [[Meetings/周会/周会 原始转写#^t3200-5600|00:03]]",
   "",
-  "**待办**",
-  "- [ ] 交方案 ==¥500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
+  "#### 待办",
+  "- [ ] 交方案 ==¥500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]] ^m-20261027-abc123-t9100",
+  "- [ ] 补数据 [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
   "",
-  "### 阶段 1",
+  "#### 未决",
+  "- 是否扩招 [[Meetings/周会/周会 原始转写#^t3200-5600|00:03]]",
+  "",
+  "### 阶段 1 · 00:00–00:30",
   "",
   "**预算** [[Meetings/周会/周会 原始转写#^t3200-5600|00:03]]",
   "收入 3 亿，毛利 ==40%==。 ^m-20261027-abc123-s1",
   "",
-  "**待办**",
-  "- [ ] 交方案 ==¥500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]] ^m-20261027-abc123-t9100",
-  "- [ ] 补数据 [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
-  "",
-  "**未决**",
-  "- 是否扩招 [[Meetings/周会/周会 原始转写#^t3200-5600|00:03]]",
-  "",
-  "### 阶段 2",
+  "### 阶段 2 · 00:00–00:30",
   "",
   "本阶段没有可提炼的实质内容。 ^m-20261027-abc123-s2",
   "",
-  "### 阶段 3",
+  "### 阶段 3 · 00:00–00:30",
   "",
   "模型原文 ^m-20261027-abc123-s3",
   "",
-  "### 渠道",
+  "### 渠道 · 00:00–00:30",
   "",
   "渠道进展顺利。 [[Meetings/周会/周会 原始转写#^t20000-21000|00:20]] ^m-20261027-abc123-s4",
   "",
+  "AI 生成，可能有遗漏或误读，以原始转写和录音为准。==高亮==的数字在转写里没有找到，请核对。",
 ].join("\n")
 
 const NOTE_SUMMARY_EMPTY_STAGE = [
-  "## AI 阶段摘要",
-  "",
-  "> [!caution] AI 生成，可能有遗漏或误读，以原始转写和录音为准。==高亮==的数字在转写里没有找到，请核对。",
-  "",
-  "### 会议概览 · 截至 00:30",
+  "AI 阶段摘要 · 截至 00:30 · 由 Meeting Live 自动更新，区域内的修改会被覆盖",
   "",
   "- **预算**：收入 3 亿，毛利 ==40%==。 [[Meetings/周会/周会 原始转写#^t3200-5600|00:03]]",
   "",
-  "**待办**",
-  "- [ ] 交方案 ==¥500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
+  "#### 待办",
+  "- [ ] 交方案 ==¥500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]] ^m-20261027-abc123-t9100",
+  "- [ ] 补数据 [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
   "",
-  "### 阶段 2",
+  "#### 未决",
+  "- 是否扩招 [[Meetings/周会/周会 原始转写#^t3200-5600|00:03]] ^m-20261027-abc123-t3200",
+  "",
+  "### 阶段 2 · 00:00–00:30",
   "",
   "本阶段没有可提炼的实质内容。 ^m-20261027-abc123-s2",
   "",
+  "AI 生成，可能有遗漏或误读，以原始转写和录音为准。==高亮==的数字在转写里没有找到，请核对。",
 ].join("\n")
 
 const MINUTES = [
@@ -119,16 +116,19 @@ const INTERVIEW_PLAIN = [
 const record = { durationMs: 10000, text: "t", utterances: [{ text: "您好。", startMs: 0, endMs: 2000, speaker: "1" }, { text: "收入3亿。", startMs: 2500, endMs: 9500, speaker: "2" }], chunks: 2 }
 const info = { title: "访谈", source: "访谈.mp3", vaultPath: "a/访谈.mp3", transcribedAt: "2026-10-27 14:30", provider: "火山引擎", model: "volc.seedasr.auc" }
 
-test("the note summary reads as 1.0.1 wrote it", () => {
+test("the note summary is written as pinned", () => {
   assert.equal(fakeSession().session.noteSummary().markdown, NOTE_SUMMARY)
   const meta = meetingMeta()
   meta.summaries = meta.summaries.slice(1, 2)
   assert.equal(fakeSession({ meta }).session.noteSummary().markdown, NOTE_SUMMARY_EMPTY_STAGE)
 })
 
-test("the summary region markers read as 1.0.1 wrote them", () => {
+test("the summary region markers carry no wording, and the region 1.0.1 wrote is still found by its id", () => {
   const edit = placeSummary("```meeting-live\nid: m-1\n```\n", "m-1", "要点")!
-  assert.equal(edit.text, "\n\n%% meeting-live-summary m-1 · 由 Meeting Live 自动更新，此区域内的修改会被覆盖 %%\n要点\n\n%% /meeting-live-summary m-1 %%")
+  assert.equal(edit.text, "\n\n%% meeting-live-summary m-1 %%\n\n要点\n\n%% /meeting-live-summary m-1 %%")
+  const old = "```meeting-live\nid: m-1\n```\n\n%% meeting-live-summary m-1 · 由 Meeting Live 自动更新，此区域内的修改会被覆盖 %%\n## AI 阶段摘要\n\n旧\n\n%% /meeting-live-summary m-1 %%\n"
+  const rewritten = placeSummary(old, "m-1", "新")!
+  assert.equal(old.slice(0, rewritten.from) + rewritten.text + old.slice(rewritten.to), "```meeting-live\nid: m-1\n```\n\n%% meeting-live-summary m-1 %%\n\n新\n\n%% /meeting-live-summary m-1 %%\n")
 })
 
 test("transcript header, gap lines and short dates read as 1.0.1 wrote them", () => {

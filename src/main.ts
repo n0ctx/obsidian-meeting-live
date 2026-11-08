@@ -20,6 +20,7 @@ import type { FileAsrGet, FileAsrPost } from "./asr/fileAsr.ts"
 import { MeetingCard, parseBlockId, type CardHost } from "./ui/card.ts"
 import { ConsentModal, MinutesModal } from "./ui/modals.ts"
 import { summaryMarkers } from "./ui/summaryMarkers.ts"
+import { markSummarySection } from "./ui/summaryPanel.ts"
 
 const LEGACY_SUMMARY_FOCUS = `Focus on the questions discussed, decisions and conclusions, key numbers and dates, disagreements or uncertainties, and useful follow-up questions.`
 
@@ -73,6 +74,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       ctx.addChild(new MeetingCard(el, this, parseBlockId(source), ctx))
     })
     this.registerEditorExtension(summaryMarkers)
+    this.registerMarkdownPostProcessor(markSummarySection)
     this.jobs = new TranscribeJobs(this.app, this.addStatusBarItem())
     this.registerInterval(window.setInterval(() => this.jobs.render(), 1000))
     this.registerMarkdownCodeBlockProcessor(JOB_LANGUAGE, (source, el, ctx) => {

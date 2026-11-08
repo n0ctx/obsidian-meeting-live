@@ -69,7 +69,7 @@ test("overview prompt merges new stages into the current overview by topic", () 
 
 test("summary markdown writes topic paragraphs, then to-dos and open questions", () => {
   const record: SummaryRecord = {
-    index: 2, startMs: 60_000, endMs: 120_000, trigger: "manual", status: "done", attempts: 1, utterances: [],
+    index: 2, startMs: 60_000, endMs: 305_000, trigger: "manual", status: "done", attempts: 1, utterances: [],
     content: {
       title: "毛利",
       paragraphs: [
@@ -81,24 +81,41 @@ test("summary markdown writes topic paragraphs, then to-dos and open questions",
     },
   }
   const md = summaryMarkdown(record, (ms) => `@${ms}`)
-  assert.match(md, /^## 毛利$/m)
-  assert.match(summaryMarkdown({ ...record, content: { ...record.content!, title: "" } }, String), /^## 阶段 2$/m)
+  // The title comes first, the range it covers after it.
+  assert.match(md, /^## 毛利 · 01:00–05:05$/m)
+  assert.match(summaryMarkdown({ ...record, content: { ...record.content!, title: "" } }, String), /^## 阶段 2 · 01:00–05:05$/m)
   // A topic sits on its own line with its time; only unverified figures are marked, the rest stay plain.
   assert.match(md, /^\*\*毛利\*\* @65000\n毛利率 ==45%==$/m)
   assert.match(md, /^维持报价，Q3 收入 3\.2 亿元$/m)
   assert.doesNotMatch(md, /原文未找到|【/)
-  assert.match(md, /^\*\*待办\*\*\n- \[ \] 周五前提交方案\n\n\*\*未决\*\*\n- 是否含税未定 @70000$/m)
-  const overview = overviewMarkdown(record.content!, 120_000, (ms) => `@${ms}`)
-  assert.match(overview, /^## 会议概览 · 截至 02:00\n\n- \*\*毛利\*\*：毛利率 ==45%== @65000\n- 维持报价，Q3 收入 3\.2 亿元\n\n\*\*待办\*\*\n- \[ \] 周五前提交方案\n/)
+  // The labels are small headings one level below the stage's, not bold lines.
+  assert.match(md, /^### 待办\n- \[ \] 周五前提交方案\n\n### 未决\n- 是否含税未定 @70000$/m)
+  assert.doesNotMatch(summaryMarkdown(record, String, "###"), /\*\*(待办|未决)\*\*/)
+  assert.match(summaryMarkdown(record, String, "###"), /^#### 待办$/m)
+  // A stage the overview lists the to-dos for leaves its own out.
+  const bare = summaryMarkdown(record, (ms) => `@${ms}`, "##", undefined, "zh", false)
+  assert.doesNotMatch(bare, /待办|未决|周五前|含税/)
+  assert.match(bare, /毛利率 ==45%==/)
+  // ...unless it has nothing else to show, so its anchor has a line to sit on.
+  const listsOnly = { ...record, content: { title: "", paragraphs: [], todos: record.content!.todos, open: [] } }
+  assert.match(summaryMarkdown(listsOnly, String, "##", (_p, first) => (first ? "s2" : undefined), "zh", false), /^- \[ \] 周五前提交方案 \^s2$/m)
+  const overview = overviewMarkdown(record.content!, (ms) => `@${ms}`)
+  assert.equal(overview, "- **毛利**：毛利率 ==45%== @65000\n- 维持报价，Q3 收入 3.2 亿元\n\n#### 待办\n- [ ] 周五前提交方案\n\n#### 未决\n- 是否含税未定 @70000\n")
+  assert.equal(overviewMarkdown({ title: "", paragraphs: [], todos: [], open: [] }, String), "")
   assert.match(summaryMarkdown({ ...record, content: { title: "", paragraphs: [], todos: [], open: [] } }, String), /本阶段没有可提炼的实质内容/)
 
   // Anchors: the first line always gets the stage's, later lines only when asked.
   const anchored = summaryMarkdown(record, (ms) => `@${ms}`, "###", (point, first) => (first ? "s2" : point?.t !== undefined ? `t${point.t}` : undefined))
-  assert.match(anchored, /^### 毛利$/m)
+  assert.match(anchored, /^### 毛利 · 01:00–05:05$/m)
   assert.match(anchored, /^\*\*毛利\*\* @65000\n毛利率 ==45%== \^s2$/m)
   assert.match(anchored, /^维持报价，Q3 收入 3\.2 亿元$/m)
-  assert.match(anchored, /^- \[ \] 周五前提交方案\n\n\*\*未决\*\*\n- 是否含税未定 @70000 \^t70000$/m)
+  assert.match(anchored, /^- \[ \] 周五前提交方案\n\n#### 未决\n- 是否含税未定 @70000 \^t70000$/m)
   assert.match(summaryMarkdown({ ...record, content: { title: "", paragraphs: [], todos: [], open: [] } }, String, "###", () => "s9"), /本阶段没有可提炼的实质内容。 \^s9/)
+  // Only the overview's to-dos and questions carry anchors (the index lines are not link targets), and none is taken for the first line of a stage.
+  const overviewAnchored = overviewMarkdown(record.content!, String, "####", "zh", (point, first) => (first ? "s0" : point?.t !== undefined ? `t${point.t}` : undefined))
+  assert.match(overviewAnchored, /^- \*\*毛利\*\*：毛利率 ==45%== 65000$/m)
+  assert.match(overviewAnchored, /^- 是否含税未定 70000 \^t70000$/m)
+  assert.doesNotMatch(overviewAnchored, /s0/)
 })
 
 test("saved marked points and sectioned summaries become paragraphs and lists", () => {
@@ -437,7 +454,8 @@ test("the default prompts are in English, say to answer in the transcript's lang
   for (const prompt of [stage, overview, DEFAULT_MINUTES_PROMPT, DEFAULT_SUMMARY_FOCUS]) assert.doesNotMatch(prompt, han)
   for (const prompt of [stage, overview, DEFAULT_MINUTES_PROMPT]) assert.match(prompt, /same language as the (transcript|summaries)/)
   assert.match(stage, /under about 150 Chinese characters or 100 words/)
-  assert.match(overview, /at most 50 Chinese characters or 30 words/)
+  assert.match(overview, /at most 30 Chinese characters or 20 words/)
+  assert.match(overview, /keep each one; merge only items that are the same action/, "the overview's to-dos are the only list, so none may be dropped")
 })
 
 test("the presets carry what each provider's documentation says: addresses, credential header and whether a key is needed", () => {

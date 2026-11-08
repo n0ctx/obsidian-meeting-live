@@ -7,7 +7,7 @@ import type { ResolvedLive } from "../asr/providers/registry.ts"
 import { AsrStreamer, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { writeMinutes } from "../llm/contextGuard.ts"
-import { buildOverviewMessages, buildSummaryMessages, hasUnverified, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown } from "../llm/summary.ts"
+import { buildOverviewMessages, buildSummaryMessages, hasUnverified, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown, type LineAnchor } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
 import { placeSummary } from "./noteSummary.ts"
@@ -467,12 +467,6 @@ export class MeetingSession extends Events {
     return this.meta.summaries.filter((s) => s.status === "done" && !merged.has(s.index))
   }
 
-  /** Timeline position the overview covers up to. */
-  get overviewThroughMs(): number {
-    const merged = new Set(this.meta.overview?.stages ?? [])
-    return Math.max(0, ...this.meta.summaries.filter((s) => merged.has(s.index)).map((s) => s.endMs))
-  }
-
   /** Merges completed stages into the overview; on failure keeps the previous overview and records the error. */
   async updateOverview(): Promise<void> {
     if (this.overviewRunning || this.overviewBacklog.length === 0) return
@@ -520,7 +514,8 @@ export class MeetingSession extends Events {
 
   /**
    * The note section holding the overview and every finished stage (empty until a stage is done),
-   * and the block each transcript line links back to: the stage point citing it, else its stage.
+   * and the block each transcript line links back to: the point citing it, else its stage.
+   * To-dos and open questions are listed once, under the overview; a stage the overview does not cover yet lists its own.
    */
   noteSummary(): { markdown: string; anchors: Map<number, string> } {
     const anchors = new Map<number, string>()
@@ -528,34 +523,38 @@ export class MeetingSession extends Events {
     if (done.length === 0) return { markdown: "", anchors }
     const lang = this.noteLang
     const link = (ms: number) => this.summaryLink(ms)
+    const overview = this.meta.overview?.content
+    const covered = new Set(overview ? this.meta.overview?.stages : [])
     const cited = new Set<number>()
+    const anchorFor = (stage?: string): LineAnchor => (point, first) => {
+      const t = point?.t === undefined ? undefined : Math.round(point.t)
+      const fresh = t !== undefined && !cited.has(t)
+      const id = first && stage ? stage : fresh ? `${this.id}-t${t}` : undefined
+      if (fresh && id) {
+        cited.add(t)
+        anchors.set(t, id)
+      }
+      return id
+    }
+    // The stages claim their lines first, the overview's to-dos and questions take what is left, whichever comes first in the note.
     const stages = done.map((s) => {
       const stage = `${this.id}-s${s.index}`
       for (const ms of s.utterances) if (!anchors.has(ms)) anchors.set(ms, stage)
-      return summaryMarkdown(s, link, "###", (point, first) => {
-        const t = point?.t === undefined ? undefined : Math.round(point.t)
-        const fresh = t !== undefined && !cited.has(t)
-        const id = first ? stage : fresh ? `${this.id}-t${t}` : undefined
-        if (fresh && id) {
-          cited.add(t)
-          anchors.set(t, id)
-        }
-        return id
-      }, lang)
+      return summaryMarkdown(s, link, "###", anchorFor(stage), lang, !covered.has(s.index))
     })
-    const overview = this.meta.overview?.content ? [overviewMarkdown(this.meta.overview.content, this.overviewThroughMs, link, "###", lang)] : []
-    const unverified = hasUnverified(this.meta.overview?.content) || done.some((s) => hasUnverified(s.content))
-    const markdown = [`## ${tr(lang, "note.summaryHeading")}`, "", tr(lang, "note.summaryCaution", unverified), "", ...overview, ...stages].join("\n")
+    const index = overview ? overviewMarkdown(overview, link, "####", lang, anchorFor()) : ""
+    const unverified = hasUnverified(overview) || done.some((s) => hasUnverified(s.content))
+    const through = formatClock(Math.max(...done.map((s) => s.endMs)))
+    const markdown = [tr(lang, "note.summaryHead", through), "", ...(index ? [index] : []), ...stages, tr(lang, "note.summaryFoot", unverified)].join("\n")
     return { markdown, anchors }
   }
 
   /** Writes the summaries into the meeting's note, right below its block, and links each transcript time back to them. */
   publishSummary(): Promise<unknown> {
-    const lang = this.noteLang
     const { markdown, anchors } = this.noteSummary()
     const note = this.noteLink
     return this.writeIo(async () => {
-      await this.env.store.editNote(this.meta.notePath, (content) => placeSummary(content, this.id, markdown, lang))
+      await this.env.store.editNote(this.meta.notePath, (content) => placeSummary(content, this.id, markdown))
       const path = this.transcriptPath
       const current = await this.env.store.readTranscript(path)
       const linked = linkTranscript(current, (ms) => {

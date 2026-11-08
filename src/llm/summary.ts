@@ -34,13 +34,13 @@ ${SHAPE}`
 const OVERVIEW_CONTRACT = `You keep a running overview of a meeting in progress. You get the current overview and the summaries of new stages; return the updated overview of the whole meeting so far.
 
 - Organize by topic, not by time. Fold each new point into the topic it belongs to, or add a topic. Merge topics that turn out to be the same.
-- Each paragraph is a single sentence of at most 50 Chinese characters or 30 words: the gist of the topic and where it stands now, with at most one key figure. Do not enumerate features, examples or sub-points; the stage summaries keep those. When a later stage revises, decides or answers something, state the latest position.
-- "todos": every action item so far, with duplicates merged.
-- "open": disagreements and questions still unresolved; drop those settled later and put the answer in the topic's paragraph.
+- Each paragraph is an index entry, not a summary: one line of at most 30 Chinese characters or 20 words that says what the topic is about and where it stands now (decided, pending, blocked, in progress). Give at most one key figure. Never list features, examples, reasons or sub-points, never copy or shorten the stage paragraphs: the stage summaries keep all of that and sit right below the overview. When a later stage revises, decides or answers something, state the latest position.
+- "todos": every action item of every stage. This list is the only place the meeting's to-dos are shown, so keep each one; merge only items that are the same action.
+- "open": disagreements and questions still unresolved; drop those settled later and put the answer in the topic's line.
 - Use only what the overview and summaries say. Do not invent names, numbers or conclusions.
 - Keep plans, forecasts and estimates marked as such, and numbers and units exactly as given.
 - "t": copy the [timestamp] where the topic first came up, or of the to-do or question.
-- Leave "title" empty.
+- "topic" names the entry's subject in a few words. Leave "title" empty.
 - Write in the same language as the summaries.
 
 Output one JSON object only, no code fences:
@@ -282,16 +282,19 @@ export type LineAnchor = (point: SummaryPoint | undefined, first: boolean) => st
 
 const anchored = (line: string, id: string | undefined) => (id ? `${line} ^${id}` : line)
 
-/** To-dos and open questions, each under its own label. */
-function listMarkdown(content: SummaryContent, link: TimeLink, mark: (line: string, point: SummaryPoint) => string, lang: Lang): string[] {
+/** The clock range a stage covers, as it reads in the stage's heading. */
+const stageRange = (record: SummaryRecord) => `${formatClock(record.startMs)}–${formatClock(record.endMs)}`
+
+/** To-dos and open questions, each under its own small heading (`level` is its `#` run). */
+function listMarkdown(content: SummaryContent, link: TimeLink, mark: (line: string, point: SummaryPoint) => string, lang: Lang, level: string): string[] {
   const lines: string[] = []
-  if (content.todos.length) lines.push(`**${tr(lang, "note.todo")}**`, ...content.todos.map((p) => mark(`- [ ] ${pointMarkdown(p, link)}`, p)), "")
-  if (content.open.length) lines.push(`**${tr(lang, "note.open")}**`, ...content.open.map((p) => mark(`- ${pointMarkdown(p, link)}`, p)), "")
+  if (content.todos.length) lines.push(`${level} ${tr(lang, "note.todo")}`, ...content.todos.map((p) => mark(`- [ ] ${pointMarkdown(p, link)}`, p)), "")
+  if (content.open.length) lines.push(`${level} ${tr(lang, "note.open")}`, ...content.open.map((p) => mark(`- ${pointMarkdown(p, link)}`, p)), "")
   return lines
 }
 
-/** Stage detail: each topic on its own line with its time, the paragraph below it. */
-function contentMarkdown(content: SummaryContent, link: TimeLink, lang: Lang, anchor?: LineAnchor): string[] {
+/** Stage detail: each topic on its own line with its time, the paragraph below it; the stage's own to-dos and open questions only when `lists` says so. */
+function contentMarkdown(content: SummaryContent, link: TimeLink, lang: Lang, level: string, lists: boolean, anchor?: LineAnchor): string[] {
   const lines: string[] = []
   let first = true
   const mark = (line: string, point: SummaryPoint) => {
@@ -303,21 +306,26 @@ function contentMarkdown(content: SummaryContent, link: TimeLink, lang: Lang, an
     const block = p.topic ? `**${p.topic}**${cite(p.t, link)}\n${pointText(p)}` : pointMarkdown(p, link)
     lines.push(mark(block, p), "")
   }
-  lines.push(...listMarkdown(content, link, mark, lang))
+  // A stage with nothing but lists keeps them: the stage's anchor needs a line to sit on.
+  if (lists || content.paragraphs.length === 0) lines.push(...listMarkdown(content, link, mark, lang, level))
   return lines
 }
 
-/** A stage as note text, with its fixed labels in `lang`; the model's own wording is kept as it came. */
-export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##", anchor?: LineAnchor, lang: Lang = uiLang()): string {
+/**
+ * A stage as note text, with its fixed labels in `lang`; the model's own wording is kept as it came.
+ * `lists: false` leaves out its to-dos and open questions, for a stage the overview already lists them for.
+ */
+export function summaryMarkdown(record: SummaryRecord, link: TimeLink, heading = "##", anchor?: LineAnchor, lang: Lang = uiLang(), lists = true): string {
   const name = record.content?.title || tr(lang, "note.stage", record.index)
-  const lines: string[] = [`${heading} ${name}`, ""]
-  if (record.content) lines.push(...(isEmptySummary(record.content) ? [anchored(tr(lang, "note.emptyStage"), anchor?.(undefined, true)), ""] : contentMarkdown(record.content, link, lang, anchor)))
+  const lines: string[] = [`${heading} ${name} · ${stageRange(record)}`, ""]
+  if (record.content) lines.push(...(isEmptySummary(record.content) ? [anchored(tr(lang, "note.emptyStage"), anchor?.(undefined, true)), ""] : contentMarkdown(record.content, link, lang, `${heading}#`, lists, anchor)))
   else if (record.raw) lines.push(anchored(record.raw.trimEnd(), anchor?.(undefined, true)), "")
   return lines.join("\n")
 }
 
-/** The overview reads as one scannable list: a line per topic, then to-dos and open questions. */
-export function overviewMarkdown(content: SummaryContent, throughMs: number, link: TimeLink, heading = "##", lang: Lang = uiLang()): string {
+/** The overview as a short index, a line per topic, then the meeting's to-dos and open questions once; `level` is the `#` run of their labels. */
+export function overviewMarkdown(content: SummaryContent, link: TimeLink, level = "####", lang: Lang = uiLang(), anchor?: LineAnchor): string {
   const topics = content.paragraphs.map((p) => `- ${p.topic ? `**${p.topic}**${tr(lang, "note.topicSep")}` : ""}${pointMarkdown(p, link)}`)
-  return [`${heading} ${tr(lang, "note.overview", formatClock(throughMs))}`, "", ...topics, ...(topics.length ? [""] : []), ...listMarkdown(content, link, (line) => line, lang)].join("\n")
+  const mark = (line: string, point: SummaryPoint) => anchored(line, anchor?.(point, false))
+  return [...topics, ...(topics.length ? [""] : []), ...listMarkdown(content, link, mark, lang, level)].join("\n")
 }

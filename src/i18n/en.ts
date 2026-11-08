@@ -490,14 +490,12 @@ export const en: Dictionary = {
   "job.noteGone": (note) => `The target note "${note}" was moved or deleted`,
 
   // ---- text written into notes and files (worded in the note language)
-  "note.summaryHeading": "AI stage summary",
-  "note.summaryCaution": (unverified) => `> [!caution] AI-generated: it may miss or misread things. The raw transcript and the recording are authoritative.${unverified ? " ==Highlighted== figures were not found in the transcript; please check them." : ""}`,
-  "note.regionMarker": "Maintained by Meeting Live; edits inside this region are overwritten",
+  "note.summaryHead": (clock) => `AI stage summary · up to ${clock} · maintained by Meeting Live, edits inside this region are overwritten`,
+  "note.summaryFoot": (unverified) => `AI-generated: it may miss or misread things. The raw transcript and the recording are authoritative.${unverified ? " ==Highlighted== figures were not found in the transcript; please check them." : ""}`,
   "note.todo": "To-do",
   "note.open": "Open questions",
   "note.stage": (n) => `Stage ${n}`,
   "note.emptyStage": "This stage had nothing substantial to summarize.",
-  "note.overview": (clock) => `Meeting overview · up to ${clock}`,
   "note.topicSep": ": ",
   "note.transcriptHeader": (provider) => `> [!info] Raw transcript produced by ${provider} live speech recognition, recorded along the recording's timeline. Each time links back to the matching AI summary in the meeting note; the transcript text is never rewritten.`,
   "note.gapLine": (from, to, reason) => `> [!warning] Transcript gap ${from} – ${to}: ${reason}. The recording is saved and that stretch can be played back.`,
@@ -523,7 +521,6 @@ export const en: Dictionary = {
   "note.writeUpInfo": (model, source, duration, time) => `> [!info] Interview notes written by ${model} from the transcript of the recording "${source}" (${duration ? `${duration} long, ` : ""}${time}). Check key facts and figures against the raw transcript before publishing.`,
   "note.rawLink": (link) => `> Raw transcript: ${link}`,
   "format.shortDateTime": (month, day, time) => `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][month - 1]} ${day}, ${time}`,
-  "summaryMarker.hint": "The AI stage summary is maintained by Meeting Live; edits inside this region are overwritten",
   "store.desktopOnly": "Meeting Live needs the desktop version of Obsidian",
 
   // ---- the setting for the language of that text
