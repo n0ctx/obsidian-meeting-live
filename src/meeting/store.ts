@@ -1,6 +1,6 @@
-import { promises as fs } from "node:fs"
 import { FileSystemAdapter, MarkdownView, TFile, Vault, normalizePath, type App } from "obsidian"
 import { t, tr, uiLang, type Lang } from "../i18n/index.ts"
+import { replaceFile, tempPath, type ReplaceIo } from "./atomicFile.ts"
 import { applyEdit, type TextEdit } from "./noteSummary.ts"
 import { transcriptHeader } from "./transcriptFormat.ts"
 import type { MeetingMeta } from "./types.ts"
@@ -49,10 +49,15 @@ export function newMeetingId(): string {
 export class MeetingStore {
   readonly app: App
   private readonly root: () => string
+  private readonly io: ReplaceIo | undefined
+  private readonly backoffMs: readonly number[] | undefined
 
-  constructor(app: App, root: () => string) {
+  /** `io` and `backoffMs` stand in for the file system calls and waits of saving meeting.json, for tests. */
+  constructor(app: App, root: () => string, io?: ReplaceIo, backoffMs?: readonly number[]) {
     this.app = app
     this.root = root
+    this.io = io
+    this.backoffMs = backoffMs
   }
 
   private get adapter(): FileSystemAdapter {
@@ -82,7 +87,7 @@ export class MeetingStore {
       const metaPath = this.path(folder, META_FILE)
       if (!(await this.adapter.exists(metaPath))) continue
       try {
-        entries.push({ folder, meta: JSON.parse(await this.adapter.read(metaPath)) as MeetingMeta })
+        entries.push({ folder, meta: await this.readMeta(folder) })
       } catch (error) {
         console.error(`[meeting-live] could not read ${metaPath}`, error)
       }
@@ -131,12 +136,25 @@ export class MeetingStore {
     return { folder: target, name }
   }
 
-  /** Atomic replace so a crash mid-write never leaves a truncated meeting.json. */
+  /** Replaces meeting.json so a crash mid-write never leaves it truncated, and a busy file on Windows only delays the write (see replaceFile). */
   async saveMeta(folder: string, meta: MeetingMeta): Promise<void> {
-    const target = this.fullPath(this.path(folder, META_FILE))
-    const temp = `${target}.tmp`
-    await fs.writeFile(temp, JSON.stringify(meta, null, 2), "utf8")
-    await fs.rename(temp, target)
+    await replaceFile(this.fullPath(this.path(folder, META_FILE)), JSON.stringify(meta, null, 2), this.io, this.backoffMs)
+  }
+
+  /** The meeting's metadata; when meeting.json cannot be read, the complete copy a write that was cut short left in meeting.json.tmp. */
+  async readMeta(folder: string): Promise<MeetingMeta> {
+    const metaPath = this.path(folder, META_FILE)
+    try {
+      return JSON.parse(await this.adapter.read(metaPath)) as MeetingMeta
+    } catch (error) {
+      const temp = tempPath(metaPath)
+      if (!(await this.adapter.exists(temp))) throw error
+      try {
+        return JSON.parse(await this.adapter.read(temp)) as MeetingMeta
+      } catch {
+        throw error
+      }
+    }
   }
 
   async readTranscript(path: string): Promise<string> {

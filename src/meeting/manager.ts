@@ -77,8 +77,7 @@ export class MeetingManager extends Events {
       if (!this.folders.has(id)) await this.reindex()
       const entry = this.folders.get(id)
       if (!entry) return undefined
-      const metaText = await this.store.app.vault.adapter.read(this.store.path(entry.folder, "meeting.json"))
-      const meta = JSON.parse(metaText) as MeetingMeta
+      const meta = await this.store.readMeta(entry.folder)
       upgradeSummaries(meta)
       const transcript = await this.store.readTranscript(this.store.path(entry.folder, meetingFile(meta.name, TRANSCRIPT_FILE)))
       const session = new MeetingSession(this.sessionEnv(), entry.folder, meta, transcript)
