@@ -5,10 +5,11 @@ import type { FileAsrProvider } from "../fileAsr.ts"
 import { deepgramProvider } from "./deepgram/index.ts"
 import { openAiCompatProvider } from "./openaiCompat/index.ts"
 import { sherpaProvider } from "./sherpa/index.ts"
+import { whisperLocalProvider } from "./whisperLocal/index.ts"
 import { volcProvider } from "./volc/index.ts"
 import type { AsrProvider, ProviderEnv } from "./types.ts"
 
-export const ASR_PROVIDERS: readonly AsrProvider[] = [volcProvider, deepgramProvider, openAiCompatProvider, sherpaProvider]
+export const ASR_PROVIDERS: readonly AsrProvider[] = [volcProvider, deepgramProvider, openAiCompatProvider, sherpaProvider, whisperLocalProvider]
 
 export function asrProvider(id: string): AsrProvider | undefined {
   return ASR_PROVIDERS.find((p) => p.id === id)

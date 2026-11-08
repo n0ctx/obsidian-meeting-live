@@ -1,6 +1,7 @@
 import { FuzzySuggestModal, Modal, Notice, TFile, setIcon, type App } from "obsidian"
 import { DECODABLE_EXTENSIONS } from "../audio/transcode.ts"
 import { t } from "../i18n/index.ts"
+import { isLoopbackHost } from "../url.ts"
 import { TranscribeJob, type AudioSource, type TranscribeDeps, type TranscribeJobs } from "./transcribeJob.ts"
 
 class AudioPicker extends FuzzySuggestModal<TFile> {
@@ -80,7 +81,7 @@ export class TranscribeFileModal extends Modal {
     const llm = this.deps.llm()
     contentEl.createDiv({
       cls: "ml-privacy",
-      text: t("transcribe.privacy", asr.name, asr.host, llm.target, this.deps.transcriptFolder(), Math.round(asr.capabilities.fileSizeLimit / 1024 / 1024)),
+      text: t(isLoopbackHost(asr.host) ? "transcribe.privacyLocal" : "transcribe.privacy", asr.name, asr.host, llm.target, this.deps.transcriptFolder(), Math.round(asr.capabilities.fileSizeLimit / 1024 / 1024)),
     })
     const footer = contentEl.createDiv({ cls: "modal-button-container" })
     footer.createEl("button", { text: t("common.cancel") }).addEventListener("click", () => this.close())

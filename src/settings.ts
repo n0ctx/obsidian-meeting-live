@@ -9,6 +9,7 @@ import { isNoteLanguage, type NoteLanguage } from "./i18n/index.ts"
 import { DEFAULT_DEEPGRAM, readDeepgramSettings, type DeepgramSettings } from "./asr/providers/deepgram/settings.ts"
 import { DEFAULT_OPENAI_COMPAT, readOpenAiCompatSettings, type OpenAiCompatSettings } from "./asr/providers/openaiCompat/settings.ts"
 import { DEFAULT_SHERPA, readSherpaSettings, type SherpaSettings } from "./asr/providers/sherpa/settings.ts"
+import { DEFAULT_WHISPER_LOCAL, readWhisperLocalSettings, type WhisperLocalSettings } from "./asr/providers/whisperLocal/settings.ts"
 import { DEFAULT_VOLC, VOLC_FLAT_KEYS, readVolcSettings, type VolcSettings } from "./asr/providers/volc/settings.ts"
 import { readSecret, type SecretReader } from "./secrets.ts"
 
@@ -25,7 +26,7 @@ export interface MeetingLiveSettings {
   /** Provider id used to transcribe recorded files. */
   fileProvider: string
   /** Configuration of each provider, kept apart so a provider can be added without touching the rest. */
-  providers: { volc: VolcSettings; deepgram: DeepgramSettings; openaiCompat: OpenAiCompatSettings; sherpa: SherpaSettings }
+  providers: { volc: VolcSettings; deepgram: DeepgramSettings; openaiCompat: OpenAiCompatSettings; sherpa: SherpaSettings; whisperLocal: WhisperLocalSettings }
   /** Recognition language for providers that take one. */
   asrLanguage: AsrLanguage
   /** Language of what the plugin writes into notes; auto follows the interface language. */
@@ -59,7 +60,7 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   voiceProcessing: false,
   liveProvider: "volc",
   fileProvider: "volc",
-  providers: { volc: DEFAULT_VOLC, deepgram: DEFAULT_DEEPGRAM, openaiCompat: DEFAULT_OPENAI_COMPAT, sherpa: DEFAULT_SHERPA },
+  providers: { volc: DEFAULT_VOLC, deepgram: DEFAULT_DEEPGRAM, openaiCompat: DEFAULT_OPENAI_COMPAT, sherpa: DEFAULT_SHERPA, whisperLocal: DEFAULT_WHISPER_LOCAL },
   asrLanguage: "auto",
   noteLanguage: "auto",
   hotwords: "",
@@ -116,6 +117,7 @@ export function loadSettings(raw: unknown): LoadedSettings {
   settings.providers.deepgram = readDeepgramSettings(storedProviders?.deepgram)
   settings.providers.openaiCompat = readOpenAiCompatSettings(storedProviders?.openaiCompat)
   settings.providers.sherpa = readSherpaSettings(storedProviders?.sherpa)
+  settings.providers.whisperLocal = readWhisperLocalSettings(storedProviders?.whisperLocal)
   if (Array.isArray(stored.consent)) settings.consent = stored.consent.filter((entry): entry is string => typeof entry === "string")
   // The single yes of 1.0.x covered the destinations configured at the time, which are the ones to be seeded.
   if (settings.consent.length === 0 && stored.consentAccepted === true) settings.consent = seedConsent(settings)
