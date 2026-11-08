@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { TFile } from "obsidian"
+import { volcFileProvider } from "../src/asr/providers/volc/file.ts"
 import { TranscribeJob, TranscribeJobs, type TranscribeDeps } from "../src/ui/transcribeJob.ts"
 
 // The stub's TFile takes a path; the real typings expose no public constructor.
@@ -28,8 +29,9 @@ test("a failed write-up retries without re-running recognition, then replaces th
   const { app, created } = fakeVault(files)
   let asrCalls = 0
   let llmCalls = 0
+  const asr = volcFileProvider({ apiKey: "k", appId: "", accessToken: "", resourceId: "volc.seedasr.auc" })
   const deps: TranscribeDeps = {
-    auth: () => ({}),
+    fileAsr: () => asr,
     post: async (url) => {
       asrCalls++
       return url.endsWith("/submit") ? { status: 200, headers: { "x-api-status-code": "20000000" }, text: "" } : { status: 200, headers: { "x-api-status-code": "20000000" }, text: JSON.stringify(asrPayload) }
@@ -50,7 +52,7 @@ test("a failed write-up retries without re-running recognition, then replaces th
     transcriptFolder: () => "Meetings/录音转写",
   }
   const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: Date.parse("2026-10-27"), read: async () => new Uint8Array([1, 2, 3]) }
-  const job = new TranscribeJob(app, deps, file("访谈.md"), source, { apiKey: "k", appId: "", accessToken: "", resourceId: "volc.seedasr.auc" }, { speakers: true, writeUp: true })
+  const job = new TranscribeJob(app, deps, file("访谈.md"), source, asr, { speakers: true, writeUp: true })
   const jobs = new TranscribeJobs(app, { addClass() {}, addEventListener() {}, toggleClass() {}, empty() {}, setText() {}, setAttr() {} } as never)
 
   // Resolve on the tracker's final notification, after the job has left the running set.

@@ -1,27 +1,30 @@
-import { DIRECT_FORMATS } from "../asr/fileAsr.ts"
 import { OggOpusMuxer, opusHead } from "./ogg.ts"
 
-/** Above this the base64 request body (×4/3) risks HTTP 413; such files are compressed first. */
-export const DIRECT_UPLOAD_LIMIT = 60 * 1024 * 1024
+/** Other formats Chromium can decode, transcoded locally before upload. */
+export const DECODABLE_EXTENSIONS = ["aac", "flac", "webm", "mov", "3gp"]
 const RATE = 16000
 const BITRATE = 32_000
 
 export interface PreparedAudio {
-  base64: string
+  data: Uint8Array
   format: string
   /** True when the file was re-encoded locally before upload. */
   transcoded: boolean
   bytes: number
 }
 
+export interface UploadLimits {
+  /** Lower-case file extension → format name the service accepts as it is. */
+  directFormats: Record<string, string>
+  maxBytes: number
+}
+
 /** Uploads the original file when the service accepts it; otherwise compresses to 16 kHz mono Opus. */
-export async function prepareAudio(data: Uint8Array, extension: string): Promise<PreparedAudio> {
-  const format = DIRECT_FORMATS[extension.toLowerCase()]
-  if (format && data.length <= DIRECT_UPLOAD_LIMIT) {
-    return { base64: Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("base64"), format, transcoded: false, bytes: data.length }
-  }
+export async function prepareAudio(data: Uint8Array, extension: string, limits: UploadLimits): Promise<PreparedAudio> {
+  const format = limits.directFormats[extension.toLowerCase()]
+  if (format && data.length <= limits.maxBytes) return { data, format, transcoded: false, bytes: data.length }
   const ogg = await toSpeechOpus(data)
-  return { base64: Buffer.from(ogg).toString("base64"), format: "ogg", transcoded: true, bytes: ogg.length }
+  return { data: ogg, format: "ogg", transcoded: true, bytes: ogg.length }
 }
 
 async function toSpeechOpus(data: Uint8Array): Promise<Uint8Array> {

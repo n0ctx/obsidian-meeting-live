@@ -1,5 +1,5 @@
 import { Events, Notice, TFile, type App } from "obsidian"
-import { renderInterviewRecord, speakerUtterances, transcribeFile, type FileAsrAuth, type FileAsrPost, type FileAsrResult } from "../asr/fileAsr.ts"
+import { renderInterviewRecord, speakerUtterances, transcribeFile, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
 import { appendJobBlock, hasJobBlock, newJobId, placeJobResult, removeJobBlock } from "../asr/jobBlock.ts"
 import { prepareAudio } from "../audio/transcode.ts"
 import type { LlmClient } from "../llm/client.ts"
@@ -17,7 +17,8 @@ export interface AudioSource {
 }
 
 export interface TranscribeDeps {
-  auth: () => { auth?: FileAsrAuth; problem?: string }
+  /** The recorded-file recognizer, resolved from the current settings. */
+  fileAsr: () => FileAsrProvider
   post: FileAsrPost
   llm: () => LlmClient
   prompt: () => string
@@ -49,18 +50,18 @@ export class TranscribeJob {
   readonly writeUp: boolean
   private readonly app: App
   private readonly deps: TranscribeDeps
-  private readonly auth: FileAsrAuth
+  private readonly file: FileAsrProvider
   private readonly speakers: boolean
   /** Kept after a failed write-up so a retry does not re-run (and re-bill) recognition. */
   private transcribed: { result: FileAsrResult; rawPath: string } | undefined
   onChange: (() => void) | undefined
 
-  constructor(app: App, deps: TranscribeDeps, target: TFile, source: AudioSource, auth: FileAsrAuth, options: { speakers: boolean; writeUp: boolean }) {
+  constructor(app: App, deps: TranscribeDeps, target: TFile, source: AudioSource, file: FileAsrProvider, options: { speakers: boolean; writeUp: boolean }) {
     this.app = app
     this.deps = deps
     this.target = target
     this.source = source
-    this.auth = auth
+    this.file = file
     this.speakers = options.speakers
     this.writeUp = options.writeUp
   }
@@ -93,8 +94,8 @@ export class TranscribeJob {
     try {
       if (!this.transcribed) {
         this.setStage("reading")
-        const audio = await prepareAudio(await this.source.read(), this.source.extension)
-        const result = await transcribeFile(this.auth, audio, {
+        const audio = await prepareAudio(await this.source.read(), this.source.extension, { directFormats: this.file.directFormats, maxBytes: this.file.capabilities.fileSizeLimit })
+        const result = await transcribeFile(this.file, audio, {
           speakers: this.speakers,
           post: this.deps.post,
           onStage: (s) => this.setStage(s.stage === "uploading" ? "uploading" : "recognizing"),
@@ -118,7 +119,7 @@ export class TranscribeJob {
     const base = `${folder}/${this.target.basename} 原始转写`
     let path = `${base}.md`
     for (let n = 2; this.app.vault.getAbstractFileByPath(path); n++) path = `${base} ${n}.md`
-    const body = renderInterviewRecord(result, { title: `${this.target.basename} 原始转写`, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), resourceId: this.auth.resourceId }, true)
+    const body = renderInterviewRecord(result, { title: `${this.target.basename} 原始转写`, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), provider: this.file.name, model: this.file.model }, true)
     await this.app.vault.create(path, `---\ntype: audio-transcript\nnote: "[[${this.target.path.replace(/\.md$/, "")}]]"\ndate: ${formatDate(new Date(this.source.modified))}\nsource: "${this.source.name}"\n---\n\n${body}`)
     return path
   }
@@ -150,7 +151,7 @@ export class TranscribeJob {
   private async appendTranscript(result: FileAsrResult): Promise<void> {
     const record = renderInterviewRecord(
       result,
-      { title: this.target.basename, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), resourceId: this.auth.resourceId },
+      { title: this.target.basename, source: this.source.name, vaultPath: this.source.vaultPath, transcribedAt: formatDateTime(new Date()), provider: this.file.name, model: this.file.model },
       false,
     )
     await this.place(record)

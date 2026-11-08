@@ -1,4 +1,5 @@
 import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
+import { volcFileProvider } from "./asr/providers/volc/file.ts"
 import { volcConfigProblem, volcConnector } from "./asr/providers/volc/live.ts"
 import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
@@ -209,10 +210,9 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     new TranscribeFileModal(
       this.app,
       {
-        auth: () => {
+        fileAsr: () => {
           const config = volcConfig(this.app, this.settings)
-          if (!config.apiKey && !(config.appId && config.accessToken)) return { problem: "未配置火山引擎凭证，请先在插件设置中填写" }
-          return { auth: { apiKey: config.apiKey, appId: config.appId, accessToken: config.accessToken, resourceId: this.settings.fileAsrResourceId.trim() || "volc.seedasr.auc" } }
+          return volcFileProvider({ apiKey: config.apiKey, appId: config.appId, accessToken: config.accessToken, resourceId: this.settings.fileAsrResourceId.trim() || "volc.seedasr.auc" })
         },
         post: this.filePost,
         llm: () => this.llm(),
