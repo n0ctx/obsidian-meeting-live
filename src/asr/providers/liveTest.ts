@@ -1,5 +1,3 @@
-import { Notice } from "obsidian"
-import { t } from "../../i18n/index.ts"
 import { CAUTIOUS_LIVE_PACING, type AsrConnect, type LivePacing } from "../contract.ts"
 
 const SECOND_OF_AUDIO = 16_000
@@ -41,17 +39,5 @@ export async function runLiveTest(connect: AsrConnect, pacing: LivePacing = CAUT
     return drop ? { ok: false, message: drop } : { ok: true, logId }
   } catch (error) {
     return { ok: false, message: (error as Error).message }
-  }
-}
-
-/** The Test button of a provider's settings: runs the test and says the outcome in a notice. */
-export async function testLiveConnection(connect: AsrConnect, pacing: LivePacing, name: string, button: HTMLButtonElement): Promise<void> {
-  button.disabled = true
-  try {
-    const outcome = await runLiveTest(connect, pacing)
-    if (outcome.ok) new Notice(t("liveTest.ok", name, outcome.logId ?? ""))
-    else new Notice(outcome.message ?? t("liveTest.failed", name), 10000)
-  } finally {
-    button.disabled = false
   }
 }

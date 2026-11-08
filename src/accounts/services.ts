@@ -30,7 +30,7 @@ export interface ServiceDef {
   readonly keyless?: true
   /** The add dialog asks for an address: `required` when there is no sensible default, `prefilled` when there is one. */
   readonly address?: "required" | "prefilled"
-  /** The option that holds that address; `baseUrl` unless the speech adapter calls it something else. */
+  /** The option that holds the service's address, where the adapter calls it something other than `baseUrl`. */
   readonly addressKey?: string
   /** The service's own settings with their defaults. Language-model services carry their address as `baseUrl`. */
   options(region: string): Record<string, unknown>
@@ -105,6 +105,7 @@ export const SERVICES: readonly ServiceDef[] = [
       return t("service.volc")
     },
     asr: "volc",
+    addressKey: "endpoint",
     keyUrl: () => "https://console.volcengine.com/speech/new/setting/apikeys?projectName=default",
     options: () => withoutKey(DEFAULT_VOLC),
   },
@@ -114,6 +115,7 @@ export const SERVICES: readonly ServiceDef[] = [
       return t("provider.deepgram")
     },
     asr: "deepgram",
+    addressKey: "endpoint",
     keyUrl: () => "https://console.deepgram.com",
     options: () => withoutKey(DEFAULT_DEEPGRAM),
   },
@@ -198,5 +200,5 @@ export function serviceForPreset(presetId: string): { def: ServiceDef; region: s
   return undefined
 }
 
-/** Where an account's address is kept: `baseUrl` for the services that have one, `endpoint` for the local recognizer, nowhere for the rest. */
-export const addressKeyOf = (def: ServiceDef): string | undefined => (def.address ? (def.addressKey ?? "baseUrl") : undefined)
+/** The option that holds an account's server address: `baseUrl` for services with a language model or a prefilled address, `endpoint` for the ones that call it that. */
+export const addressKeyOf = (def: ServiceDef): string | undefined => def.addressKey ?? (def.presets || def.address ? "baseUrl" : undefined)

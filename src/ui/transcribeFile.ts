@@ -56,7 +56,8 @@ export class TranscribeFileModal extends Modal {
     const extensions = [...Object.keys(asr.directFormats), ...DECODABLE_EXTENSIONS]
     contentEl.createDiv({
       cls: "ml-consent-text",
-      text: t("transcribe.intro", asr.name, asr.capabilities.diarization, this.target.basename),
+      // With no account for recorded files there is no service to name; say what is missing instead.
+      text: asr.name ? t("transcribe.intro", asr.name, asr.capabilities.diarization, this.target.basename) : (asr.problem ?? ""),
     })
 
     const pick = contentEl.createDiv({ cls: "ml-file-pick" })

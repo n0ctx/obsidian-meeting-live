@@ -3,7 +3,7 @@ import { inBackground } from "./background.ts"
 import { ensureConsentFor, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
 import { t } from "./i18n/index.ts"
 import { resolveFile, resolveLive, type ResolveEnv } from "./asr/providers/registry.ts"
-import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
+import { compatibleClient, type HttpGet, type HttpPost, type LlmClient } from "./llm/client.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import { MeetingManager } from "./meeting/manager.ts"
 import type { MeetingSession } from "./meeting/session.ts"
@@ -30,9 +30,15 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   manager!: MeetingManager
   private jobs!: TranscribeJobs
   private statusEl!: HTMLElement
+  private settingTab!: MeetingLiveSettingTab
 
   readonly post: HttpPost = async (url, headers, body) => {
     const response = await requestUrl({ url, method: "POST", headers, body, throw: false })
+    return { status: response.status, text: response.text }
+  }
+
+  readonly get: HttpGet = async (url, headers) => {
+    const response = await requestUrl({ url, method: "GET", headers, throw: false })
     return { status: response.status, text: response.text }
   }
 
@@ -78,7 +84,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
         }, () => this.transcriptFolder().split("/").pop() ?? ""),
       )
     })
-    this.addSettingTab(new MeetingLiveSettingTab(this.app, this))
+    this.settingTab = new MeetingLiveSettingTab(this.app, this)
+    this.addSettingTab(this.settingTab)
     this.registerCommands()
 
     this.statusEl = this.addStatusBarItem()
@@ -170,7 +177,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     await withLlmConsent((kinds) => this.ensureConsent(kinds), () => Promise.all([session.runQueue(), session.updateOverview()]))
   }
 
-  openSettings(): void {
+  openSettings(addAccount = false): void {
+    this.settingTab.addFormOpen = addAccount
     const setting = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting
     setting?.open()
     setting?.openTabById(this.manifest.id)

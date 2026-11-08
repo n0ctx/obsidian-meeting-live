@@ -1,26 +1,74 @@
 import { Notice, PluginSettingTab, Setting, type App } from "obsidian"
-import { inBackground } from "./background.ts"
+import { type Account } from "./accounts/account.ts"
+import { freeCheck, hasFreeCheck, liveTestOf, paidCheck, type CheckDeps, type CheckResult } from "./accounts/check.ts"
+import { accountLlmConfig } from "./accounts/llm.ts"
+import { addAccount, chooseLlmAccount, createAccount, isOwnSecret, removeAccount, secretIdFor } from "./accounts/manage.ts"
+import { accountLabel, accountRoles, accountsFor, roleAccount } from "./accounts/roles.ts"
+import { SERVICES, addressKeyOf, defaultRegion, presetOfService, serviceDef, type ServiceDef } from "./accounts/services.ts"
 import { ASR_LANGUAGES, asrLanguageName, type AsrLanguage } from "./asr/language.ts"
+import { providerOf } from "./asr/providers/registry.ts"
+import { volcHandshake } from "./asr/providers/volc/live.ts"
+import { inBackground } from "./background.ts"
 import { liveIsLocal } from "./consent.ts"
-import { asrProvider, fileProviders, liveProviders } from "./asr/providers/registry.ts"
-import type { AsrProvider } from "./asr/providers/types.ts"
 import { listInputDevices } from "./audio/capture.ts"
 import { isNoteLanguage, t } from "./i18n/index.ts"
+import type { HttpGet, HttpPost } from "./llm/client.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
-import { LLM_PRESETS, presetById } from "./llm/presets.ts"
+import { curatedModels, listModels } from "./llm/models.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
-import type MeetingLivePlugin from "./main.ts"
 import type { MeetingLiveSettings } from "./settings.ts"
 import { platformText } from "./platform.ts"
-import { secretField, textField } from "./ui/settingFields.ts"
+import { readSecret } from "./secrets.ts"
+import { textField } from "./ui/settingFields.ts"
 
-/** A reply to this proves the endpoint, the key and the model work together; it is English so that it asks the same of every model. */
-const LLM_TEST_PROMPT = "Reply with only the two letters: OK"
+/** What the settings page needs from the plugin: the settings and a way to save them, and the two HTTP calls checks make. */
+export interface SettingsHost {
+  settings: MeetingLiveSettings
+  saveSettings(): Promise<void>
+  get: HttpGet
+  post: HttpPost
+}
+
+const OTHER_MODEL = "\u0000other"
+
+type Status = { kind: "ok" | "failed" | "checking" | "manual"; text: string }
+
+/** What the add form holds before anything is stored. */
+interface Draft {
+  service: string
+  region: string
+  address: string
+  key: string
+  more: boolean
+  /** The last check failed: pressing Add again adds the account anyway. */
+  failed: boolean
+  message: string
+}
+
+/** The models offered for the language-model account, and where they came from. */
+interface ModelList {
+  models: string[]
+  source: "fetched" | "fallback" | "failed"
+}
 
 export class MeetingLiveSettingTab extends PluginSettingTab {
-  private readonly plugin: MeetingLivePlugin
+  private readonly plugin: SettingsHost
+  private readonly status = new Map<string, Status>()
+  private readonly modelLists = new Map<string, ModelList>()
+  /** Accounts whose check is the one that may count as usage, because the service documents no free one. */
+  private readonly needsTest = new Set<string>()
+  private readonly open = new Set<string>()
+  private globalAdvanced = false
+  private modelOther = false
+  /** The add form is showing; set from outside to land on it, as the card's "Add account" does. */
+  addFormOpen = false
+  private draft: Draft | undefined
+  private privacyEl!: HTMLElement
+  private accountsEl!: HTMLElement
+  private rolesEl!: HTMLElement
+  private advancedEl!: HTMLElement
 
-  constructor(app: App, plugin: MeetingLivePlugin) {
+  constructor(app: App, plugin: SettingsHost & ConstructorParameters<typeof PluginSettingTab>[1]) {
     super(app, plugin)
     this.plugin = plugin
   }
@@ -33,14 +81,29 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     inBackground(this.plugin.saveSettings())
   }
 
+  private deps(): CheckDeps {
+    return {
+      get: this.plugin.get,
+      post: this.plugin.post,
+      volcHandshake,
+      secrets: this.app.secretStorage,
+      liveTest: (account, key) => liveTestOf(account, key, this.s),
+    }
+  }
+
   override display(): void {
     const { containerEl } = this
     containerEl.empty()
     containerEl.addClass("ml-settings")
+    if (this.addFormOpen) this.draft ??= this.newDraft(SERVICES[0])
 
-    const privacy = containerEl.createDiv({ cls: "ml-settings-privacy" })
-    privacy.createEl("strong", { text: t("settings.privacy.title") })
-    privacy.createSpan({ text: t(liveIsLocal(this.s) ? "settings.privacy.bodyLocal" : "settings.privacy.body", asrProvider(this.s.liveProvider)?.name ?? this.s.liveProvider) })
+    this.privacyEl = containerEl.createDiv({ cls: "ml-settings-privacy" })
+    new Setting(containerEl).setName(t("settings.accounts")).setHeading()
+    this.accountsEl = containerEl.createDiv()
+    this.rolesEl = containerEl.createDiv()
+    this.renderPrivacy()
+    this.renderAccounts()
+    this.renderRoles()
 
     new Setting(containerEl).setName(t("settings.recording")).setHeading()
     textField(new Setting(containerEl).setName(t("settings.folder.name")).setDesc(t("settings.folder.desc")), this.s, "folder", () => this.save(), "Meetings")
@@ -59,23 +122,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
             this.save()
           }),
       )
-    new Setting(containerEl)
-      .setName(t("settings.format.name"))
-      .setDesc(t("settings.format.desc"))
-      .addDropdown((d) =>
-        d
-          .addOption("ogg", t("settings.format.opus"))
-          .addOption("wav", t("settings.format.wav"))
-          .setValue(this.s.audioFormat)
-          .onChange((v) => {
-            this.s.audioFormat = v as MeetingLiveSettings["audioFormat"]
-            this.save()
-          }),
-      )
-    const device = new Setting(containerEl)
-      .setName(t("settings.device.name"))
-      .setDesc(platformText("systemAudio"))
-    device.addDropdown(async (d) => {
+    new Setting(containerEl).setName(t("settings.device.name")).setDesc(platformText("systemAudio")).addDropdown(async (d) => {
       d.addOption("", t("settings.device.default"))
       try {
         for (const dev of await listInputDevices()) d.addOption(dev.deviceId, dev.label || t("settings.device.unnamed"))
@@ -87,21 +134,6 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
         this.save()
       })
     })
-    new Setting(containerEl)
-      .setName(t("settings.voice.name"))
-      .setDesc(t("settings.voice.desc"))
-      .addToggle((field) =>
-        field.setValue(this.s.voiceProcessing).onChange((v) => {
-          this.s.voiceProcessing = v
-          this.save()
-        }),
-      )
-
-    this.asrSettings(containerEl)
-
-    new Setting(containerEl).setName(t("settings.llm")).setHeading()
-    this.compatibleSettings(containerEl)
-    new Setting(containerEl).setName(t("settings.llm.test")).addButton((b) => b.setButtonText(t("settings.test")).onClick(() => void this.testLlm(b.buttonEl)))
 
     new Setting(containerEl).setName(t("settings.summary")).setHeading()
     new Setting(containerEl).setName(t("settings.auto.name")).addToggle((field) =>
@@ -122,19 +154,492 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
             this.save()
           }),
       )
-    this.promptSetting(t("settings.focus.name"), t("settings.focus.desc"), "summaryFocus", DEFAULT_SUMMARY_FOCUS, 5)
+    this.promptSetting(containerEl, t("settings.focus.name"), t("settings.focus.desc"), "summaryFocus", DEFAULT_SUMMARY_FOCUS, 5)
 
     new Setting(containerEl).setName(t("settings.minutes")).setHeading()
-    this.promptSetting(t("settings.minutesPrompt.name"), t("settings.minutesPrompt.desc"), "minutesPrompt", DEFAULT_MINUTES_PROMPT, 12)
+    this.promptSetting(containerEl, t("settings.minutesPrompt.name"), t("settings.minutesPrompt.desc"), "minutesPrompt", DEFAULT_MINUTES_PROMPT, 12)
+
+    this.advancedEl = containerEl.createDiv()
+    this.renderGlobalAdvanced()
   }
 
-  private asrSettings(containerEl: HTMLElement): void {
+  // ---------------------------------------------------------------- privacy
+
+  private renderPrivacy(): void {
+    this.privacyEl.empty()
+    this.privacyEl.createEl("strong", { text: t("settings.privacy.title") })
+    const live = roleAccount(this.s, "live")
+    const text = !live ? t("settings.privacy.bodyAccounts") : t(liveIsLocal(this.s) ? "settings.privacy.bodyLocal" : "settings.privacy.body", accountLabel(this.s.accounts, live))
+    this.privacyEl.createSpan({ text })
+  }
+
+  // ---------------------------------------------------------------- accounts
+
+  private renderAccounts(): void {
+    const el = this.accountsEl
+    el.empty()
+    if (this.s.accounts.length === 0 && !this.draft) el.createDiv({ cls: "setting-item-description ml-settings-note", text: t("settings.accounts.empty") })
+    for (const account of this.s.accounts) this.renderAccount(el, account)
+    if (this.draft) this.renderDraft(el, this.draft)
+    else {
+      new Setting(el)
+        .setName(t("settings.accounts.add.name"))
+        .setDesc(t("settings.accounts.add.desc"))
+        .addButton((b) =>
+          b
+            .setButtonText(t("settings.accounts.add.button"))
+            .setCta()
+            .onClick(() => {
+              this.draft = this.newDraft(SERVICES[0])
+              this.renderAccounts()
+            }),
+        )
+    }
+  }
+
+  private roleNames(account: Account): string {
+    const can = accountRoles(account)
+    return (["live", "file", "llm"] as const)
+      .filter((role) => can[role])
+      .map((role) => t(`settings.role.${role}`))
+      .join(t("settings.role.and"))
+  }
+
+  private renderAccount(parent: HTMLElement, account: Account): void {
+    const status = this.status.get(account.id)
+    const roles = this.roleNames(account)
+    const setting = new Setting(parent).setName(accountLabel(this.s.accounts, account))
+    setting.descEl.createDiv({ text: roles ? t("settings.account.serves", roles) : t("settings.account.servesNothing") })
+    setting.descEl.createDiv({ cls: `ml-account-status is-${status?.kind ?? "unchecked"}`, text: status?.text ?? t("settings.status.unchecked") })
+    const paid = this.needsTest.has(account.id) || !hasFreeCheck(account)
+    setting
+      .addButton((b) =>
+        b
+          .setButtonText(paid ? t("settings.test.manual") : t("settings.check"))
+          .setDisabled(status?.kind === "checking")
+          .onClick(() => inBackground(this.check(account, paid))),
+      )
+      .addExtraButton((b) =>
+        b
+          .setIcon("settings")
+          .setTooltip(t("settings.account.advanced"))
+          .onClick(() => {
+            if (!this.open.delete(account.id)) this.open.add(account.id)
+            this.renderAccounts()
+          }),
+      )
+      .addExtraButton((b) =>
+        b
+          .setIcon("trash")
+          .setTooltip(t("settings.remove"))
+          .onClick(() => this.remove(account)),
+      )
+    if (this.open.has(account.id)) this.renderAccountAdvanced(parent.createDiv({ cls: "ml-advanced" }), account)
+  }
+
+  /** Checks an account's key: the free call where the service documents one, or the Test that may count as usage when asked for it. */
+  private async check(account: Account, paid: boolean): Promise<void> {
+    this.status.set(account.id, { kind: "checking", text: t("settings.status.checking") })
+    this.renderAccounts()
+    const key = readSecret(this.app.secretStorage, account.apiKeySecret)
+    const model = this.s.roles.llm.account === account.id ? this.s.roles.llm.model : undefined
+    const result = paid ? await paidCheck(account, key, this.deps(), model) : await freeCheck(account, key, this.deps())
+    this.applyResult(account, result)
+    this.renderAccounts()
+    this.renderRoles()
+  }
+
+  private applyResult(account: Account, result: CheckResult): void {
+    if (result.state === "manual") {
+      this.needsTest.add(account.id)
+      this.status.set(account.id, { kind: "manual", text: t("settings.status.manual") })
+      return
+    }
+    if (result.state === "failed") {
+      this.status.set(account.id, { kind: "failed", text: t("settings.status.failed", result.message) })
+      return
+    }
+    this.needsTest.delete(account.id)
+    if (result.options) {
+      Object.assign(account.options, result.options)
+      this.save()
+    }
+    if (result.models?.length) this.modelLists.set(account.id, { models: result.models, source: "fetched" })
+    this.status.set(account.id, { kind: "ok", text: result.models?.length ? t("settings.status.models", result.models.length) : (result.note ?? t("settings.status.ok")) })
+  }
+
+  private remove(account: Account): void {
+    const label = accountLabel(this.s.accounts, account)
+    removeAccount(this.s, account.id)
+    // A key the plugin stored is cleared with its account. One the user named (the ones 1.0.1 read) stays: 1.0.1 and other plugins may still use it.
+    const shared = this.s.accounts.some((a) => a.apiKeySecret === account.apiKeySecret)
+    if (isOwnSecret(account.apiKeySecret) && !shared) this.app.secretStorage.setSecret(account.apiKeySecret, "")
+    this.status.delete(account.id)
+    this.modelLists.delete(account.id)
+    this.needsTest.delete(account.id)
+    this.open.delete(account.id)
+    this.save()
+    new Notice(t("settings.removed", label))
+    this.renderPrivacy()
+    this.renderAccounts()
+    this.renderRoles()
+  }
+
+  // ---------------------------------------------------------------- the add form
+
+  private newDraft(def: ServiceDef): Draft {
+    const region = defaultRegion(def)
+    const key = addressKeyOf(def)
+    return { service: def.id, region, address: key && def.address === "prefilled" ? String(def.options(region)[key] ?? "") : "", key: "", more: false, failed: false, message: "" }
+  }
+
+  private renderDraft(parent: HTMLElement, draft: Draft): void {
+    const def = serviceDef(draft.service)!
+    const box = parent.createDiv({ cls: "ml-add-form" })
+    const changed = () => {
+      draft.failed = false
+      draft.message = ""
+    }
+    new Setting(box).setName(t("settings.add.service")).addDropdown((d) => {
+      for (const service of SERVICES) d.addOption(service.id, service.name)
+      d.setValue(draft.service).onChange((id) => {
+        const next = serviceDef(id)
+        if (!next) return
+        this.draft = { ...this.newDraft(next), key: draft.key }
+        this.renderAccounts()
+      })
+    })
+    if (def.regions) {
+      const regions = def.regions
+      new Setting(box)
+        .setName(t("settings.add.region"))
+        .setDesc(t("settings.add.region.desc"))
+        .addDropdown((d) => {
+          for (const region of regions) d.addOption(region.id, region.label)
+          d.setValue(draft.region).onChange((v) => {
+            draft.region = v
+            changed()
+          })
+        })
+    }
+    const addressKey = addressKeyOf(def)
+    if (addressKey && (def.address || draft.more)) this.draftAddress(box, def, draft, changed)
+    if (!def.keyless || def.presets) {
+      const setting = new Setting(box).setName(t("settings.add.key"))
+      setting.descEl.setText(def.keyless ? t("settings.add.key.optional") : "")
+      const url = def.keyUrl(draft.region)
+      if (url) setting.descEl.createEl("a", { text: t("settings.add.key.get"), href: url })
+      setting.addText((field) => {
+        field.inputEl.type = "password"
+        field.setPlaceholder(t("settings.add.key.placeholder")).setValue(draft.key).onChange((v) => {
+          draft.key = v.trim()
+          changed()
+        })
+      })
+    } else box.createDiv({ cls: "setting-item-description ml-settings-note", text: t("settings.add.key.none") })
+    const message = box.createDiv({ cls: `ml-add-message${draft.failed ? " is-failed" : ""}`, text: draft.message })
+    new Setting(box)
+      .addButton((b) => b.setButtonText(draft.failed ? t("settings.add.anyway") : t("settings.add.submit")).setCta().onClick(() => inBackground(this.submitDraft(draft, message))))
+      .addButton((b) =>
+        b.setButtonText(t("settings.add.cancel")).onClick(() => {
+          this.draft = undefined
+          this.addFormOpen = false
+          this.renderAccounts()
+        }),
+      )
+      .addExtraButton((b) =>
+        b
+          .setIcon("settings")
+          .setTooltip(t("settings.add.more"))
+          .onClick(() => {
+            draft.more = !draft.more
+            this.renderAccounts()
+          }),
+      )
+  }
+
+  private draftAddress(box: HTMLElement, def: ServiceDef, draft: Draft, changed: () => void): void {
+    new Setting(box)
+      .setName(t("settings.add.address"))
+      .setDesc(def.address === "required" ? t("settings.add.address.required") : def.address === "prefilled" ? t("settings.add.address.prefilled") : t("settings.account.address.desc"))
+      .addText((field) => {
+        const key = addressKeyOf(def)!
+        field.setPlaceholder(String(def.options(draft.region)[key] ?? "")).setValue(draft.address).onChange((v) => {
+          draft.address = v.trim()
+          changed()
+        })
+      })
+  }
+
+  /** Checks what was typed before storing anything: a key that fails is not saved unless the user adds the account anyway. */
+  private async submitDraft(draft: Draft, message: HTMLElement): Promise<void> {
+    const def = serviceDef(draft.service)!
+    const addressKey = addressKeyOf(def)
+    if (!def.keyless && !draft.key) return this.say(draft, message, t("settings.add.needKey"))
+    if (def.address === "required" && !draft.address) return this.say(draft, message, t("settings.add.needAddress"))
+    const options = addressKey && draft.address ? { [addressKey]: draft.address } : {}
+    const account = createAccount(this.s.accounts, def, draft.region, { options })
+    this.say(draft, message, t("settings.add.checking"), false)
+    // Pressing Add again after a failed check adds the account as it is, unchecked.
+    const forced = draft.failed
+    const result: CheckResult = forced ? { state: "manual" } : await freeCheck(account, draft.key, this.deps())
+    if (result.state === "failed") {
+      draft.failed = true
+      return this.say(draft, message, result.message)
+    }
+    if (draft.key || !def.keyless) {
+      account.apiKeySecret = secretIdFor(account.id)
+      this.app.secretStorage.setSecret(account.apiKeySecret, draft.key)
+    }
+    addAccount(this.s, account)
+    // A forced add was never checked, so it says so rather than claiming a pass.
+    if (forced) this.status.set(account.id, { kind: "failed", text: t("settings.status.unchecked") })
+    else this.applyResult(account, result)
+    this.draft = undefined
+    this.addFormOpen = false
+    this.save()
+    new Notice(t("settings.add.done", accountLabel(this.s.accounts, account)))
+    this.renderPrivacy()
+    this.renderAccounts()
+    this.renderRoles()
+  }
+
+  private say(draft: Draft, el: HTMLElement, text: string, problem = true): void {
+    draft.message = text
+    el.setText(text)
+    el.toggleClass("is-failed", problem)
+  }
+
+  // ---------------------------------------------------------------- one account's advanced settings
+
+  private renderAccountAdvanced(el: HTMLElement, account: Account): void {
+    const def = serviceDef(account.service)
+    if (!def) return
+    const save = () => this.save()
+    textField(new Setting(el).setName(t("settings.account.name")).setDesc(t("settings.account.name.desc")), account, "name", () => {
+      save()
+      this.renderRoles()
+    }, serviceDef(account.service)?.name ?? "")
+    if (!def.keyless || def.presets) this.keyReplaceField(el, account)
+    const addressKey = addressKeyOf(def)
+    if (addressKey) textField(new Setting(el).setName(t("settings.account.address")).setDesc(t("settings.account.address.desc")), account.options, addressKey, save, String(def.options("")[addressKey] ?? ""))
+    providerOf(account)?.renderAdvanced({ app: this.app, containerEl: el, account, save, refresh: () => this.renderAccounts() })
+    const preset = presetOfService(def, account.options)
+    if (preset) this.llmAdvanced(el, account, preset)
+  }
+
+  private keyReplaceField(el: HTMLElement, account: Account): void {
+    new Setting(el)
+      .setName(t("settings.account.key"))
+      .setDesc(t("settings.account.key.desc"))
+      .addText((field) => {
+        field.inputEl.type = "password"
+        field.setPlaceholder(account.apiKeySecret ? t("settings.account.key.saved") : t("settings.add.key.placeholder"))
+        // Committed when the field loses focus, not per keystroke: each commit replaces the stored key.
+        field.inputEl.addEventListener("change", () => {
+          const key = field.inputEl.value.trim()
+          if (!key) return
+          // The secret the user named stays as it was, since 1.0.1 may still read it; the new key goes under an id of the plugin's own.
+          if (!isOwnSecret(account.apiKeySecret)) account.apiKeySecret = secretIdFor(account.id)
+          this.app.secretStorage.setSecret(account.apiKeySecret, key)
+          field.inputEl.value = ""
+          this.save()
+          inBackground(this.check(account, false))
+        })
+      })
+  }
+
+  private llmAdvanced(el: HTMLElement, account: Account, preset: NonNullable<ReturnType<typeof presetOfService>>): void {
+    const llm = account.llm
+    if (preset.customHeaders) {
+      new Setting(el)
+        .setName(t("settings.llm.headers.name"))
+        .setDesc(t("settings.llm.headers.desc"))
+        .addTextArea((field) => {
+          field.inputEl.rows = 3
+          field.setValue(llm.headers).onChange((v) => {
+            llm.headers = v
+            this.save()
+          })
+        })
+    }
+    if (preset.effort !== "none") {
+      new Setting(el)
+        .setName(t("settings.llm.effort.name"))
+        .setDesc(preset.effort === "deepseek" ? t("settings.llm.effort.deepseek") : t("settings.llm.effort.plain"))
+        .addDropdown((d) =>
+          d
+            .addOption("off", t("settings.llm.effort.off"))
+            .addOption("low", t("settings.llm.effort.low"))
+            .addOption("medium", t("settings.llm.effort.medium"))
+            .addOption("high", t("settings.llm.effort.high"))
+            .setValue(llm.effort)
+            .onChange((v) => {
+              llm.effort = v as Account["llm"]["effort"]
+              this.save()
+            }),
+        )
+    }
+    if (preset.temperature) {
+      new Setting(el)
+        .setName(t("settings.llm.temperature.name"))
+        .setDesc(t("settings.llm.temperature.desc"))
+        .addSlider((slider) =>
+          slider
+            .setLimits(0, 1, 0.05)
+            .setValue(llm.temperature)
+            .onChange((v) => {
+              llm.temperature = v
+              this.save()
+            }),
+        )
+    }
+    new Setting(el)
+      .setName(t("settings.llm.limit.name"))
+      .setDesc(t("settings.llm.limit.desc", preset.name, preset.inputTokens.toLocaleString()))
+      .addText((field) =>
+        field
+          .setPlaceholder(String(preset.inputTokens))
+          .setValue(llm.inputLimit > 0 ? String(llm.inputLimit) : "")
+          .onChange((v) => {
+            const n = Math.floor(Number(v))
+            llm.inputLimit = Number.isFinite(n) && n > 0 ? n : 0
+            this.save()
+          }),
+      )
+  }
+
+  // ---------------------------------------------------------------- roles
+
+  private renderRoles(): void {
+    const el = this.rolesEl
+    el.empty()
+    if (this.s.accounts.length === 0) return
+    new Setting(el).setName(t("settings.roles")).setHeading()
+    this.roleChoice(el, "live")
+    this.roleChoice(el, "file")
+    this.roleChoice(el, "llm")
+    const llm = roleAccount(this.s, "llm")
+    if (llm) this.modelChoice(el, llm)
+  }
+
+  private roleChoice(el: HTMLElement, role: "live" | "file" | "llm"): void {
+    const candidates = accountsFor(this.s.accounts, role)
+    const chosen = roleAccount(this.s, role)
+    const setting = new Setting(el).setName(t(`settings.roles.${role}.name`)).setDesc(candidates.length ? t(`settings.roles.${role}.desc`) : t("settings.roles.noneAvailable"))
+    setting.addDropdown((d) => {
+      d.addOption("", candidates.length ? t("settings.roles.none") : t("settings.roles.noneAvailable"))
+      for (const account of candidates) d.addOption(account.id, accountLabel(this.s.accounts, account))
+      d.setValue(chosen?.id ?? "").onChange((id) => {
+        const account = candidates.find((a) => a.id === id)
+        if (role === "llm") {
+          chooseLlmAccount(this.s, account)
+          this.modelOther = false
+          this.save()
+          this.renderRoles()
+          // Choosing the account is the moment the model list is asked for.
+          if (account) inBackground(this.refreshModels(account))
+        } else {
+          this.s.roles[role] = account?.id ?? ""
+          this.save()
+          this.renderPrivacy()
+        }
+      })
+    })
+  }
+
+  private modelChoice(el: HTMLElement, account: Account): void {
+    const preset = presetOfService(serviceDef(account.service)!, account.options)!
+    const cached = this.modelLists.get(account.id)
+    const current = this.s.roles.llm.model
+    const models = cached?.models ?? curatedModels(preset.id, preset.model)
+    const other = this.modelOther || !models.includes(current)
+    const desc = !cached ? t("settings.model.desc.fallback") : cached.source === "fetched" ? t("settings.model.desc.fetched", cached.models.length) : cached.source === "failed" ? t("settings.model.desc.failed") : t("settings.model.desc.fallback")
+    const setting = new Setting(el).setName(t("settings.model.name")).setDesc(preset.id === "azure" ? t("settings.llm.model.azure") : desc)
+    setting.addDropdown((d) => {
+      for (const model of models) d.addOption(model, model)
+      d.addOption(OTHER_MODEL, t("settings.model.other"))
+      d.setValue(other ? OTHER_MODEL : current).onChange((v) => {
+        this.modelOther = v === OTHER_MODEL
+        if (!this.modelOther) {
+          this.s.roles.llm.model = v
+          this.save()
+        }
+        this.renderRoles()
+      })
+    })
+    if (other) {
+      setting.addText((field) =>
+        field.setPlaceholder(t("settings.model.other.placeholder")).setValue(current).onChange((v) => {
+          this.s.roles.llm.model = v.trim()
+          this.save()
+        }),
+      )
+    }
+    setting.addExtraButton((b) =>
+      b
+        .setIcon("refresh-cw")
+        .setTooltip(t("settings.model.refresh"))
+        .onClick(() => inBackground(this.refreshModels(account))),
+    )
+  }
+
+  /** Asks the account's service for its models. A failed or missing list falls back to the short list, and the page says which. */
+  private async refreshModels(account: Account): Promise<void> {
+    const config = accountLlmConfig(account, readSecret(this.app.secretStorage, account.apiKeySecret), this.s.roles.llm.model)
+    if (!config) return
+    const outcome = await listModels(config.preset.id, config, this.plugin.get)
+    if (outcome.state === "ok" && outcome.models.length) this.modelLists.set(account.id, { models: outcome.models, source: "fetched" })
+    else this.modelLists.set(account.id, { models: curatedModels(config.preset.id, config.preset.model), source: outcome.state === "ok" || outcome.state === "none" ? "fallback" : "failed" })
+    if (outcome.state === "rejected") this.status.set(account.id, { kind: "failed", text: t("settings.status.failed", t("check.rejected", outcome.status)) })
+    this.renderAccounts()
+    this.renderRoles()
+  }
+
+  // ---------------------------------------------------------------- advanced, for the whole plugin
+
+  private renderGlobalAdvanced(): void {
+    const el = this.advancedEl
+    el.empty()
+    new Setting(el)
+      .setName(t("settings.advanced"))
+      .setDesc(t("settings.advanced.desc"))
+      .addButton((b) =>
+        b.setButtonText(this.globalAdvanced ? t("settings.advanced.hide") : t("settings.advanced.show")).onClick(() => {
+          this.globalAdvanced = !this.globalAdvanced
+          this.renderGlobalAdvanced()
+        }),
+      )
+    if (!this.globalAdvanced) return
     const s = this.s
-    new Setting(containerEl).setName(t("settings.asr")).setHeading()
-    this.providerChoice(containerEl, t("settings.liveProvider.name"), t("settings.liveProvider.desc"), liveProviders(), "liveProvider")
-    this.providerChoice(containerEl, t("settings.fileProvider.name"), t("settings.fileProvider.desc"), fileProviders(), "fileProvider")
-    if (asrProvider(s.liveProvider)?.live?.capabilities(s).hotwords) {
-      new Setting(containerEl)
+    new Setting(el)
+      .setName(t("settings.format.name"))
+      .setDesc(t("settings.format.desc"))
+      .addDropdown((d) =>
+        d
+          .addOption("ogg", t("settings.format.opus"))
+          .addOption("wav", t("settings.format.wav"))
+          .setValue(s.audioFormat)
+          .onChange((v) => {
+            s.audioFormat = v as MeetingLiveSettings["audioFormat"]
+            this.save()
+          }),
+      )
+    new Setting(el)
+      .setName(t("settings.voice.name"))
+      .setDesc(t("settings.voice.desc"))
+      .addToggle((field) =>
+        field.setValue(s.voiceProcessing).onChange((v) => {
+          s.voiceProcessing = v
+          this.save()
+        }),
+      )
+    const live = roleAccount(s, "live")
+    const file = roleAccount(s, "file")
+    const liveProvider = live && providerOf(live)?.live
+    const fileProvider = file && providerOf(file)?.file
+    if (live && liveProvider?.capabilities(live).hotwords) {
+      new Setting(el)
         .setName(t("settings.hotwords.name"))
         .setDesc(t("settings.hotwords.desc"))
         .addTextArea((field) => {
@@ -145,9 +650,9 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           })
         })
     }
-    const languageFor = [asrProvider(s.liveProvider)?.live?.capabilities(s).language && t("asr.role.live"), asrProvider(s.fileProvider)?.file?.capabilities(s).language && t("asr.role.file")].filter(Boolean)
+    const languageFor = [live && liveProvider?.capabilities(live).language && t("asr.role.live"), file && fileProvider?.capabilities(file).language && t("asr.role.file")].filter(Boolean)
     if (languageFor.length) {
-      new Setting(containerEl)
+      new Setting(el)
         .setName(t("settings.language.name"))
         .setDesc(t("settings.language.desc", languageFor.join(t("settings.language.and"))))
         .addDropdown((d) => {
@@ -158,109 +663,10 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           })
         })
     }
-    for (const id of new Set([s.liveProvider, s.fileProvider])) {
-      const provider = asrProvider(id)
-      if (provider) provider.renderSettings({ app: this.app, containerEl, settings: s, save: () => this.save(), roles: { live: id === s.liveProvider && !!provider.live, file: id === s.fileProvider && !!provider.file } })
-      else containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("settings.unknownProvider", id) })
-    }
   }
 
-  /** A dropdown of the providers able to do the job; an id that is no longer available stays visible so the page tells the truth. */
-  private providerChoice(containerEl: HTMLElement, name: string, desc: string, providers: AsrProvider[], key: "liveProvider" | "fileProvider"): void {
-    new Setting(containerEl)
-      .setName(name)
-      .setDesc(desc)
-      .addDropdown((d) => {
-        for (const p of providers) d.addOption(p.id, p.name)
-        if (!providers.some((p) => p.id === this.s[key])) d.addOption(this.s[key], t("settings.providerUnavailable", this.s[key]))
-        d.setValue(this.s[key]).onChange((v) => {
-          this.s[key] = v
-          this.save()
-          this.display()
-        })
-      })
-  }
-
-  private compatibleSettings(containerEl: HTMLElement): void {
-    const s = this.s
-    const preset = presetById(s.llmPreset)
-    containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("settings.llm.intro") })
-    new Setting(containerEl).setName(t("settings.llm.service")).addDropdown((d) => {
-      for (const p of LLM_PRESETS) d.addOption(p.id, p.name)
-      d.setValue(preset.id).onChange((id) => {
-        const next = presetById(id)
-        s.llmPreset = next.id
-        if (next.id !== "custom") {
-          s.llmBaseUrl = next.baseUrl
-          s.llmModel = next.model
-        }
-        this.save()
-        this.display()
-      })
-    })
-    textField(new Setting(containerEl).setName(t("settings.llm.url.name")).setDesc(t("settings.llm.url.desc")), s, "llmBaseUrl", () => this.save(), preset.baseUrl || t("settings.llm.url.placeholder"))
-    textField(new Setting(containerEl).setName(t("settings.llm.model.name")).setDesc(preset.id === "azure" ? t("settings.llm.model.azure") : ""), s, "llmModel", () => this.save(), preset.model || t("settings.llm.model.placeholder"))
-    secretField(this.app, new Setting(containerEl).setName(preset.keyRequired ? t("settings.llm.key.required") : t("settings.llm.key.optional")).setDesc(preset.keyRequired ? "" : t("settings.llm.key.optionalDesc")), s, "llmApiKeySecret", () => this.save())
-    if (preset.customHeaders) {
-      new Setting(containerEl)
-        .setName(t("settings.llm.headers.name"))
-        .setDesc(t("settings.llm.headers.desc"))
-        .addTextArea((field) => {
-          field.inputEl.rows = 3
-          field.setValue(s.llmHeaders).onChange((v) => {
-            s.llmHeaders = v
-            this.save()
-          })
-        })
-    }
-    if (preset.effort !== "none") {
-      new Setting(containerEl)
-        .setName(t("settings.llm.effort.name"))
-        .setDesc(preset.effort === "deepseek" ? t("settings.llm.effort.deepseek") : t("settings.llm.effort.plain"))
-        .addDropdown((d) =>
-          d
-            .addOption("off", t("settings.llm.effort.off"))
-            .addOption("low", t("settings.llm.effort.low"))
-            .addOption("medium", t("settings.llm.effort.medium"))
-            .addOption("high", t("settings.llm.effort.high"))
-            .setValue(s.llmEffort)
-            .onChange((v) => {
-              s.llmEffort = v as MeetingLiveSettings["llmEffort"]
-              this.save()
-            }),
-        )
-    }
-    if (preset.temperature) {
-      new Setting(containerEl)
-        .setName(t("settings.llm.temperature.name"))
-        .setDesc(t("settings.llm.temperature.desc"))
-        .addSlider((slider) =>
-          slider
-            .setLimits(0, 1, 0.05)
-            .setValue(s.llmTemperature)
-            .onChange((v) => {
-              s.llmTemperature = v
-              this.save()
-            }),
-        )
-    }
-    new Setting(containerEl)
-      .setName(t("settings.llm.limit.name"))
-      .setDesc(t("settings.llm.limit.desc", preset.name, preset.inputTokens.toLocaleString()))
-      .addText((field) =>
-        field
-          .setPlaceholder(String(preset.inputTokens))
-          .setValue(s.llmInputLimit > 0 ? String(s.llmInputLimit) : "")
-          .onChange((v) => {
-            const n = Math.floor(Number(v))
-            s.llmInputLimit = Number.isFinite(n) && n > 0 ? n : 0
-            this.save()
-          }),
-      )
-  }
-
-  private promptSetting(name: string, desc: string, key: "summaryFocus" | "minutesPrompt", fallback: string, rows: number): void {
-    const setting = new Setting(this.containerEl).setName(name).setDesc(desc)
+  private promptSetting(el: HTMLElement, name: string, desc: string, key: "summaryFocus" | "minutesPrompt", fallback: string, rows: number): void {
+    const setting = new Setting(el).setName(name).setDesc(desc)
     setting.settingEl.addClass("ml-prompt-setting")
     let area: HTMLTextAreaElement
     setting.addExtraButton((b) =>
@@ -281,19 +687,5 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
         this.save()
       })
     })
-  }
-
-  private async testLlm(button: HTMLButtonElement): Promise<void> {
-    const llm = this.plugin.llm()
-    if (llm.problem) return void new Notice(llm.problem)
-    button.disabled = true
-    try {
-      const reply = await llm.complete([{ role: "user", content: LLM_TEST_PROMPT }])
-      new Notice(t("settings.llm.testOk", reply.slice(0, 40)))
-    } catch (error) {
-      new Notice((error as Error).message, 10000)
-    } finally {
-      button.disabled = false
-    }
   }
 }

@@ -29,3 +29,14 @@ export async function detectVolcResource(config: VolcConfig, handshake: (config:
   }
   return { state: "refused", status: first?.status ?? 0, body: first?.body ?? "" }
 }
+
+/**
+ * The file resource that goes with a streaming resource, for an account whose file resource is still the default: an account granted only the
+ * 1.0 streaming resource is a 1.0 account, and 1.0 files are `volc.bigasr.auc`. This is an inference from the paired naming
+ * (https://docs.volcengine.com/docs/doubao-voice/large-model-recording-file-recognition-standard-version-api?lang=zh); no free call checks a
+ * file resource, so it cannot be confirmed without submitting audio.
+ */
+export function fileResourceFor(liveResourceId: string, currentFileResourceId: string, defaultFileResourceId: string): string {
+  if (currentFileResourceId.trim() !== defaultFileResourceId) return currentFileResourceId
+  return liveResourceId.startsWith("volc.bigasr.") ? "volc.bigasr.auc" : defaultFileResourceId
+}

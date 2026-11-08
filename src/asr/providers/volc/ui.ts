@@ -18,7 +18,6 @@ export function renderVolcAdvanced({ app, containerEl, account, save }: Advanced
   )
   textField(new Setting(containerEl).setName(t("volc.settings.appId")), volc, "appId", save)
   secretField(app, new Setting(containerEl).setName(t("volc.settings.accessToken")), volc, "accessTokenSecret", save)
-  textField(new Setting(containerEl).setName(t("volc.settings.endpoint.name")).setDesc(t("volc.settings.endpoint.desc")), volc, "endpoint", save)
   new Setting(containerEl)
     .setName(t("volc.settings.speakers.name"))
     .setDesc(t("volc.settings.speakers.desc"))

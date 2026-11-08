@@ -26,7 +26,8 @@ export interface CardHost {
   summarize(session: MeetingSession): Promise<void>
   /** Agrees to the current model service and lets the summaries that waited for it go out. */
   confirmLlm(session: MeetingSession): Promise<void>
-  openSettings(): void
+  /** Opens the plugin's settings, on the form that adds an account when `addAccount` is set. */
+  openSettings(addAccount?: boolean): void
   openPath(path: string): void
   revealFolder(session: MeetingSession): void
   saveSettings(): Promise<void>
@@ -274,7 +275,7 @@ export class MeetingCard extends MarkdownRenderChild {
     const settings = this.host.settings
     const asr = this.host.asr()
     const llmProblem = this.session!.llmProblem
-    const check = (ok: boolean, icon: string, title: string, detail: string) => {
+    const check = (ok: boolean, icon: string, title: string, detail: string, noAccount = false) => {
       const row = checks.createDiv({ cls: `ml-check ${ok ? "is-ok" : "is-off"}` })
       setIcon(row.createSpan({ cls: "ml-check-icon" }), icon)
       const label = row.createDiv({ cls: "ml-check-text" })
@@ -283,14 +284,16 @@ export class MeetingCard extends MarkdownRenderChild {
       if (ok) {
         row.createSpan({ cls: "ml-check-state", text: t("card.check.ready") })
       } else {
-        const fix = row.createEl("button", { cls: "ml-link", text: t("card.check.fix") })
-        fix.addEventListener("click", () => this.host.openSettings())
+        // With no account for the job, the way out is to add one, so that is where the link goes.
+        const fix = row.createEl("button", { cls: "ml-link", text: t(noAccount ? "card.check.addAccount" : "card.check.fix") })
+        fix.addEventListener("click", () => this.host.openSettings(noAccount))
       }
     }
     check(true, "mic", t("card.check.recording"), t("card.check.recordingDetail", settings.audioFormat === "ogg" ? t("card.check.opus") : t("card.check.wav"), settings.folder))
-    check(!asr.problem, "captions", t("card.check.live"), asr.problem ? t("card.check.liveProblem", asr.problem) : t("card.check.liveOk", asr.name))
-    check(!llmProblem, "list", t("card.check.summary"), llmProblem ? t("card.check.summaryProblem", llmProblem) : t("card.check.summaryOk", settings.summaryIntervalMin, this.host.llm().model))
-    hero.createDiv({ cls: "ml-privacy", text: t(liveIsLocal(settings) ? "card.privacyLocal" : "card.privacy", asr.name) })
+    check(!asr.problem, "captions", t("card.check.live"), asr.problem ? t("card.check.liveProblem", asr.problem) : t("card.check.liveOk", asr.name), !settings.roles.live)
+    check(!llmProblem, "list", t("card.check.summary"), llmProblem ? t("card.check.summaryProblem", llmProblem) : t("card.check.summaryOk", settings.summaryIntervalMin, this.host.llm().model), !settings.roles.llm.account)
+    // Without a live account no audio is sent anywhere, so there is nothing to say about where it goes.
+    if (settings.roles.live) hero.createDiv({ cls: "ml-privacy", text: t(liveIsLocal(settings) ? "card.privacyLocal" : "card.privacy", asr.name) })
   }
 
   private iconButton(parent: HTMLElement, icon: string, label: string, action: () => void): HTMLButtonElement {
