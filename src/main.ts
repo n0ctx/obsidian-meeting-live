@@ -216,6 +216,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
         ensureConsent: (kinds) => this.ensureConsent(kinds),
         llm: () => this.llm(),
         prompt: () => this.settings.minutesPrompt,
+        summaryFocus: () => this.settings.summaryFocus,
         transcriptFolder: () => `${this.settings.folder}/录音转写`,
       },
       this.jobs,

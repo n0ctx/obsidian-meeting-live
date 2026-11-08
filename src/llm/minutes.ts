@@ -10,12 +10,17 @@ export const DEFAULT_MINUTES_PROMPT = `You write meeting notes from a raw speech
 - Organize by topic, not by time. Suggested sections: Summary, Discussion by topic, Key figures, Action items, Open questions. Skip empty sections.
 - Write in the same language as the transcript.`
 
+const CONDENSED_HEADING = `## Transcript (condensed)
+The full transcript was too long to send at once, so it was summarized part by part. Each line is a point from one part, with the timestamp of the transcript line it rests on. Treat it as the transcript: details not listed here were left out, not absent.`
+
 export interface MinutesInput {
   title: string
   date: string
   utterances: Utterance[]
   summaries: SummaryRecord[]
   notes: { path: string; content: string }[]
+  /** The utterances are summaries of the transcript, not the transcript itself (it was too long to send whole). */
+  condensed?: boolean
 }
 
 export function buildMinutesMessages(prompt: string, input: MinutesInput): ChatMessage[] {
@@ -27,7 +32,7 @@ export function buildMinutesMessages(prompt: string, input: MinutesInput): ChatM
   if (done.length) {
     parts.push("## Stage summaries (for cross-checking only)", ...done.map((s) => summaryMarkdown(s, (ms) => formatClock(ms, true))), "")
   }
-  parts.push("## Transcript", transcriptLines(input.utterances))
+  parts.push(input.condensed ? CONDENSED_HEADING : "## Transcript", transcriptLines(input.utterances))
   return [
     { role: "system", content: prompt.trim() || DEFAULT_MINUTES_PROMPT },
     { role: "user", content: parts.join("\n") },

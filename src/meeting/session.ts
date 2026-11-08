@@ -5,7 +5,7 @@ import { SegmentRecorder, opusSupported, repairSegment } from "../audio/recorder
 import type { ResolvedLive } from "../asr/providers/registry.ts"
 import { AsrStreamer, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
-import { buildMinutesMessages } from "../llm/minutes.ts"
+import { writeMinutes } from "../llm/contextGuard.ts"
 import { buildOverviewMessages, buildSummaryMessages, hasUnverified, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
@@ -523,21 +523,15 @@ export class MeetingSession extends Events {
 
   // ---------------------------------------------------------------- minutes
 
-  async generateMinutes(prompt: string, notes: { path: string; content: string }[]): Promise<string> {
+  async generateMinutes(prompt: string, notes: { path: string; content: string }[], onProgress?: (text: string) => void): Promise<string> {
     const llm = this.env.llm()
     if (llm.problem) throw new Error(llm.problem)
     if (this.utterances.length === 0) throw new Error("还没有可用的转写内容")
     this.minutes = { status: "running" }
     this.emitChange()
     try {
-      const messages = buildMinutesMessages(prompt, {
-        title: this.meta.title,
-        date: formatDate(new Date(this.meta.createdAt)),
-        utterances: this.utterances,
-        summaries: this.meta.summaries,
-        notes,
-      })
-      const text = await llm.complete(messages)
+      const input = { title: this.meta.title, date: formatDate(new Date(this.meta.createdAt)), utterances: this.utterances, summaries: this.meta.summaries, notes }
+      const text = await writeMinutes(llm, prompt, input, { focus: this.env.settings().summaryFocus, onProgress })
       const path = await this.env.store.uniquePath(this.folder, meetingFile(this.meta.name, MINUTES_FILE), "md")
       const note = this.meta.notePath.replace(/\.md$/, "")
       const doc = [

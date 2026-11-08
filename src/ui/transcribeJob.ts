@@ -4,7 +4,8 @@ import { appendJobBlock, hasJobBlock, newJobId, placeJobResult, removeJobBlock }
 import type { Destination } from "../consent.ts"
 import { prepareAudio } from "../audio/transcode.ts"
 import type { LlmClient } from "../llm/client.ts"
-import { buildMinutesMessages, stripMeetingBlocks } from "../llm/minutes.ts"
+import { writeMinutes } from "../llm/contextGuard.ts"
+import { stripMeetingBlocks } from "../llm/minutes.ts"
 import { formatClock, formatDate, formatDateTime } from "../meeting/types.ts"
 
 export interface AudioSource {
@@ -25,6 +26,8 @@ export interface TranscribeDeps {
   post: FileAsrPost
   llm: () => LlmClient
   prompt: () => string
+  /** The summary focus the condensing step of a long transcript uses. */
+  summaryFocus: () => string
   /** Vault folder for raw transcripts produced by this command. */
   transcriptFolder: () => string
 }
@@ -139,14 +142,8 @@ export class TranscribeJob {
     if (llm.problem) throw new Error(llm.problem)
     this.setStage("writing")
     const notes = stripMeetingBlocks(await this.app.vault.read(this.target))
-    const messages = buildMinutesMessages(this.deps.prompt(), {
-      title: this.target.basename,
-      date: formatDate(new Date(this.source.modified)),
-      utterances: speakerUtterances(done.result),
-      summaries: [],
-      notes: notes ? [{ path: this.target.path, content: notes }] : [],
-    })
-    const text = await llm.complete(messages)
+    const input = { title: this.target.basename, date: formatDate(new Date(this.source.modified)), utterances: speakerUtterances(done.result), summaries: [], notes: notes ? [{ path: this.target.path, content: notes }] : [] }
+    const text = await writeMinutes(llm, this.deps.prompt(), input, { focus: this.deps.summaryFocus() })
     const raw = done.rawPath.replace(/\.md$/, "")
     const lines = [
       `> [!info] 访谈记录由 ${llm.model} 根据录音「${this.source.name}」的转写整理（时长 ${formatClock(done.result.durationMs, true)}，${formatDateTime(new Date())}）。发布前请对照原始转写核实关键事实与数字。`,

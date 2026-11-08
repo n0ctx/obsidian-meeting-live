@@ -164,7 +164,7 @@ export class MinutesModal extends Modal {
         if (file instanceof TFile) notes.push({ path, content: stripMeetingBlocks(await this.app.vault.cachedRead(file)) })
       }
       session
-        .generateMinutes(prompt.value, notes)
+        .generateMinutes(prompt.value, notes, (text) => status.setText(text))
         .then((path) => {
           new Notice("正式纪要已生成")
           this.onDone(path)

@@ -51,6 +51,7 @@ test("a failed write-up retries without re-running recognition, then replaces th
       },
     }),
     prompt: () => "系统提示",
+    summaryFocus: () => "",
     transcriptFolder: () => "Meetings/录音转写",
   }
   const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: Date.parse("2026-10-27"), read: async () => new Uint8Array([1, 2, 3]) }
@@ -105,6 +106,7 @@ test("recording to notes asks for consent before anything is uploaded, and only 
     post: async () => (posts++, { status: 500, headers: {}, text: "" }),
     llm: () => ({ problem: undefined, model: "m", target: "t", inputLimit: 1_000_000, complete: async () => "" }),
     prompt: () => "",
+    summaryFocus: () => "",
     transcriptFolder: () => "Meetings/录音转写",
   })
   const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: 0, read: async () => new Uint8Array([1, 2, 3]) }

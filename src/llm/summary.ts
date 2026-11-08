@@ -58,6 +58,16 @@ function contentLines(content: SummaryContent): string[] {
   ]
 }
 
+/** A summary as timestamped lines, each at the transcript line it cites, so it can stand in for that stretch of the transcript. */
+export function summaryUtterances(content: SummaryContent, fallbackMs: number): Utterance[] {
+  const at = (t: number | undefined) => t ?? fallbackMs
+  return [
+    ...content.paragraphs.map((p) => ({ startMs: at(p.t), endMs: at(p.t), text: `${p.topic ? `${p.topic}: ` : ""}${p.text}` })),
+    ...content.todos.map((p) => ({ startMs: at(p.t), endMs: at(p.t), text: `To-do: ${p.text}` })),
+    ...content.open.map((p) => ({ startMs: at(p.t), endMs: at(p.t), text: `Open: ${p.text}` })),
+  ].sort((a, b) => a.startMs - b.startMs)
+}
+
 function stageDigest(s: SummaryRecord): string {
   const label = `Stage ${s.index} (${formatClock(s.startMs)}–${formatClock(s.endMs)})${s.content?.title ? ` ${s.content.title}` : ""}`
   if (!s.content) return `${label}:\n${(s.raw ?? "").slice(0, 400)}`
