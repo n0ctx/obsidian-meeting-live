@@ -185,7 +185,7 @@ test("through the streamer: finals arrive in order on the meeting timeline, a dr
       if (n === 1 && binaryFrames === 10) ws.terminate()
     })
   })
-  const asr = new AsrStreamer({ onFinal: (u) => finals.push(u), onInterim: () => undefined, onGap: (g) => gaps.push(g), onState: (s) => states.push(s) }, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 1500 })
+  const asr = new AsrStreamer({ onFinal: (u) => finals.push(u), onInterim: () => undefined, onGap: (g) => gaps.push(g), onState: (s) => states.push(s) }, { manualTicks: true, pacing: { maxRate: 1000 }, finalTimeoutMs: 1500 })
   asr.begin(0, sherpaConnector({ endpoint: server.endpoint }))
   await waitFor(() => asr.currentState === "live")
   for (let i = 0; i < 4; i++) {

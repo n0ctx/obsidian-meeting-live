@@ -2,7 +2,7 @@ import type { App } from "obsidian"
 import type { Lang } from "../../i18n/index.ts"
 import type { SecretReader } from "../../secrets.ts"
 import type { MeetingLiveSettings } from "../../settings.ts"
-import type { AsrConnect } from "../contract.ts"
+import type { AsrConnect, LivePacing } from "../contract.ts"
 import type { FileAsrProvider } from "../fileAsr.ts"
 
 /** What a live recognizer can do, so generic code asks instead of assuming it is Volcengine. */
@@ -50,6 +50,8 @@ export interface ProviderSettingsContext {
 /** Live transcription while recording. Settings-dependent answers take the current settings. */
 export interface LiveService {
   capabilities(settings: MeetingLiveSettings): LiveCapabilities
+  /** The fastest the service takes audio, with the documentation that says so next to the value. Never faster than the documented limit. */
+  pacing(settings: MeetingLiveSettings): LivePacing
   /** Host live audio goes to under these settings, for privacy text and consent. Empty when it cannot be told. */
   host(settings: MeetingLiveSettings): string
   resolve(env: ProviderEnv): LiveAsr

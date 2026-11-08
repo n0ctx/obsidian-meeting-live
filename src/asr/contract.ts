@@ -50,6 +50,26 @@ export interface AsrConnectionHandlers {
   onClose(error: AsrError): void
 }
 
+/**
+ * How fast a provider takes audio. Services throttle, close or error when audio arrives faster than they can follow, so the streamer
+ * never sends faster than the provider declares, in steady state, while catching up after a reconnect, and when a run ends.
+ *
+ * The guarantee: over any window of W seconds the streamer sends at most `maxRate` × W seconds of audio, plus one chunk (200 ms) and
+ * what a late timer tick owes. A provider that limits audio per window (Tencent: error 4000 above 3 s of audio within 1 s) declares a
+ * rate that keeps `maxRate` × 1.1 s + 0.2 s under that limit, with room to spare.
+ */
+export interface LivePacing {
+  /** Largest sustained send rate as a multiple of real time: 1 is real time, 2 sends two seconds of audio per second. At 1 a backlog never shrinks. */
+  maxRate: number
+}
+
+/**
+ * For a provider whose documentation states no limit: the 1.25x real-time throttle that Deepgram and AssemblyAI both document for
+ * their streaming APIs. Real-time-only services (Tencent, iFlytek) state 1x, which cannot drain a backlog at all; this is the least
+ * that does, and it is a rate two comparable services are documented to accept.
+ */
+export const CAUTIOUS_LIVE_PACING: LivePacing = { maxRate: 1.25 }
+
 export type AsrConnect = (handlers: AsrConnectionHandlers) => Promise<{ connection: AsrConnection; logId?: string }>
 
 /**

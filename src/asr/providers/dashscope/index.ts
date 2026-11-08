@@ -2,7 +2,7 @@ import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { dashScopeFileProvider } from "./file.ts"
-import { DASHSCOPE_FILE_CAPABILITIES, DASHSCOPE_ID, dashScopeLiveCapabilities } from "./info.ts"
+import { DASHSCOPE_FILE_CAPABILITIES, DASHSCOPE_ID, DASHSCOPE_LIVE_PACING, dashScopeLiveCapabilities } from "./info.ts"
 import { dashScopeConfigProblem, dashScopeConnector } from "./live.ts"
 import { dashScopeConfig, dashScopeEndpoints, dashScopeFileConfig } from "./settings.ts"
 import { renderDashScopeSettings } from "./ui.ts"
@@ -17,6 +17,7 @@ export const dashScopeProvider: AsrProvider = {
   nameIn: (lang: Lang) => tr(lang, "provider.dashscope"),
   live: {
     capabilities: (settings) => dashScopeLiveCapabilities(settings.providers.dashscope.model),
+    pacing: () => DASHSCOPE_LIVE_PACING,
     host: (settings) => hostOf(dashScopeEndpoints(settings.providers.dashscope).live.replace(/^ws/, "http")),
     resolve: (env) => {
       const config = configOf(env)

@@ -2,7 +2,7 @@ import { ASR_RATE, PcmRing, msToSamples, samplesToMs } from "../audio/pcm.ts"
 import { newGap } from "../meeting/gap.ts"
 import { speakerId } from "../meeting/speakers.ts"
 import type { GapCode, TranscriptGap, Utterance } from "../meeting/types.ts"
-import { AsrError, type AsrConnect, type AsrConnection, type AsrUpdate, type AsrUtterance } from "./contract.ts"
+import { AsrError, type AsrConnect, type AsrConnection, type AsrUpdate, type AsrUtterance, type LivePacing } from "./contract.ts"
 
 export type AsrState = "disabled" | "idle" | "connecting" | "live" | "reconnecting" | "failed"
 
@@ -17,9 +17,11 @@ export interface AsrEvents {
 export interface AsrOptions {
   ringSeconds: number
   chunkMs: number
-  /** Chunks sent per tick; above 1 lets the stream catch up after a reconnect. */
-  maxChunksPerTick: number
+  /** Send rate for a run that declares none. A run started with a provider's own pacing never uses it. */
+  pacing: LivePacing
   tickMs: number
+  /** Longest `end()` keeps sending the backlog at the provider's pace; what is still unsent after that is recorded as a gap. */
+  flushMs: number
   finalTimeoutMs: number
   /** Longest an utterance may stay unconfirmed before its text is kept and recognition restarts. */
   maxInterimMs: number
@@ -27,16 +29,29 @@ export interface AsrOptions {
   manualTicks?: boolean
 }
 
+/**
+ * How long `end()` keeps sending a backlog. Audio left unsent is in the recording either way, but a stop that hangs is a visible failure, so the
+ * wait is bounded; a minute covers a backlog of 75 s at the slowest declared rate (1.25x), which is what an outage the retry ladder
+ * rides out (about 30 s of waiting plus the speech to resend) leaves behind, and costs the user at most a minute at a stop.
+ */
+export const DEFAULT_FLUSH_MS = 60_000
+
 const DEFAULTS: AsrOptions = {
   ringSeconds: 180,
   chunkMs: 200,
-  maxChunksPerTick: 3,
+  // What the streamer sent before providers declared a pace: three chunks per tick, which is 6x real time.
+  pacing: { maxRate: 6 },
   tickMs: 100,
+  flushMs: DEFAULT_FLUSH_MS,
   finalTimeoutMs: 8000,
   maxInterimMs: 60_000,
 }
 
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000]
+
+/** A tick later than this many ticks is a stalled timer (a background window): it is granted the real time that passed, up to the cap below. */
+const LATE_TICKS = 1.5
+const MAX_STEP_MS = 1000
 
 /** Shifts a connection-relative utterance onto the meeting timeline. */
 function onTimeline(item: AsrUtterance, text: string, baseMs: number): Utterance {
@@ -64,6 +79,12 @@ export class AsrStreamer {
   private running = false
   private ending = false
   private generation = 0
+  /** Audio (in samples) the provider's pace lets the next tick send; the part of a chunk left over carries into the next tick. */
+  private allowance = 0
+  private pacing: LivePacing
+  private lastStepAt: number | undefined
+  private flushCut = false
+  private wakeFlush: (() => void) | undefined
 
   /** The connector of the current run; a new run may bring a different one. */
   private connect: AsrConnect | null = null
@@ -72,6 +93,7 @@ export class AsrStreamer {
   constructor(events: AsrEvents, options: Partial<AsrOptions> = {}) {
     this.events = events
     this.options = { ...DEFAULTS, ...options }
+    this.pacing = this.options.pacing
     this.ring = new PcmRing(this.options.ringSeconds * ASR_RATE)
     this.chunk = (this.options.chunkMs / 1000) * ASR_RATE
     this.state = "idle"
@@ -100,17 +122,20 @@ export class AsrStreamer {
 
   /**
    * Starts a recording run at the given timeline position, recognizing through `connect` (null: no recognizer
-   * is available, so the run is recorded as a gap). The buffer and the finals already seen carry over between runs.
+   * is available, so the run is recorded as a gap), sending no faster than `pacing`. The buffer and the finals already seen carry over between runs.
    */
-  begin(positionMs: number, connect: AsrConnect | null): void {
+  begin(positionMs: number, connect: AsrConnect | null, pacing: LivePacing = this.options.pacing): void {
     this.connect = connect
+    this.pacing = pacing
+    this.flushCut = false
     const position = msToSamples(positionMs)
     if (this.ring.end !== position) this.ring.seek(position)
     this.running = true
     this.ending = false
     this.cursor = position
     this.retryIndex = 0
-    if (!this.options.manualTicks) this.tickTimer = window.setInterval(() => this.tick(), this.options.tickMs)
+    this.lastStepAt = undefined
+    if (!this.options.manualTicks) this.tickTimer = window.setInterval(() => this.tick(this.step()), this.options.tickMs)
     if (connect) void this.open("connecting")
     else this.setState("disabled")
   }
@@ -124,11 +149,40 @@ export class AsrStreamer {
     }
   }
 
-  tick(): void {
+  /** One step of sending; `elapsedMs` is the time it stands for, a tick unless the timer ran late. */
+  tick(elapsedMs: number = this.options.tickMs): void {
     if (this.state !== "live" || !this.connection) return
-    for (let i = 0; i < this.options.maxChunksPerTick && this.ring.end - this.cursor >= this.chunk; i++) {
-      this.send(this.chunk, false)
+    this.pump(elapsedMs, false)
+  }
+
+  /** Time a step stands for: one tick, or the time that really passed when the timer ran clearly late, so a throttled timer does not slow the stream. */
+  private step(): number {
+    const now = Date.now()
+    const passed = now - (this.lastStepAt ?? now)
+    this.lastStepAt = now
+    return passed >= this.options.tickMs * LATE_TICKS ? Math.min(passed, MAX_STEP_MS) : this.options.tickMs
+  }
+
+  /**
+   * Sends what the provider's pace allows for `elapsedMs`: whole chunks (and the last partial one when `final`), at most
+   * `maxRate` × time on average. Less than one chunk of allowance carries over; more never builds up, so idle time buys no burst.
+   */
+  private pump(elapsedMs: number, final: boolean): void {
+    this.allowance += Math.round((this.pacing.maxRate * elapsedMs * ASR_RATE) / 1000)
+    for (;;) {
+      const pending = this.ring.end - this.cursor
+      const size = pending >= this.chunk ? this.chunk : final ? pending : 0
+      if (size === 0 || this.allowance < size) break
+      this.send(size, false)
+      this.allowance -= size
     }
+    this.allowance = Math.min(this.allowance, this.chunk - 1)
+  }
+
+  /** Makes a pending `end()` stop sending its backlog and record what is left as a gap: a resumed recording must not wait for it. */
+  interruptFlush(): void {
+    this.flushCut = true
+    this.wakeFlush?.()
   }
 
   /** Ends the current run: flushes audio, waits for final results, records untranscribed audio as gaps. */
@@ -139,27 +193,31 @@ export class AsrStreamer {
     if (this.tickTimer) window.clearInterval(this.tickTimer)
     this.tickTimer = undefined
     if (this.connecting) await this.connecting
+    let tail: GapCode = this.connect ? "disconnected" : "unconfigured"
     if (this.state === "live" && this.connection) {
-      while (this.ring.end - this.cursor > 0) this.send(Math.min(this.chunk, this.ring.end - this.cursor), false)
-      let timeout: number | undefined
-      const done = new Promise<void>((resolve) => {
-        this.finalWaiter = resolve
-        timeout = window.setTimeout(resolve, this.options.finalTimeoutMs)
-      })
-      try {
-        this.connection.sendAudio(new Int16Array(0), true)
-        await done
-      } catch {
-        // The socket closed while finishing; remaining interims are committed below.
+      tail = (await this.flush()) ?? tail
+      // A connection lost during the flush has nobody left to wait for.
+      if (this.connection) {
+        let timeout: number | undefined
+        const done = new Promise<void>((resolve) => {
+          this.finalWaiter = resolve
+          timeout = window.setTimeout(resolve, this.options.finalTimeoutMs)
+        })
+        try {
+          this.connection.sendAudio(new Int16Array(0), true)
+          await done
+        } catch {
+          // The socket closed while finishing; remaining interims are committed below.
+        }
+        window.clearTimeout(timeout)
+        this.finalWaiter = undefined
       }
-      window.clearTimeout(timeout)
-      this.finalWaiter = undefined
       this.dropConnection()
     }
     for (const u of this.interims) this.acceptFinal(u)
     this.setInterims([])
     if (this.cursor < this.ring.end) {
-      this.emitGap(this.cursor, this.ring.end, this.connect ? "disconnected" : "unconfigured")
+      this.emitGap(this.cursor, this.ring.end, tail)
       this.cursor = this.ring.end
     }
     this.running = false
@@ -169,11 +227,14 @@ export class AsrStreamer {
 
   /**
    * Immediately retries a failed or waiting connection, through `connect` when given (the recognizer resolved afresh, so settings fixed
-   * since the failure apply). The buffer and the finals stay. Returns whether a retry started: not while live or already connecting.
+   * since the failure apply), whose `pacing` then applies. The buffer and the finals stay. Returns whether a retry started: not while live or already connecting.
    */
-  retryNow(connect?: AsrConnect): boolean {
+  retryNow(connect?: AsrConnect, pacing?: LivePacing): boolean {
     if (!this.running || !this.connect || this.state === "live" || this.connecting) return false
-    if (connect) this.connect = connect
+    if (connect) {
+      this.connect = connect
+      this.pacing = pacing ?? this.options.pacing
+    }
     this.clearRetry()
     this.retryIndex = 0
     void this.open("reconnecting")
@@ -185,6 +246,42 @@ export class AsrStreamer {
     this.clearRetry()
     if (this.tickTimer) window.clearInterval(this.tickTimer)
     this.dropConnection()
+  }
+
+  /**
+   * Sends the backlog at the provider's pace, so ending a run after an outage obeys the same limit as catching up does. The wait is
+   * bounded by `flushMs`: the audio is in the recording either way, but a stop that hangs is a visible failure. Returns why audio is
+   * left unsent (the bound or a resumed recording cut the flush, or the connection went), and nothing when all of it went out.
+   */
+  private async flush(): Promise<GapCode | undefined> {
+    const deadline = Date.now() + this.options.flushMs
+    let elapsed = this.options.tickMs
+    this.lastStepAt = undefined
+    while (this.ring.end > this.cursor) {
+      if (!this.running || !this.connection) return "disconnected"
+      try {
+        this.pump(elapsed, true)
+      } catch {
+        return "disconnected"
+      }
+      if (this.ring.end <= this.cursor) break
+      if (this.flushCut || Date.now() >= deadline) return "unsent"
+      await this.sleep(this.options.tickMs)
+      elapsed = this.step()
+    }
+    return undefined
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const wake = () => {
+        window.clearTimeout(timer)
+        this.wakeFlush = undefined
+        resolve()
+      }
+      const timer = window.setTimeout(wake, ms)
+      this.wakeFlush = wake
+    })
   }
 
   private send(samples: number, last: boolean): void {
@@ -214,6 +311,8 @@ export class AsrStreamer {
           return
         }
         base = this.cursor
+        this.allowance = 0
+        this.lastStepAt = undefined
         this.connection = connection
         this.retryIndex = 0
         if (logId) this.events.onLogId?.(logId)

@@ -1,6 +1,6 @@
 // Every speech-recognition provider the plugin knows. Adding one is a new folder under providers/ and a line here.
 import { t, type Lang } from "../../i18n/index.ts"
-import type { AsrConnect } from "../contract.ts"
+import { CAUTIOUS_LIVE_PACING, type AsrConnect, type LivePacing } from "../contract.ts"
 import type { FileAsrProvider } from "../fileAsr.ts"
 import { assemblyAiProvider } from "./assemblyai/index.ts"
 import { dashScopeProvider } from "./dashscope/index.ts"
@@ -24,6 +24,8 @@ export interface ResolvedLive {
   id: string
   name: string
   connect: AsrConnect | null
+  /** How fast this recognizer takes audio; the streamer sends no faster. */
+  pacing: LivePacing
   problem?: string
 }
 
@@ -31,9 +33,9 @@ export interface ResolvedLive {
 export function resolveLive(env: ProviderEnv): ResolvedLive {
   const id = env.settings.liveProvider
   const provider = asrProvider(id)
-  if (!provider) return { id, name: id, connect: null, problem: unknownProblem(id) }
-  if (!provider.live) return { id, name: provider.name, connect: null, problem: unsupportedProblem(provider.name, t("asr.role.live")) }
-  return { id, name: provider.name, ...provider.live.resolve(env) }
+  if (!provider) return { id, name: id, connect: null, pacing: CAUTIOUS_LIVE_PACING, problem: unknownProblem(id) }
+  if (!provider.live) return { id, name: provider.name, connect: null, pacing: CAUTIOUS_LIVE_PACING, problem: unsupportedProblem(provider.name, t("asr.role.live")) }
+  return { id, name: provider.name, pacing: provider.live.pacing(env.settings), ...provider.live.resolve(env) }
 }
 
 /** The recorded-file recognizer under the current settings. */

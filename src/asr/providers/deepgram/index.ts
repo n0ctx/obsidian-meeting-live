@@ -2,7 +2,7 @@ import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { deepgramFileProvider } from "./file.ts"
-import { DEEPGRAM_FILE_CAPABILITIES, DEEPGRAM_ID, DEEPGRAM_LIVE_CAPABILITIES } from "./info.ts"
+import { DEEPGRAM_FILE_CAPABILITIES, DEEPGRAM_ID, DEEPGRAM_LIVE_CAPABILITIES, DEEPGRAM_LIVE_PACING } from "./info.ts"
 import { deepgramConfigProblem, deepgramConnector } from "./live.ts"
 import { deepgramConfig, deepgramFileConfig, deepgramFileUrlOf } from "./settings.ts"
 import { renderDeepgramSettings } from "./ui.ts"
@@ -17,6 +17,7 @@ export const deepgramProvider: AsrProvider = {
   nameIn: (lang: Lang) => tr(lang, "provider.deepgram"),
   live: {
     capabilities: () => DEEPGRAM_LIVE_CAPABILITIES,
+    pacing: () => DEEPGRAM_LIVE_PACING,
     host: (settings) => hostOf(settings.providers.deepgram.endpoint.replace(/^ws/, "http")),
     resolve: (env) => {
       const config = configOf(env)

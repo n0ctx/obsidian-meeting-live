@@ -1,7 +1,7 @@
 import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider } from "../types.ts"
-import { SHERPA_ID, SHERPA_LIVE_CAPABILITIES } from "./info.ts"
+import { SHERPA_ID, SHERPA_LIVE_CAPABILITIES, SHERPA_LIVE_PACING } from "./info.ts"
 import { sherpaConfigProblem, sherpaConnector } from "./live.ts"
 import { sherpaConfig } from "./settings.ts"
 import { renderSherpaSettings } from "./ui.ts"
@@ -14,6 +14,7 @@ export const sherpaProvider: AsrProvider = {
   nameIn: (lang: Lang) => tr(lang, "provider.sherpa"),
   live: {
     capabilities: () => SHERPA_LIVE_CAPABILITIES,
+    pacing: () => SHERPA_LIVE_PACING,
     host: (settings) => hostOf(settings.providers.sherpa.endpoint.trim().replace(/^ws/i, "http")),
     resolve: ({ settings }) => {
       const config = sherpaConfig(settings.providers.sherpa)

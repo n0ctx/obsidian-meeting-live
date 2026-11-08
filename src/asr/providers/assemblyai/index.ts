@@ -3,7 +3,7 @@ import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { assemblyAiFileProvider } from "./file.ts"
-import { ASSEMBLYAI_FILE_CAPABILITIES, ASSEMBLYAI_ID, ASSEMBLYAI_LIVE_CAPABILITIES } from "./info.ts"
+import { ASSEMBLYAI_FILE_CAPABILITIES, ASSEMBLYAI_ID, ASSEMBLYAI_LIVE_CAPABILITIES, ASSEMBLYAI_LIVE_PACING } from "./info.ts"
 import { assemblyAiConfigProblem, assemblyAiConnector } from "./live.ts"
 import { assemblyAiConfig, assemblyAiEndpoints, assemblyAiFileConfig } from "./settings.ts"
 import { renderAssemblyAiSettings } from "./ui.ts"
@@ -18,6 +18,7 @@ export const assemblyAiProvider: AsrProvider = {
   nameIn: (lang: Lang) => tr(lang, "provider.assemblyai"),
   live: {
     capabilities: () => ASSEMBLYAI_LIVE_CAPABILITIES,
+    pacing: () => ASSEMBLYAI_LIVE_PACING,
     host: (settings) => hostOf(assemblyAiEndpoints(settings.providers.assemblyai).live.replace(/^ws/, "http")),
     resolve: (env) => {
       const config = configOf(env)

@@ -1,6 +1,6 @@
 import { Notice } from "obsidian"
 import { t } from "../../i18n/index.ts"
-import type { AsrConnect } from "../contract.ts"
+import { CAUTIOUS_LIVE_PACING, type AsrConnect, type LivePacing } from "../contract.ts"
 
 const SECOND_OF_AUDIO = 16_000
 const CHUNK = 3200
@@ -13,10 +13,10 @@ export interface LiveTestOutcome {
 }
 
 /**
- * Connects, sends one second of silence, ends the stream and waits for the service to say it is done.
+ * Connects, sends one second of silence at `pacing`, ends the stream and waits for the service to say it is done.
  * It costs the service's minimum billed time, which is why it only runs when the user presses a button.
  */
-export async function runLiveTest(connect: AsrConnect, waitMs = 8000): Promise<LiveTestOutcome> {
+export async function runLiveTest(connect: AsrConnect, pacing: LivePacing = CAUTIOUS_LIVE_PACING, waitMs = 8000): Promise<LiveTestOutcome> {
   let drop: string | undefined
   let finish: () => void = () => undefined
   const finished = new Promise<void>((resolve) => (finish = resolve))
@@ -28,7 +28,11 @@ export async function runLiveTest(connect: AsrConnect, waitMs = 8000): Promise<L
         finish()
       },
     })
-    for (let sent = 0; sent < SECOND_OF_AUDIO; sent += CHUNK) connection.sendAudio(new Int16Array(CHUNK), false)
+    const chunkMs = (CHUNK / SECOND_OF_AUDIO / pacing.maxRate) * 1000
+    for (let sent = 0; sent < SECOND_OF_AUDIO; sent += CHUNK) {
+      if (sent > 0) await new Promise((resolve) => window.setTimeout(resolve, chunkMs))
+      connection.sendAudio(new Int16Array(CHUNK), false)
+    }
     connection.sendAudio(new Int16Array(0), true)
     let timer: number | undefined
     await Promise.race([finished, new Promise((resolve) => (timer = window.setTimeout(resolve, waitMs)))])
@@ -41,10 +45,10 @@ export async function runLiveTest(connect: AsrConnect, waitMs = 8000): Promise<L
 }
 
 /** The Test button of a provider's settings: runs the test and says the outcome in a notice. */
-export async function testLiveConnection(connect: AsrConnect, name: string, button: HTMLButtonElement): Promise<void> {
+export async function testLiveConnection(connect: AsrConnect, pacing: LivePacing, name: string, button: HTMLButtonElement): Promise<void> {
   button.disabled = true
   try {
-    const outcome = await runLiveTest(connect)
+    const outcome = await runLiveTest(connect, pacing)
     if (outcome.ok) new Notice(t("liveTest.ok", name, outcome.logId ?? ""))
     else new Notice(outcome.message ?? t("liveTest.failed", name), 10000)
   } finally {

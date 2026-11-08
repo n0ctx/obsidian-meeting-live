@@ -17,6 +17,7 @@ export const en: Dictionary = {
   "gap.overflow": "The network was down for longer than the buffer holds; this stretch could not be transcribed",
   "gap.disconnected": "Speech recognition was not connected; this stretch could not be transcribed",
   "gap.unconfigured": "Speech recognition is not configured; this stretch was not transcribed",
+  "gap.unsent": "Recognition could not catch up before the recording stopped; this stretch is in the recording but was not transcribed",
 
   "volc.noEndpoint": "The Volcengine WebSocket address is empty",
   "volc.noResource": "The Volcengine Resource ID is empty",

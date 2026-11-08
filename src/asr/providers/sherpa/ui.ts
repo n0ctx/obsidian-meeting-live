@@ -3,7 +3,7 @@ import { t } from "../../../i18n/index.ts"
 import { textField } from "../../../ui/settingFields.ts"
 import { testLiveConnection } from "../liveTest.ts"
 import type { ProviderSettingsContext } from "../types.ts"
-import { SHERPA_DEFAULT_ENDPOINT } from "./info.ts"
+import { SHERPA_DEFAULT_ENDPOINT, SHERPA_LIVE_PACING } from "./info.ts"
 import { sherpaConfigProblem, sherpaConnector } from "./live.ts"
 import { sherpaConfig } from "./settings.ts"
 
@@ -20,7 +20,7 @@ export function renderSherpaSettings({ containerEl, settings, save }: ProviderSe
         const config = sherpaConfig(sherpa)
         const problem = sherpaConfigProblem(config)
         if (problem) return void new Notice(problem)
-        void testLiveConnection(sherpaConnector(config), t("provider.sherpa"), b.buttonEl)
+        void testLiveConnection(sherpaConnector(config), SHERPA_LIVE_PACING, t("provider.sherpa"), b.buttonEl)
       }),
     )
 }

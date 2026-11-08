@@ -1,3 +1,4 @@
+import { CAUTIOUS_LIVE_PACING, type LivePacing } from "../../contract.ts"
 import type { FileCapabilities, LiveCapabilities } from "../types.ts"
 
 export const DASHSCOPE_ID = "dashscope"
@@ -30,6 +31,14 @@ export const takesInlineHotwords = (model: string): boolean => /^qwen-audio/i.te
 
 /** Takes a language hint; speakers are not separated while streaming (the model table lists no live diarization). */
 export const dashScopeLiveCapabilities = (model: string): LiveCapabilities => ({ hotwords: takesInlineHotwords(model), endWindow: false, language: true, diarization: false })
+
+/**
+ * The documentation states no send rate limit and no error for sending too fast; every example sends 100 ms packets every 100 ms (real time):
+ *   https://www.alibabacloud.com/help/en/model-studio/real-time-speech-recognition-user-guide
+ *   https://www.alibabacloud.com/help/en/model-studio/qwen-audio-asr-streaming-client-events
+ * So the cautious default applies.
+ */
+export const DASHSCOPE_LIVE_PACING: LivePacing = CAUTIOUS_LIVE_PACING
 
 /** The file model that separates speakers and takes up to 12 hours (https://www.alibabacloud.com/help/en/model-studio/asr-model). */
 export const DASHSCOPE_FILE_MODEL = "fun-asr"

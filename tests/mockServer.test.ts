@@ -68,7 +68,7 @@ function recorder() {
 async function recoversFromDrop(connect: AsrConnect, connections: () => Promise<number>): Promise<Utterance[]> {
   const first = await connections()
   const rec = recorder()
-  const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+  const asr = new AsrStreamer(rec.events, { manualTicks: true, pacing: { maxRate: 1000 }, finalTimeoutMs: 3000 })
   asr.begin(0, connect)
   await waitFor(() => asr.currentState === "live")
 
@@ -131,7 +131,7 @@ test("AssemblyAI through the streamer: a forced drop mid-meeting recovers with n
 test("AssemblyAI speaker labels travel from the turns to the streamer's finals, and the formatted-turn models settle each turn once", async () => {
   for (const model of ["universal-3-5-pro", "universal-streaming-multilingual"]) {
     const rec = recorder()
-    const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+    const asr = new AsrStreamer(rec.events, { manualTicks: true, pacing: { maxRate: 1000 }, finalTimeoutMs: 3000 })
     asr.begin(0, assemblyai("k", { diarize: true, model }))
     await waitFor(() => asr.currentState === "live")
     for (let s = 0; s < 10; s++) {
@@ -161,7 +161,7 @@ test("AssemblyAI: a refused key closes with 1008, which is fatal and stops the s
 test("Deepgram end of stream: CloseStream makes the server send the last final and close, and no empty frame is sent", async () => {
   const before = await stats()
   const rec = recorder()
-  const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+  const asr = new AsrStreamer(rec.events, { manualTicks: true, pacing: { maxRate: 1000 }, finalTimeoutMs: 3000 })
   asr.begin(0, deepgram())
   await waitFor(() => asr.currentState === "live")
   asr.push(new Int16Array(16000 * 2).fill(100))
@@ -323,7 +323,7 @@ test("speaker labels travel from Deepgram's words to the finals, the transcript 
   const listen = (diarize: boolean) => deepgramConnector({ endpoint: `${wsBase()}/v1/listen`, apiKey: "k", model: "nova-3", language: "zh", diarize })
   const finalsOf = async (diarize: boolean) => {
     const rec = recorder()
-    const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+    const asr = new AsrStreamer(rec.events, { manualTicks: true, pacing: { maxRate: 1000 }, finalTimeoutMs: 3000 })
     asr.begin(0, listen(diarize))
     await waitFor(() => asr.currentState === "live")
     for (let s = 0; s < 14; s++) {
@@ -348,7 +348,7 @@ test("Volcengine speakers: the request asks for them only when turned on, and sp
   const volc = (speakers: boolean) => volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, hotwords: [], speakers })
   const finalsOf = async (speakers: boolean) => {
     const rec = recorder()
-    const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+    const asr = new AsrStreamer(rec.events, { manualTicks: true, pacing: { maxRate: 1000 }, finalTimeoutMs: 3000 })
     asr.begin(0, volc(speakers))
     await waitFor(() => asr.currentState === "live")
     for (let s = 0; s < 16; s++) {

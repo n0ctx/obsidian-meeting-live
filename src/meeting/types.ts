@@ -19,7 +19,7 @@ export interface AudioSegment {
 }
 
 /** Why a stretch of audio was not transcribed, for wording the reason in whichever language it is read. */
-export type GapCode = "overflow" | "disconnected" | "unconfigured"
+export type GapCode = "overflow" | "disconnected" | "unconfigured" | "unsent"
 
 export interface TranscriptGap {
   startMs: number

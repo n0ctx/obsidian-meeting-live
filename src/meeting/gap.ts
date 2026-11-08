@@ -1,7 +1,7 @@
 import { tr, uiLang, type Key, type Lang } from "../i18n/index.ts"
 import type { GapCode, TranscriptGap } from "./types.ts"
 
-const KEYS = { overflow: "gap.overflow", disconnected: "gap.disconnected", unconfigured: "gap.unconfigured" } as const satisfies Record<GapCode, Key>
+const KEYS = { overflow: "gap.overflow", disconnected: "gap.disconnected", unconfigured: "gap.unconfigured", unsent: "gap.unsent" } as const satisfies Record<GapCode, Key>
 
 /** A gap with its reason worded in the interface language, which is what the meeting data keeps for older readers. */
 export function newGap(startMs: number, endMs: number, code: GapCode): TranscriptGap {

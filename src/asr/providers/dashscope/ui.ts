@@ -3,7 +3,7 @@ import { t } from "../../../i18n/index.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
 import { testLiveConnection } from "../liveTest.ts"
 import type { ProviderSettingsContext } from "../types.ts"
-import { DASHSCOPE_LIVE_MODEL, isDashScopeRegion } from "./info.ts"
+import { DASHSCOPE_LIVE_MODEL, isDashScopeRegion, DASHSCOPE_LIVE_PACING } from "./info.ts"
 import { dashScopeConfigProblem, dashScopeConnector } from "./live.ts"
 import { dashScopeConfig } from "./settings.ts"
 
@@ -37,7 +37,7 @@ export function renderDashScopeSettings({ app, containerEl, settings, save, role
           const config = dashScopeConfig(app.secretStorage, dashscope, settings.asrLanguage, settings.hotwords)
           const problem = dashScopeConfigProblem(config)
           if (problem) return void new Notice(problem)
-          void testLiveConnection(dashScopeConnector(config), t("provider.dashscope"), b.buttonEl)
+          void testLiveConnection(dashScopeConnector(config), DASHSCOPE_LIVE_PACING, t("provider.dashscope"), b.buttonEl)
         }),
       )
   }

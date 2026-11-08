@@ -2,7 +2,7 @@ import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { FILE_ASR_HOST, volcFileProvider } from "./file.ts"
-import { VOLC_FILE_CAPABILITIES, VOLC_ID, volcLiveCapabilities } from "./info.ts"
+import { VOLC_FILE_CAPABILITIES, VOLC_ID, VOLC_LIVE_PACING, volcLiveCapabilities } from "./info.ts"
 import { volcConfigProblem, volcConnector } from "./live.ts"
 import { volcConfig } from "./settings.ts"
 import { renderVolcSettings } from "./ui.ts"
@@ -17,6 +17,7 @@ export const volcProvider: AsrProvider = {
   nameIn: (lang: Lang) => tr(lang, "provider.volc"),
   live: {
     capabilities: (settings) => volcLiveCapabilities(settings.providers.volc.speakers),
+    pacing: () => VOLC_LIVE_PACING,
     host: (settings) => hostOf(settings.providers.volc.endpoint),
     resolve: (env) => {
       const config = configOf(env)

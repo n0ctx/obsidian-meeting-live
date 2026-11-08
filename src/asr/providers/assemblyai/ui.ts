@@ -3,7 +3,7 @@ import { t } from "../../../i18n/index.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
 import { testLiveConnection } from "../liveTest.ts"
 import type { ProviderSettingsContext } from "../types.ts"
-import { ASSEMBLYAI_LIVE_MODEL, isAssemblyAiRegion } from "./info.ts"
+import { ASSEMBLYAI_LIVE_MODEL, isAssemblyAiRegion, ASSEMBLYAI_LIVE_PACING } from "./info.ts"
 import { assemblyAiConfigProblem, assemblyAiConnector } from "./live.ts"
 import { assemblyAiConfig } from "./settings.ts"
 
@@ -45,7 +45,7 @@ export function renderAssemblyAiSettings({ app, containerEl, settings, save, rol
         const config = assemblyAiConfig(app.secretStorage, assemblyai, settings.hotwords)
         const problem = assemblyAiConfigProblem(config)
         if (problem) return void new Notice(problem)
-        void testLiveConnection(assemblyAiConnector(config), t("provider.assemblyai"), b.buttonEl)
+        void testLiveConnection(assemblyAiConnector(config), ASSEMBLYAI_LIVE_PACING, t("provider.assemblyai"), b.buttonEl)
       }),
     )
 }

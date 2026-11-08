@@ -23,7 +23,7 @@ function harness(diarize = false, base = 0) {
   const finals: Utterance[] = []
   let interims: Utterance[] = []
   const connections: { handlers: AsrConnectionHandlers; sent: number }[] = []
-  const asr = new AsrStreamer({ onFinal: (u) => finals.push(u), onInterim: (list) => (interims = list), onGap: () => undefined, onState: () => undefined }, { manualTicks: true, finalTimeoutMs: 50, maxChunksPerTick: 100 })
+  const asr = new AsrStreamer({ onFinal: (u) => finals.push(u), onInterim: (list) => (interims = list), onGap: () => undefined, onState: () => undefined }, { manualTicks: true, finalTimeoutMs: 50, pacing: { maxRate: 100 } })
   const connect = async (handlers: AsrConnectionHandlers) => {
     const record = { handlers, sent: 0 }
     connections.push(record)

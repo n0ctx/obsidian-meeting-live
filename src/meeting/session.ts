@@ -149,6 +149,8 @@ export class MeetingSession extends Events {
   // ---------------------------------------------------------------- lifecycle
 
   start(): Promise<void> {
+    // The recording a pause just ended may still be sending its backlog; a resume must not wait for that, since nothing is recorded meanwhile.
+    if (this.meta.status === "paused") this.asr?.interruptFlush()
     return this.serialize(() => this.doStart())
   }
 
@@ -223,7 +225,7 @@ export class MeetingSession extends Events {
   }
 
   /** Starts recognition with the recognizer resolved for this run, so settings changed between runs apply to the next one. */
-  private startAsr({ connect, problem }: ResolvedLive): void {
+  private startAsr({ connect, pacing, problem }: ResolvedLive): void {
     this.asrDetail = problem
     if (!this.asr) {
       this.asr = new AsrStreamer({
@@ -245,7 +247,7 @@ export class MeetingSession extends Events {
       this.asr.restore(this.utterances)
     }
     this.runGapStart = this.meta.gaps.length
-    this.asr.begin(this.durationMs, connect)
+    this.asr.begin(this.durationMs, connect, pacing)
     this.asrState = this.asr.currentState
   }
 
@@ -340,7 +342,7 @@ export class MeetingSession extends Events {
       this.emitChange()
       return
     }
-    if (!this.asr.retryNow(resolved.connect)) return
+    if (!this.asr.retryNow(resolved.connect, resolved.pacing)) return
     this.asrRun = resolved
     // A stretch of audio is tagged with the provider it is sent to, which may be another one from here on.
     if (this.liveSegment) this.liveSegment.asrProvider = resolved.id

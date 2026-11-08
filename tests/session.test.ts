@@ -8,6 +8,9 @@ import { MeetingSession, type SessionEnv } from "../src/meeting/session.ts"
 import type { MeetingMeta } from "../src/meeting/types.ts"
 import { DEFAULT_SETTINGS } from "../src/settings.ts"
 
+/** Fast enough that one tick sends what the test buffered. */
+const PACING = { maxRate: 6 }
+
 /** A connector whose connections answer the end of stream at once and can be fed results by the test. */
 function connector() {
   const sent = { connections: 0 }
@@ -57,9 +60,9 @@ test("the recognizer is resolved at every run and each audio segment records the
   const a = connector()
   const b = connector()
   const plan: ResolvedLive[] = [
-    { id: "volc", name: "火山引擎", connect: a.connect },
-    { id: "volc", name: "火山引擎", connect: null, problem: "未配置凭证" },
-    { id: "other", name: "其他服务", connect: b.connect },
+    { id: "volc", name: "火山引擎", connect: a.connect, pacing: PACING },
+    { id: "volc", name: "火山引擎", connect: null, pacing: PACING, problem: "未配置凭证" },
+    { id: "other", name: "其他服务", connect: b.connect, pacing: PACING },
   ]
   let calls = 0
   const session = setup(() => plan[calls++])
@@ -109,11 +112,13 @@ test("retry now in the failed state resolves the recognizer afresh and loses nei
     connect: async () => {
       throw new AsrError("鉴权失败", true)
     },
+    pacing: PACING,
   }
   const sent: number[] = []
   const fixed: ResolvedLive = {
     id: "other",
     name: "其他服务",
+    pacing: PACING,
     connect: async (handlers) => ({
       connection: {
         sendAudio: (pcm, last) => {
@@ -156,8 +161,9 @@ test("retry now with settings that no longer resolve to a recognizer shows why a
     connect: async () => {
       throw new AsrError("鉴权失败", true)
     },
+    pacing: PACING,
   }
-  const plan: ResolvedLive[] = [rejected, { id: "volc", name: "火山引擎", connect: null, problem: "未配置凭证" }]
+  const plan: ResolvedLive[] = [rejected, { id: "volc", name: "火山引擎", connect: null, pacing: PACING, problem: "未配置凭证" }]
   let calls = 0
   const session = setup(() => plan[calls++])
   await session.start()
@@ -173,7 +179,7 @@ test("retry now with settings that no longer resolve to a recognizer shows why a
 const mockDevice = (t: TestContext, closeCapture: () => Promise<void> = async () => undefined) => {
   t.mock.method(AudioCapture, "open", async () => ({ sampleRate: 16000, channels: 1, deviceLabel: "测试麦克风", close: closeCapture }) as unknown as AudioCapture)
 }
-const idle: ResolvedLive = { id: "volc", name: "火山引擎", connect: null, problem: "未配置凭证" }
+const idle: ResolvedLive = { id: "volc", name: "火山引擎", connect: null, pacing: PACING, problem: "未配置凭证" }
 
 test("when the recorder fails and no new file can be opened, the card is told instead of a rejection going unseen", async (t) => {
   mockDevice(t)
@@ -220,4 +226,24 @@ test("the summary queue, which callers start and do not wait for, never rejects"
   } finally {
     logged.mock.restore()
   }
+})
+
+test("resuming does not wait for a paused run to send its backlog: the unsent audio becomes a gap and recording restarts", { timeout: 15_000 }, async (t) => {
+  mockDevice(t)
+  t.mock.method(SegmentRecorder, "create", async () => ({ write: () => undefined, close: async () => undefined }))
+  const slow = connector()
+  const session = setup(() => ({ id: "slow", name: "慢速服务", connect: slow.connect, pacing: { maxRate: 1.25 } }))
+  await session.start()
+  await settle()
+  // A minute of audio that has not been sent: at 1.25x, flushing it would take 48 s with the microphone closed.
+  ;(session as unknown as { asr: { push(pcm: Int16Array): void } }).asr.push(new Int16Array(60 * 16000))
+  const pausing = session.pause()
+  const started = Date.now()
+  await session.start()
+  await pausing
+  assert.ok(Date.now() - started < 3000, `resuming waited ${Date.now() - started} ms`)
+  assert.equal(session.status, "recording")
+  assert.ok(session.meta.gaps.some((g) => g.code === "unsent"), "the unsent part is recorded as a gap")
+  await session.pause()
+  await session.stop()
 })

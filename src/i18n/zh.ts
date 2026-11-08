@@ -17,6 +17,7 @@ export const zh = {
   "gap.overflow": "网络中断超过缓冲时长，该时段未能转写",
   "gap.disconnected": "ASR 未连接，该时段未能转写",
   "gap.unconfigured": "未配置语音识别，该时段未转写",
+  "gap.unsent": "录音停止前识别未能追上进度，该时段已录音但未转写",
 
   "volc.noEndpoint": "未填写火山引擎 WebSocket 地址",
   "volc.noResource": "未填写火山引擎 Resource ID",

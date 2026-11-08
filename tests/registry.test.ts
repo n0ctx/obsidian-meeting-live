@@ -68,6 +68,7 @@ const liveOnly: AsrProvider = {
   name: "仅实时",
   live: {
     capabilities: () => ({ hotwords: false, endWindow: false, language: true, diarization: true }),
+    pacing: () => ({ maxRate: 2 }),
     host: () => "live.example.com",
     resolve: () => ({ connect: async () => Promise.reject(new Error("unused")) }),
   },

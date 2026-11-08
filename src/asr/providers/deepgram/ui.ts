@@ -3,6 +3,7 @@ import { t } from "../../../i18n/index.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
 import { testLiveConnection } from "../liveTest.ts"
 import type { ProviderSettingsContext } from "../types.ts"
+import { DEEPGRAM_LIVE_PACING } from "./info.ts"
 import { deepgramConfigProblem, deepgramConnector } from "./live.ts"
 import { deepgramConfig } from "./settings.ts"
 
@@ -35,7 +36,7 @@ export function renderDeepgramSettings({ app, containerEl, settings, save, roles
         const config = deepgramConfig(app.secretStorage, deepgram, settings.asrLanguage)
         const problem = deepgramConfigProblem(config)
         if (problem) return void new Notice(problem)
-        void testLiveConnection(deepgramConnector(config), t("provider.deepgram"), b.buttonEl)
+        void testLiveConnection(deepgramConnector(config), DEEPGRAM_LIVE_PACING, t("provider.deepgram"), b.buttonEl)
       }),
     )
 }

@@ -5,7 +5,7 @@ import type { MeetingLiveSettings } from "../../../settings.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
 import { testLiveConnection } from "../liveTest.ts"
 import type { ProviderSettingsContext } from "../types.ts"
-import { VOLC_LIVE_CAPABILITIES } from "./info.ts"
+import { VOLC_LIVE_CAPABILITIES, VOLC_LIVE_PACING } from "./info.ts"
 import { volcConfigProblem, volcConnector } from "./live.ts"
 import { volcConfig } from "./settings.ts"
 
@@ -64,5 +64,5 @@ function testConnection(secrets: SecretReader, settings: MeetingLiveSettings, bu
   const config = volcConfig(secrets, settings.providers.volc, settings.hotwords)
   const problem = volcConfigProblem(config)
   if (problem) return void new Notice(problem)
-  void testLiveConnection(volcConnector(config), t("provider.volc"), button)
+  void testLiveConnection(volcConnector(config), VOLC_LIVE_PACING, t("provider.volc"), button)
 }

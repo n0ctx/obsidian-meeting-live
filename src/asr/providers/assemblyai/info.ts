@@ -1,3 +1,4 @@
+import type { LivePacing } from "../../contract.ts"
 import type { FileCapabilities, LiveCapabilities } from "../types.ts"
 
 export const ASSEMBLYAI_ID = "assemblyai"
@@ -32,6 +33,14 @@ export const needsFormatTurns = (model: string): boolean => /^universal-streamin
  * after the session begins (up to 100). `speaker_labels` labels speakers while streaming.
  */
 export const ASSEMBLYAI_LIVE_CAPABILITIES: LiveCapabilities = { hotwords: true, endWindow: false, language: false, diarization: true }
+
+/**
+ * Audio may be sent faster than real time, but "throughput is throttled at ~1.25x real time"; the server closes the session with error 3007
+ * once more than five minutes of audio are buffered ahead of processing, and advises pacing at about real time to keep Turn messages consistent:
+ *   https://www.assemblyai.com/docs/streaming/message-sequence
+ *   https://www.assemblyai.com/docs/streaming/guides/stream_prerecorded_file_realtime
+ */
+export const ASSEMBLYAI_LIVE_PACING: LivePacing = { maxRate: 1.25 }
 
 /** `/v2/upload` takes files up to 2.2 GB (https://www.assemblyai.com/docs/getting-started/transcribe-an-audio-file). */
 export const ASSEMBLYAI_FILE_LIMIT = Math.floor(2.2 * 1024 * 1024 * 1024)
