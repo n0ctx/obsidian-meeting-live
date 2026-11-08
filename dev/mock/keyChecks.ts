@@ -19,13 +19,13 @@ export const MOCK_MODELS = ["mock-chat-large", "mock-chat-small"]
 export function keyCheckRoutes(req: IncomingMessage, res: ServerResponse): boolean {
   if (req.method !== "GET" || !req.url) return false
   const path = new URL(req.url, "http://mock").pathname
-  if (path.endsWith("/v1/models")) {
-    if (bearer(req) === "bad") return answer(res, 401, { error: { message: "Incorrect API key provided: bad", type: "invalid_request_error" } })
-    return answer(res, 200, { object: "list", data: MOCK_MODELS.map((id) => ({ id, object: "model", owned_by: "mock" })) })
-  }
   if (path === "/api/v1/models") {
     if (bearer(req) === "bad") return answer(res, 401, { code: "InvalidApiKey", message: "Invalid API-key provided." })
     return answer(res, 200, { output: { total: 2, page_no: 1, page_size: 100, models: MOCK_MODELS.map((model) => ({ model })) } })
+  }
+  if (path.endsWith("/v1/models")) {
+    if (bearer(req) === "bad") return answer(res, 401, { error: { message: "Incorrect API key provided: bad", type: "invalid_request_error" } })
+    return answer(res, 200, { object: "list", data: MOCK_MODELS.map((id) => ({ id, object: "model", owned_by: "mock" })) })
   }
   if (path === "/v1/auth/token") {
     if (req.headers.authorization?.replace(/^Token /, "") === "bad") return answer(res, 401, { err_code: "INVALID_AUTH", err_msg: "Invalid credentials." })

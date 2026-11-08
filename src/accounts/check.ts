@@ -84,7 +84,8 @@ async function checkVolc(account: Account, key: string, deps: CheckDeps): Promis
   const found = await detectVolcResource(config, deps.volcHandshake)
   if (found.state === "unreachable") return unreachable(found.message)
   if (found.state === "refused") return { state: "failed", message: t("check.volcRefused", found.status) }
-  const options = { resourceId: found.resourceId, fileResourceId: fileResourceFor(found.resourceId, settings.fileResourceId, DEFAULT_VOLC.fileResourceId) }
+  // A resource the account already had and that works is left alone, the file one too; only a move to another resource brings the file resource along.
+  const options = found.changed ? { resourceId: found.resourceId, fileResourceId: fileResourceFor(found.resourceId, settings.fileResourceId, DEFAULT_VOLC.fileResourceId) } : { resourceId: found.resourceId }
   return { state: "ok", options, note: t("check.volcResource", found.resourceId) }
 }
 
