@@ -266,8 +266,17 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
       Object.assign(account.options, result.options)
       this.save()
     }
-    if (result.models?.length) this.modelLists.set(account.id, { models: result.models, source: "fetched" })
+    if (result.models?.length) this.takeModels(account, result.models)
     this.status.set(account.id, { kind: "ok", text: result.models?.length ? t("settings.status.models", result.models.length) : (result.note ?? t("settings.status.ok")) })
+  }
+
+  /** Keeps the list a service gave. A service with no suggested model (Custom, OpenRouter) leaves the model empty, so the first listed one fills it in. */
+  private takeModels(account: Account, models: string[]): void {
+    this.modelLists.set(account.id, { models, source: "fetched" })
+    if (this.s.roles.llm.account === account.id && !this.s.roles.llm.model) {
+      this.s.roles.llm.model = models[0]
+      this.save()
+    }
   }
 
   private remove(account: Account): void {
@@ -372,7 +381,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
   private draftAddress(box: HTMLElement, def: ServiceDef, draft: Draft, changed: () => void): void {
     new Setting(box)
       .setName(t("settings.add.address"))
-      .setDesc(def.address === "required" ? t("settings.add.address.required") : def.address === "prefilled" ? t("settings.add.address.prefilled") : t("settings.account.address.desc"))
+      .setDesc(def.address === "required" ? t("settings.add.address.required") : def.address === "prefilled" ? t("settings.add.address.prefilled") : t("settings.address.other"))
       .addText((field) => {
         const key = addressKeyOf(def)!
         field.setPlaceholder(String(def.options(draft.region)[key] ?? "")).setValue(draft.address).onChange((v) => {
@@ -435,7 +444,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     }, serviceDef(account.service)?.name ?? "")
     if (!def.keyless || def.presets) this.keyReplaceField(el, account)
     const addressKey = addressKeyOf(def)
-    if (addressKey) textField(new Setting(el).setName(t("settings.account.address")).setDesc(t("settings.account.address.desc")), account.options, addressKey, save, String(def.options("")[addressKey] ?? ""))
+    if (addressKey) textField(new Setting(el).setName(t("settings.account.address")).setDesc(def.presets ? t("settings.account.address.desc") : t("settings.address.other")), account.options, addressKey, save, String(def.options("")[addressKey] ?? ""))
     providerOf(account)?.renderAdvanced({ app: this.app, containerEl: el, account, save, refresh: () => this.renderAccounts() })
     const preset = presetOfService(def, account.options)
     if (preset) this.llmAdvanced(el, account, preset)
@@ -602,7 +611,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     const config = accountLlmConfig(account, readSecret(this.app.secretStorage, account.apiKeySecret), this.s.roles.llm.model)
     if (!config) return
     const outcome = await listModels(config.preset.id, config, this.plugin.get)
-    if (outcome.state === "ok" && outcome.models.length) this.modelLists.set(account.id, { models: outcome.models, source: "fetched" })
+    if (outcome.state === "ok" && outcome.models.length) this.takeModels(account, outcome.models)
     else this.modelLists.set(account.id, { models: curatedModels(config.preset.id, config.preset.model), source: outcome.state === "ok" || outcome.state === "none" ? "fallback" : "failed" })
     if (outcome.state === "rejected") this.status.set(account.id, { kind: "failed", text: t("settings.status.failed", t("check.rejected", outcome.status)) })
     this.renderAccounts()
