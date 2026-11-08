@@ -1,5 +1,5 @@
 import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
-import { ensureConsentFor, type Destination } from "./consent.ts"
+import { ensureConsentFor, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
 import { t } from "./i18n/index.ts"
 import { resolveFile, resolveLive } from "./asr/providers/registry.ts"
 import type { ProviderEnv } from "./asr/providers/types.ts"
@@ -55,6 +55,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       settings: () => this.settings,
       asr: () => resolveLive(this.providerEnv()),
       llm: () => this.llm(),
+      llmConsented: () => !needsConsent(this.settings, ["llm"]),
     })
 
     this.registerMarkdownCodeBlockProcessor("meeting-live", (source, el, ctx) => {
@@ -129,11 +130,16 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     return ensureConsentFor(this.settings, (destinations) => new ConsentModal(this.app, destinations).ask(), () => this.saveSettings(), kinds)
   }
 
-  openMinutes(session: MeetingSession): void {
+  /** Opens the minutes dialog once the user has agreed to where the model service is, which may have changed since the recording. */
+  async openMinutes(session: MeetingSession): Promise<void> {
     if (session.llmProblem) {
       new Notice(t("notice.configureFirst", session.llmProblem))
       return
     }
+    await withLlmConsent((kinds) => this.ensureConsent(kinds), () => this.showMinutes(session))
+  }
+
+  private showMinutes(session: MeetingSession): void {
     new MinutesModal(this.app, session, {
       prompt: this.settings.minutesPrompt,
       target: this.llm().target,
@@ -143,6 +149,20 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       },
       onDone: (path) => this.openPath(path),
     }).open()
+  }
+
+  /** Cuts a summary of what has not been summarized yet, after the user has agreed to where the model service is. */
+  async summarize(session: MeetingSession): Promise<void> {
+    if (session.llmProblem) {
+      new Notice(t("notice.configureFirst", session.llmProblem))
+      return
+    }
+    await withLlmConsent((kinds) => this.ensureConsent(kinds), () => new Notice(session.summarizeNow() ? t("notice.summarizing") : t("notice.nothingToSummarize")))
+  }
+
+  /** After the user agrees to a new model service, what waited for it goes out. */
+  async confirmLlm(session: MeetingSession): Promise<void> {
+    await withLlmConsent((kinds) => this.ensureConsent(kinds), () => Promise.all([session.runQueue(), session.updateOverview()]))
   }
 
   openSettings(): void {
@@ -207,7 +227,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     withSession("start", t("cmd.start"), "mic", async (s) => (await this.ensureConsent()) && s.start(), (s) => s.status !== "recording" && s.status !== "stopping")
     withSession("pause", t("cmd.pause"), "pause", (s) => s.pause(), (s) => s.status === "recording")
     withSession("stop", t("cmd.stop"), "square", (s) => s.stop(), (s) => ["recording", "paused", "interrupted"].includes(s.status))
-    withSession("summarize", t("cmd.summarize"), "list", (s) => !s.summarizeNow() && new Notice(t("notice.nothingToSummarize")), () => true)
+    withSession("summarize", t("cmd.summarize"), "list", (s) => this.summarize(s), () => true)
     withSession("minutes", t("cmd.minutes"), "file-pen-line", (s) => this.openMinutes(s), (s) => s.utterances.length > 0)
   }
 

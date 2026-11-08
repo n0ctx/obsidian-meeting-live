@@ -85,7 +85,7 @@ export function fakeSession(options: { settings?: Partial<MeetingLiveSettings>; 
     }),
     claim: () => undefined,
     release: () => undefined,
-    ...(options.consented === undefined ? {} : { llmConsented: () => options.consented }),
+    llmConsented: () => options.consented ?? true,
   } as unknown as SessionEnv
   const session = new MeetingSession(env, "Meetings/周会", options.meta ?? meetingMeta(), options.transcript ?? TRANSCRIPT)
   return { session, env, written, llmCalls, note, settings }

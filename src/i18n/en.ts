@@ -457,4 +457,9 @@ export const en: Dictionary = {
   "settings.noteLanguage.auto": "Follow the interface language",
   "settings.noteLanguage.zh": "中文",
   "settings.noteLanguage.en": "English",
+
+  // ---- consent for the model service
+  "session.consentNeeded": "You have not yet agreed to send the transcript to the current LLM service (the service or address changed). Confirm and try again.",
+  "card.alert.consent": (target) => `Summaries are paused: the LLM service is now ${target}, and you need to confirm sending the transcript there first.`,
+  "card.alert.confirm": "Confirm",
 }

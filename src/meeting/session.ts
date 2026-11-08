@@ -22,6 +22,11 @@ export interface SessionEnv {
   /** The live recognizer under the current settings; asked afresh for every recording run. */
   asr: () => ResolvedLive
   llm: () => LlmClient
+  /**
+   * Whether the user has agreed to send text to the model service as it is configured now. The host may have changed since the
+   * meeting was recorded, so a meeting that is not recording must not send anything until they agree again.
+   */
+  llmConsented: () => boolean
   /** Ensures only one meeting records at a time; returns an error message if blocked. */
   claim: (session: MeetingSession) => string | undefined
   release: (session: MeetingSession) => void
@@ -104,6 +109,10 @@ export class MeetingSession extends Events {
 
   get llmProblem(): string | undefined {
     return this.env.llm().problem
+  }
+
+  get llmConsented(): boolean {
+    return this.env.llmConsented()
   }
 
   /** Language of what this meeting writes into notes and files, under the current settings. */
@@ -374,7 +383,8 @@ export class MeetingSession extends Events {
     if (this.queueRunning) return
     this.queueRunning = true
     try {
-      for (let record = this.nextPending(); record; record = this.nextPending()) {
+      // Records wait as pending, not failed, while consent is missing: nothing is lost, and they run once the user agrees.
+      for (let record = this.nextPending(); record && this.llmConsented; record = this.nextPending()) {
         await this.runSummary(record)
         await this.updateOverview()
       }
@@ -443,7 +453,7 @@ export class MeetingSession extends Events {
     try {
       for (let stages = this.overviewBacklog; stages.length; stages = this.overviewBacklog) {
         const llm = this.env.llm()
-        if (llm.problem) return
+        if (llm.problem || !this.llmConsented) return
         const overview = this.meta.overview ?? { stages: [] }
         const merged = [...overview.stages, ...stages.map((s) => s.index)].sort((a, b) => a - b)
         const substantive = stages.filter((s) => !s.content || !isEmptySummary(s.content))
@@ -534,6 +544,7 @@ export class MeetingSession extends Events {
   async generateMinutes(prompt: string, notes: { path: string; content: string }[], onProgress?: (text: string) => void): Promise<string> {
     const llm = this.env.llm()
     if (llm.problem) throw new Error(llm.problem)
+    if (!this.llmConsented) throw new Error(t("session.consentNeeded"))
     if (this.utterances.length === 0) throw new Error(t("session.noTranscript"))
     this.minutes = { status: "running" }
     this.emitChange()

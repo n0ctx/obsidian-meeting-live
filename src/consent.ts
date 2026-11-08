@@ -50,6 +50,13 @@ export function needsConsent(settings: MeetingLiveSettings, kinds?: Destination[
  * True when every destination of the given kinds (all by default) has been agreed to, asking first if one has not.
  * The question lists all of those destinations; accepting records them all.
  */
+/** Runs `action` once the user has agreed to where the model service is, asking first if its host is new. False when they declined. */
+export async function withLlmConsent(ensure: (kinds: Destination["kind"][]) => Promise<boolean>, action: () => unknown): Promise<boolean> {
+  if (!(await ensure(["llm"]))) return false
+  await action()
+  return true
+}
+
 export async function ensureConsentFor(settings: MeetingLiveSettings, ask: (destinations: Destination[]) => Promise<boolean>, save: () => Promise<void>, kinds?: Destination["kind"][]): Promise<boolean> {
   if (!needsConsent(settings, kinds)) return true
   const current = relevant(settings, kinds)

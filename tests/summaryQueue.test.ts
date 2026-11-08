@@ -29,6 +29,7 @@ function setup(reply: (messages: ChatMessage[]) => string) {
       },
     },
     settings: () => DEFAULT_SETTINGS,
+    llmConsented: () => true,
     llm: () => ({
       problem: undefined,
       model: "fake",

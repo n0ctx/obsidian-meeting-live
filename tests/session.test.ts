@@ -38,6 +38,7 @@ function setup(resolve: () => ResolvedLive) {
     },
     settings: () => ({ ...DEFAULT_SETTINGS, audioFormat: "wav" as const }),
     asr: resolve,
+    llmConsented: () => true,
     llm: () => ({ problem: "未配置", model: "", target: "", complete: async () => "" }),
     claim: () => undefined,
     release: () => undefined,

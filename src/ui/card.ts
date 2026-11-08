@@ -1,4 +1,5 @@
 import { MarkdownRenderChild, Menu, Notice, TFile, setIcon, type App, type EventRef, type Events, type MarkdownPostProcessorContext } from "obsidian"
+import { withLlmConsent, type Destination } from "../consent.ts"
 import { t, type Key } from "../i18n/index.ts"
 import type { LlmClient } from "../llm/client.ts"
 import type { MeetingManager } from "../meeting/manager.ts"
@@ -17,8 +18,12 @@ export interface CardHost {
   /** The live recognizer under the current settings: its display name and why it cannot be used, if it cannot. */
   asr(): { name: string; problem?: string }
   llm(): LlmClient
-  ensureConsent(): Promise<boolean>
-  openMinutes(session: MeetingSession): void
+  ensureConsent(kinds?: Destination["kind"][]): Promise<boolean>
+  openMinutes(session: MeetingSession): Promise<void>
+  /** Summarizes what is new, after asking about the model service if it is a new one. */
+  summarize(session: MeetingSession): Promise<void>
+  /** Agrees to the current model service and lets the summaries that waited for it go out. */
+  confirmLlm(session: MeetingSession): Promise<void>
   openSettings(): void
   openPath(path: string): void
   revealFolder(session: MeetingSession): void
@@ -435,13 +440,12 @@ export class MeetingCard extends MarkdownRenderChild {
   }
 
   private summarizeNow(): void {
-    const session = this.session!
-    if (session.llmProblem) {
-      new Notice(t("notice.configureFirst", session.llmProblem))
-      return
-    }
-    if (!session.summarizeNow()) new Notice(t("notice.nothingToSummarize"))
-    else new Notice(t("notice.summarizing"))
+    void this.host.summarize(this.session!)
+  }
+
+  /** Runs an action that sends text to the model service once the user has agreed to where that is. */
+  private withLlm(action: () => unknown): void {
+    void withLlmConsent((kinds) => this.host.ensureConsent(kinds), action)
   }
 
   private openMenu(event: MouseEvent): void {
@@ -451,7 +455,7 @@ export class MeetingCard extends MarkdownRenderChild {
     if (session.isLive && (session.asrState === "failed" || session.asrState === "reconnecting")) {
       menu.addItem((i) => i.setTitle(t("card.menu.reconnect")).setIcon("refresh-cw").onClick(() => session.retryAsr()))
     }
-    menu.addItem((i) => i.setTitle(t("card.menu.minutes")).setIcon("file-pen-line").onClick(() => this.host.openMinutes(session)))
+    menu.addItem((i) => i.setTitle(t("card.menu.minutes")).setIcon("file-pen-line").onClick(() => void this.host.openMinutes(session)))
     menu.addSeparator()
     menu.addItem((i) => i.setTitle(t("card.menu.openRaw")).setIcon("captions").onClick(() => this.host.openPath(session.transcriptPath)))
     menu.addItem((i) => i.setTitle(platformText("reveal")).setIcon("folder-open").onClick(() => this.host.revealFolder(session)))
@@ -487,6 +491,10 @@ export class MeetingCard extends MarkdownRenderChild {
       tone = "warn"
       text = t("card.alert.reconnecting", session.asrName, session.asrDetail ?? "")
       actions.push([t("card.alert.reconnectNow"), () => session.retryAsr()])
+    } else if (!session.llmProblem && !session.llmConsented && (session.meta.summaries.some((s) => s.status === "pending") || (session.isLive && this.host.settings.autoSummary))) {
+      tone = "warn"
+      text = t("card.alert.consent", this.host.llm().target)
+      actions.push([t("card.alert.confirm"), () => void this.host.confirmLlm(session)])
     } else if (!session.llmProblem) {
       const failed = session.meta.summaries.filter((s) => s.status === "failed")
       const overview = session.meta.overview
@@ -495,15 +503,15 @@ export class MeetingCard extends MarkdownRenderChild {
         tone = "warn"
         const last = failed[failed.length - 1]
         text = failed.length > 1 ? t("card.alert.summariesFailed", failed.length, last.error ?? t("common.unknownError")) : t("card.alert.summaryFailed", last.index, last.error ?? t("common.unknownError"))
-        actions.push([t("common.retry"), () => failed.forEach((s) => session.retrySummary(s.index))])
+        actions.push([t("common.retry"), () => this.withLlm(() => failed.forEach((s) => session.retrySummary(s.index)))])
       } else if (overview?.error && !session.overviewRunning) {
         tone = "warn"
         text = t("card.alert.overviewFailed", overview.error)
-        actions.push([t("common.retry"), () => void session.updateOverview()])
+        actions.push([t("common.retry"), () => this.withLlm(() => session.updateOverview())])
       } else if (backlog > 0 && !session.isLive && !session.overviewRunning && session.meta.summaries.every((s) => s.status === "done" || s.status === "failed")) {
         tone = "warn"
         text = t("card.alert.backlog", backlog)
-        actions.push([t("card.alert.merge"), () => void session.updateOverview()])
+        actions.push([t("card.alert.merge"), () => this.withLlm(() => session.updateOverview())])
       }
     }
     this.alertEl.toggleClass("is-visible", !!text)
@@ -560,6 +568,6 @@ export class MeetingCard extends MarkdownRenderChild {
     minutes.createSpan({ text: running ? t("card.foot.generating") : t("card.foot.generate") })
     minutes.toggleClass("is-spinning", running)
     minutes.disabled = running || session.utterances.length === 0
-    minutes.addEventListener("click", () => this.host.openMinutes(session))
+    minutes.addEventListener("click", () => void this.host.openMinutes(session))
   }
 }

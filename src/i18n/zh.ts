@@ -457,6 +457,11 @@ export const zh = {
   "settings.noteLanguage.auto": "跟随界面语言",
   "settings.noteLanguage.zh": "中文",
   "settings.noteLanguage.en": "English",
+
+  // ---- consent for the model service
+  "session.consentNeeded": "尚未确认把转写文本发送到当前的 LLM 服务（服务或地址已更改），请确认后再试",
+  "card.alert.consent": (target: string) => `摘要已暂停：LLM 服务现在是 ${target}，需要先确认把转写文本发送到那里。`,
+  "card.alert.confirm": "确认",
 }
 
 export type Dictionary = { [K in keyof typeof zh]: (typeof zh)[K] extends (...args: infer A) => string ? (...args: A) => string : string }
