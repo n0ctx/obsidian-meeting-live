@@ -47,7 +47,7 @@ export function parseDashScopeMessage(raw: string, sentMs: number): DashScopeEve
   try {
     const parsed = JSON.parse(raw) as unknown
     if (!parsed || typeof parsed !== "object") return { kind: "ignore" }
-    message = parsed as typeof message
+    message = parsed
   } catch {
     return { kind: "ignore" }
   }

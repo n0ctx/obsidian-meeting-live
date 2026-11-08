@@ -64,7 +64,7 @@ test("a failed write-up retries without re-running recognition, then replaces th
     new Promise<void>((resolve) => {
       const ref = jobs.on("change", (j: unknown) => {
         if ((j as TranscribeJob).finished && jobs.running === 0) {
-          jobs.offref(ref as never)
+          jobs.offref(ref)
           resolve()
         }
       })
@@ -155,7 +155,7 @@ test("retrying a failed write-up asks again about the model's host, which may ha
   const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: 0, read: async () => new Uint8Array([1, 2, 3]) }
   const job = new TranscribeJob(app, deps, file("访谈.md"), source, asr, { speakers: true, writeUp: true })
   const jobs = new TranscribeJobs(app, { addClass() {}, addEventListener() {}, toggleClass() {}, empty() {}, setText() {}, setAttr() {} } as never)
-  const settled = () => new Promise<void>((resolve) => { const ref = jobs.on("change", (j: unknown) => { if ((j as TranscribeJob).finished && jobs.running === 0) { jobs.offref(ref as never); resolve() } }) })
+  const settled = () => new Promise<void>((resolve) => { const ref = jobs.on("change", (j: unknown) => { if ((j as TranscribeJob).finished && jobs.running === 0) { jobs.offref(ref); resolve() } }) })
 
   let done = settled()
   assert.equal(await job.launch(jobs), true)

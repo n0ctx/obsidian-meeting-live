@@ -22,7 +22,7 @@ const BUSY_CODES = new Set(["EPERM", "EBUSY", "EACCES"])
 /** Waits between the attempts to rename; about 0.8 s in all, short enough not to hold up the session's write queue. */
 const RENAME_BACKOFF_MS = [20, 40, 80, 160, 240, 240]
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms))
 
 /**
  * Replaces `target` with `data` without a moment in which it is missing or cut short.

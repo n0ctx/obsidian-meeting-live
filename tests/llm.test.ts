@@ -160,7 +160,7 @@ test("chat client builds URLs, parses responses, surfaces API errors", async () 
   assert.equal(ok, "OK")
   assert.equal(sent?.headers.Authorization, "Bearer k")
   await assert.rejects(chat(custom, [], async () => ({ status: 401, text: '{"error":{"message":"bad key"}}' })), /HTTP 401.*bad key/)
-  assert.equal(JSON.parse(sent!.body).reasoning_effort, undefined)
+  assert.equal(JSON.parse(sent.body).reasoning_effort, undefined)
 })
 
 const hi: ChatMessage[] = [{ role: "user", content: "hi" }]
