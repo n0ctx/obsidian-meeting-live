@@ -115,7 +115,9 @@ export async function volcTranscribeFile(auth: FileAsrAuth, audio: PreparedAudio
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => window.setTimeout(r, ms)))
   const requestId = randomUUID()
   options.onStage?.({ stage: "uploading" })
-  const submitted = statusOf(await options.post(FILE_ASR_BASE + SUBMIT_PATH, headers(auth, requestId), JSON.stringify(buildFileRequest(Buffer.from(audio.data.buffer, audio.data.byteOffset, audio.data.byteLength).toString("base64"), audio.format, options.speakers))))
+  // The view may cover only part of the buffer behind it, so encode exactly its bytes.
+  const base64 = Buffer.from(audio.data.buffer, audio.data.byteOffset, audio.data.byteLength).toString("base64")
+  const submitted = statusOf(await options.post(FILE_ASR_BASE + SUBMIT_PATH, headers(auth, requestId), JSON.stringify(buildFileRequest(base64, audio.format, options.speakers))))
   if (submitted.code !== STATUS_OK) fail(submitted.code, submitted.message)
 
   let waited = 0

@@ -43,6 +43,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     const loaded = loadSettings(await this.loadData())
     this.settings = loaded.settings
     this.legacySettings = loaded.legacy
+    if (loaded.migrated) await this.saveSettings()
     // The previous default asked for follow-up questions, which stage summaries no longer include.
     if (this.settings.summaryFocus === LEGACY_SUMMARY_FOCUS) this.settings.summaryFocus = DEFAULT_SUMMARY_FOCUS
     const store = new MeetingStore(this.app, () => this.settings.folder)

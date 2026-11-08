@@ -46,7 +46,7 @@ export class MeetingSession extends Events {
   interims: Utterance[] = []
   asrState: AsrState = "idle"
   asrDetail: string | undefined
-  /** Why the current run has no recognizer, if it has none. */
+  /** The recognizer resolved for the current or latest run. */
   private asrRun: ResolvedLive | undefined
   saveState: SaveState = "saved"
   savedAt = Date.now()
@@ -167,7 +167,8 @@ export class MeetingSession extends Events {
     const blocked = this.env.claim(this)
     if (blocked) throw new Error(blocked)
     const settings = this.env.settings()
-    this.asrRun = this.env.asr()
+    const asr = this.env.asr()
+    this.asrRun = asr
     this.error = undefined
     let capture: AudioCapture | undefined
     try {
@@ -188,7 +189,7 @@ export class MeetingSession extends Events {
     this.capture = capture
     this.deviceLabel = capture.deviceLabel
     this.resampler = new AsrResampler(capture.sampleRate)
-    this.startAsr()
+    this.startAsr(asr)
     this.meta.status = "recording"
     this.ticker = window.setInterval(() => this.onTick(), 1000)
     await this.saveNow()
@@ -206,8 +207,7 @@ export class MeetingSession extends Events {
   }
 
   /** Starts recognition with the recognizer resolved for this run, so settings changed between runs apply to the next one. */
-  private startAsr(): void {
-    const { connect, problem } = this.asrRun ?? { connect: null, problem: undefined }
+  private startAsr({ connect, problem }: ResolvedLive): void {
     this.asrDetail = problem
     if (!this.asr) {
       this.asr = new AsrStreamer({

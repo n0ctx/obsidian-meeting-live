@@ -74,6 +74,13 @@ test("what is saved keeps the 1.0.1 keys exactly as found and drops the dead one
   }
 })
 
+test("only data of an older shape is flagged for writing back", () => {
+  assert.equal(loadSettings(authorData()).migrated, true)
+  assert.equal(loadSettings(null).migrated, false)
+  const first = loadSettings(authorData())
+  assert.equal(loadSettings(JSON.parse(JSON.stringify(storedSettings(first.settings, first.legacy)))).migrated, false)
+})
+
 test("saved settings load back unchanged, and loading twice changes nothing", () => {
   const first = loadSettings(authorData())
   const saved = JSON.parse(JSON.stringify(storedSettings(first.settings, first.legacy)))

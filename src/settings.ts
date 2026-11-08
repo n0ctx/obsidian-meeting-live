@@ -64,6 +64,8 @@ export interface LoadedSettings {
   settings: MeetingLiveSettings
   /** Keys of the previous settings shape that are written back unchanged, so the previous version can still run after a downgrade. */
   legacy: Record<string, unknown>
+  /** The stored settings were of an older shape, so the migrated result is worth writing back. */
+  migrated: boolean
 }
 
 /**
@@ -85,7 +87,7 @@ export function loadSettings(raw: unknown): LoadedSettings {
   if (settings.consent.length === 0 && stored.consentAccepted === true) settings.consent = seedConsent(settings)
   const legacy: Record<string, unknown> = {}
   for (const key of LEGACY_KEYS) if (key in stored) legacy[key] = stored[key]
-  return { settings, legacy }
+  return { settings, legacy, migrated: Object.keys(stored).length > 0 && !current }
 }
 
 /** What goes into data.json: the legacy keys exactly as they were found, and the current settings. */
