@@ -1,6 +1,10 @@
 import assert from "node:assert/strict"
 import { afterEach, test } from "node:test"
 import type { AsrConnectionHandlers, AsrUtterance } from "../src/asr/contract.ts"
+import type { LlmClient } from "../src/llm/client.ts"
+import { messagesTokens, writeMinutes } from "../src/llm/contextGuard.ts"
+import { buildMinutesMessages } from "../src/llm/minutes.ts"
+import { buildSummaryMessages, parseSummary } from "../src/llm/summary.ts"
 import { AsrStreamer } from "../src/asr/streamer.ts"
 import { labelledText, speakerColor, speakerId, speakerName, SPEAKER_COLORS } from "../src/meeting/speakers.ts"
 import { linkTranscript, parseTranscript, utteranceLine } from "../src/meeting/transcriptFormat.ts"
@@ -111,4 +115,63 @@ test("labelled finals keep their speaker and are deduplicated by start time", as
     emit([final("毛利四成。", 950, 1800, "2"), final("好的。", 1900, 2100, "bad id!")])
   })
   assert.deepEqual(finals.map((u) => [u.text, u.speaker]), [["今年收入三亿。", "1"], ["毛利四成。", "2"], ["好的。", undefined]])
+})
+
+// ---------------------------------------------------------------- what the model receives
+
+const talk: Utterance[] = [
+  { startMs: 1000, endMs: 3000, text: "收入三亿", speaker: "1" },
+  { startMs: 4000, endMs: 6000, text: "毛利四成", speaker: "2" },
+]
+
+test("summaries and minutes name the speakers in the note language and warn the model about the labels", () => {
+  const stage = (lang: "zh" | "en") => buildSummaryMessages("周会", "", { startMs: 0, endMs: 60_000 }, talk, [], undefined, lang)[1].content
+  assert.match(stage("zh"), /^\[00:00:01\] 说话人 1：收入三亿$/m)
+  assert.match(stage("zh"), /^\[00:00:04\] 说话人 2：毛利四成$/m)
+  assert.match(stage("en"), /^\[00:00:04\] Speaker 2: 毛利四成$/m)
+  assert.match(stage("en"), /^Note: some lines begin with a speaker label\..*not names/m)
+
+  const minutes = buildMinutesMessages("", { title: "周会", date: "2026-10-27", utterances: talk, summaries: [], notes: [], lang: "en" })[1].content
+  assert.match(minutes, /Note: some lines begin with a speaker label/)
+  assert.match(minutes, /^\[00:00:01\] Speaker 1: 收入三亿$/m)
+})
+
+test("a transcript without speakers reaches the model exactly as before", () => {
+  const plain = talk.map(({ speaker: _speaker, ...u }) => u)
+  const [, stage] = buildSummaryMessages("周会", "", { startMs: 0, endMs: 60_000 }, plain, [], undefined)
+  assert.doesNotMatch(stage.content, /speaker label|说话人/)
+  assert.match(stage.content, /^\[00:00:01\] 收入三亿$/m)
+  const [, minutes] = buildMinutesMessages("", { title: "周会", date: "d", utterances: plain, summaries: [], notes: [] })
+  assert.doesNotMatch(minutes.content, /speaker label|说话人/)
+})
+
+test("a figure that only a speaker label contains is still unverified", () => {
+  // "说话人 2" puts a 2 in the lines the model reads, but figures are checked against what was said.
+  const content = parseSummary(JSON.stringify({ title: "", paragraphs: [{ topic: "", text: "说话人 2 提到毛利 2 成", t: "00:00:04" }], todos: [], open: [] }), talk)
+  assert.deepEqual(content?.paragraphs[0].unverified, ["2"])
+})
+
+test("the label a speaker adds counts towards the size of a part when the minutes are condensed", async () => {
+  const lines: Utterance[] = Array.from({ length: 60 }, (_, i) => ({ startMs: i * 10_000, endMs: i * 10_000 + 9000, text: `第${i}句`.padEnd(40, "话") }))
+  const limit = 2500
+  const linesPerPart = async (utterances: Utterance[]) => {
+    const maps: number[] = []
+    const llm: LlmClient = {
+      problem: undefined,
+      model: "fake",
+      target: "fake",
+      inputLimit: limit,
+      complete: async (messages) => {
+        if (!messages[0].content.startsWith("You summarize one stage")) return "纪要"
+        maps.push(messages[1].content.split("\n").filter((l) => /^\[\d\d:\d\d:\d\d\] /.test(l)).length)
+        assert.ok(messagesTokens(messages) <= limit, "a part must fit whatever the labels add")
+        return JSON.stringify({ title: "", paragraphs: [{ topic: "", text: "概述", t: "00:00:00" }], todos: [], open: [] })
+      },
+    }
+    await writeMinutes(llm, "提示", { title: "访谈", date: "d", utterances, summaries: [], notes: [], lang: "zh" }, { focus: "" })
+    return maps
+  }
+  const plain = await linesPerPart(lines)
+  const labelled = await linesPerPart(lines.map((u) => ({ ...u, speaker: "12" })))
+  assert.ok(labelled[0] < plain[0], `a part holds fewer labelled lines (${labelled[0]}) than plain ones (${plain[0]})`)
 })

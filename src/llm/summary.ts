@@ -1,4 +1,5 @@
 import { tr, uiLang, type Lang } from "../i18n/index.ts"
+import { hasSpeakers, labelledText } from "../meeting/speakers.ts"
 import { formatClock, parseClock, type MeetingMeta, type SummaryContent, type SummaryParagraph, type SummaryPoint, type SummaryRecord, type Utterance } from "../meeting/types.ts"
 import type { ChatMessage } from "./client.ts"
 
@@ -45,9 +46,20 @@ const OVERVIEW_CONTRACT = `You keep a running overview of a meeting in progress.
 Output one JSON object only, no code fences:
 ${SHAPE}`
 
-export function transcriptLines(utterances: Utterance[]): string {
-  return utterances.map((u) => `[${formatClock(u.startMs, true)}] ${u.text}`).join("\n")
+/** One transcript line as the model reads it; a speaker is named in `lang` in front of the text. */
+export function transcriptLine(u: Utterance, lang: Lang = uiLang()): string {
+  return `[${formatClock(u.startMs, true)}] ${labelledText(u, lang)}`
 }
+
+export function transcriptLines(utterances: Utterance[], lang: Lang = uiLang()): string {
+  return utterances.map((u) => transcriptLine(u, lang)).join("\n")
+}
+
+/** Told to the model whenever lines carry speaker labels, so it neither takes them for names nor trusts them across a reconnect. */
+const SPEAKER_CAUTION = "Note: some lines begin with a speaker label. Labels are told apart by voice and are not names; the same number may refer to a different person after a connection was lost and restored."
+
+/** The caution about speaker labels, when any of these utterances has one. */
+export const speakerCaution = (utterances: Utterance[]): string | undefined => (hasSpeakers(utterances) ? SPEAKER_CAUTION : undefined)
 
 const stamp = (t: number | undefined) => (t === undefined ? "" : ` [${formatClock(t, true)}]`)
 
@@ -77,7 +89,7 @@ function stageDigest(s: SummaryRecord): string {
 
 const withFocus = (contract: string, focus: string) => (focus.trim() ? `${contract}\n\nFocus:\n${focus.trim()}` : contract)
 
-export function buildSummaryMessages(title: string, focus: string, window: { startMs: number; endMs: number }, utterances: Utterance[], previous: SummaryRecord[], overview: SummaryContent | undefined): ChatMessage[] {
+export function buildSummaryMessages(title: string, focus: string, window: { startMs: number; endMs: number }, utterances: Utterance[], previous: SummaryRecord[], overview: SummaryContent | undefined, lang: Lang = uiLang()): ChatMessage[] {
   const last = previous.filter((s) => s.status === "done").at(-1)
   const user = [
     `Meeting: ${title}`,
@@ -89,7 +101,8 @@ export function buildSummaryMessages(title: string, focus: string, window: { sta
     last ? stageDigest(last) : "(none)",
     "",
     `Current stage transcript (${formatClock(window.startMs, true)}–${formatClock(window.endMs, true)}):`,
-    transcriptLines(utterances),
+    ...(hasSpeakers(utterances) ? [SPEAKER_CAUTION] : []),
+    transcriptLines(utterances, lang),
   ].join("\n")
   return [
     { role: "system", content: withFocus(STAGE_CONTRACT, focus) },
