@@ -42,7 +42,7 @@ export interface ProviderSettingsContext {
   app: App
   containerEl: HTMLElement
   settings: MeetingLiveSettings
-  save(): void
+  save: () => void
   /** What the provider is selected for, so its section shows only the settings that matter. */
   roles: { live: boolean; file: boolean }
 }

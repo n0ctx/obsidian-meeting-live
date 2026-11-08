@@ -29,6 +29,9 @@ function joinWords(words: string[]): string {
   return words.reduce((text, word) => (text && !(CJK.test(text.slice(-1)) && CJK.test(word[0])) ? `${text} ${word}` : text + word), "")
 }
 
+/** A string or number as text; anything else (missing, an object) as empty. */
+const scalar = (value: unknown): string => (typeof value === "string" || typeof value === "number" ? String(value) : "")
+
 const ms = (seconds: unknown): number => Math.round(Number(seconds) * 1000)
 
 /** Splits one result into runs of a single speaker, using the speaker number on each word (diarize=true). */
@@ -82,7 +85,7 @@ export function parseDeepgramMessage(raw: string, diarize: boolean): DeepgramEve
     case "Metadata":
       return { kind: "end" }
     case "Error":
-      return { kind: "error", variant: String(message.variant ?? ""), description: String(message.description ?? message.message ?? "") }
+      return { kind: "error", variant: scalar(message.variant), description: scalar(message.description ?? message.message) }
     default:
       return { kind: "ignore" }
   }

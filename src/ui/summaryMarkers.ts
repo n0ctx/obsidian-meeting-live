@@ -20,10 +20,7 @@ class MarkerWidget extends WidgetType {
     return other.end === this.end
   }
   toDOM(): HTMLElement {
-    const el = document.createElement("span")
-    el.className = `ml-summary-marker${this.end ? " is-end" : ""}`
-    el.textContent = this.end ? "" : t("summaryMarker.hint")
-    return el
+    return createSpan({ cls: this.end ? ["ml-summary-marker", "is-end"] : "ml-summary-marker", text: this.end ? "" : t("summaryMarker.hint") })
   }
   override ignoreEvent(): boolean {
     return false

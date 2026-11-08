@@ -109,7 +109,7 @@ export class TranscribeFileModal extends Modal {
       choose({ name: file.name, extension: file.name.split(".").pop()?.toLowerCase() ?? "", size: file.size, modified: file.lastModified, read: async () => new Uint8Array(await file.arrayBuffer()) })
     })
 
-    start.addEventListener("click", async () => {
+    const begin = async () => {
       const source = this.source
       if (!source) return
       const current = this.deps.fileAsr()
@@ -120,7 +120,8 @@ export class TranscribeFileModal extends Modal {
       start.disabled = true
       if (await job.launch(this.jobs)) this.close()
       else start.disabled = false
-    })
+    }
+    start.addEventListener("click", () => void begin())
   }
 
   override onClose(): void {

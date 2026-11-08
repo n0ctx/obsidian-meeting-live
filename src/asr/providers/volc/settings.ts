@@ -43,7 +43,7 @@ export function readVolcSettings(source: unknown, flat: boolean): VolcSettings {
   const result = { ...DEFAULT_VOLC }
   for (const key of Object.keys(DEFAULT_VOLC) as (keyof VolcSettings)[]) {
     const value = stored[flat ? FLAT_KEYS[key] : key]
-    if (typeof value === typeof DEFAULT_VOLC[key]) (result[key] as string | number) = value as string | number
+    if (typeof value === typeof DEFAULT_VOLC[key]) (result as Record<string, unknown>)[key] = value
   }
   return result
 }

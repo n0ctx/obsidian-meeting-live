@@ -33,7 +33,7 @@ export const resolveNoteLang = (preference: NoteLanguage): Lang => (preference =
 
 /** A message in a given language. */
 export function tr<K extends Key>(lang: Lang, key: K, ...args: Args<K>): string {
-  const message = DICTIONARIES[lang][key] as string | ((...values: unknown[]) => string)
+  const message: string | ((...values: unknown[]) => string) = DICTIONARIES[lang][key]
   return typeof message === "function" ? message(...args) : message
 }
 

@@ -69,7 +69,7 @@ export class TimelinePlayer {
     this.track.addEventListener("pointermove", (event) => {
       const ms = positionAt(event)
       this.hover.setText(formatClock(ms))
-      this.hover.style.left = `${(ms / Math.max(1, this.total())) * 100}%`
+      this.hover.setCssProps({ left: `${(ms / Math.max(1, this.total())) * 100}%` })
     })
     this.track.addEventListener("pointerdown", (event) => {
       if (this.total() <= 0) return
@@ -155,7 +155,7 @@ export class TimelinePlayer {
     this.track.toggleClass("is-empty", !has)
     this.timeEl.setText(formatClock(this.positionMs))
     this.totalEl.setText(formatClock(total))
-    this.fill.style.width = `${total > 0 ? Math.min(100, (this.positionMs / total) * 100) : 0}%`
+    this.fill.setCssProps({ width: `${total > 0 ? Math.min(100, (this.positionMs / total) * 100) : 0}%` })
     const meta = this.session.meta
     const key = `${Math.round(total / 5000)}:${meta.segments.length}:${meta.gaps.length}:${meta.summaries.length}`
     if (key === this.markKey || total <= 0) return
@@ -164,11 +164,10 @@ export class TimelinePlayer {
     const pct = (ms: number) => `${(ms / total) * 100}%`
     for (const gap of meta.gaps) {
       const el = this.marks.createDiv({ cls: "ml-mark-gap", attr: { "aria-label": t("player.gap", formatClock(gap.startMs), formatClock(gap.endMs)) } })
-      el.style.left = pct(gap.startMs)
-      el.style.width = pct(Math.max(gap.endMs - gap.startMs, total / 400))
+      el.setCssProps({ left: pct(gap.startMs), width: pct(Math.max(gap.endMs - gap.startMs, total / 400)) })
     }
-    for (const segment of meta.segments.slice(1)) this.marks.createDiv({ cls: "ml-mark-seg" }).style.left = pct(segment.startMs)
-    for (const s of meta.summaries) this.marks.createDiv({ cls: "ml-mark-stage", attr: { "aria-label": t("player.stage", s.index) } }).style.left = pct(s.endMs)
+    for (const segment of meta.segments.slice(1)) this.marks.createDiv({ cls: "ml-mark-seg" }).setCssProps({ left: pct(segment.startMs) })
+    for (const s of meta.summaries) this.marks.createDiv({ cls: "ml-mark-stage", attr: { "aria-label": t("player.stage", s.index) } }).setCssProps({ left: pct(s.endMs) })
   }
 
   destroy(): void {

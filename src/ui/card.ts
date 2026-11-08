@@ -306,7 +306,7 @@ export class MeetingCard extends MarkdownRenderChild {
     this.root.dataset.status = status
     this.statusEl.dataset.status = status
     this.statusText.setText(t(STATUS_LABEL[status]))
-    if (document.activeElement !== this.titleInput) this.setTitle(session.meta.title)
+    if (activeDocument.activeElement !== this.titleInput) this.setTitle(session.meta.title)
     this.root.toggleClass("is-capsule", !!session.meta.collapsed)
     const chipsHome = session.meta.collapsed ? this.metaEl : this.statusItems
     if (this.chips.parentElement !== chipsHome) chipsHome.appendChild(this.chips)

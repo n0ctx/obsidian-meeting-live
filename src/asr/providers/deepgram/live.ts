@@ -102,10 +102,10 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
       let endRequested = false
       let endAnnounced = false
       let lastSentAt = Date.now()
-      let keepAlive: ReturnType<typeof setInterval> | undefined
+      let keepAlive: number | undefined
 
       const stopKeepAlive = () => {
-        if (keepAlive) clearInterval(keepAlive)
+        if (keepAlive) window.clearInterval(keepAlive)
         keepAlive = undefined
       }
       const fail = (error: AsrError) => {
@@ -139,7 +139,7 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
         ready = true
         window.clearTimeout(timer)
         // No audio flows while a run is paused or the backlog is being built up; the server hangs up after 10 s of nothing.
-        keepAlive = setInterval(() => {
+        keepAlive = window.setInterval(() => {
           if (socket.readyState !== WebSocket.OPEN || Date.now() - lastSentAt < keepAliveMs) return
           socket.send(JSON.stringify({ type: "KeepAlive" }))
           lastSentAt = Date.now()

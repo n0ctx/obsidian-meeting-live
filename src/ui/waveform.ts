@@ -35,7 +35,7 @@ export class Waveform {
     const width = canvas.clientWidth
     const height = canvas.clientHeight
     if (!width || !height) return
-    const state = `${session.status}:${width}:${height}:${document.body.classList.contains("theme-dark")}`
+    const state = `${session.status}:${width}:${height}:${activeDocument.body.classList.contains("theme-dark")}`
     if (!force && session.levelCursor === this.drawnCursor && state === this.drawnState) return
     this.drawnCursor = session.levelCursor
     this.drawnState = state

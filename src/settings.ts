@@ -98,7 +98,7 @@ export function loadSettings(raw: unknown): LoadedSettings {
   for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof MeetingLiveSettings)[]) {
     if (key === "providers" || key === "version" || key === "consent") continue
     const value = stored[key]
-    if (typeof value === typeof DEFAULT_SETTINGS[key]) (settings[key] as string | number | boolean) = value as string | number | boolean
+    if (typeof value === typeof DEFAULT_SETTINGS[key]) (settings as unknown as Record<string, unknown>)[key] = value
   }
   if (!isAsrLanguage(settings.asrLanguage)) settings.asrLanguage = DEFAULT_SETTINGS.asrLanguage
   // Notes written by 1.0.x are in Chinese whatever the interface language, so settings from before the choice existed keep writing
