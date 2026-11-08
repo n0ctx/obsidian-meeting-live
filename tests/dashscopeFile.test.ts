@@ -12,9 +12,9 @@ const config = (patch: Partial<DashScopeFileConfig> = {}): DashScopeFileConfig =
 const audio = (n = 12): PreparedAudio => ({ data: new Uint8Array(n).fill(9), format: "ogg", transcoded: true, bytes: n })
 const ok = (body: unknown, status = 200): FileAsrResponse => ({ status, headers: {}, text: JSON.stringify(body) })
 
-const policy = { request_id: "r", data: { policy: "POLICY", signature: "SIG", upload_dir: "dashscope-instant/u/2026-11-08/d", upload_host: "https://oss.example.com", expire_in_seconds: 300, oss_access_key_id: "AK", x_oss_object_acl: "private", x_oss_forbid_overwrite: "true" } }
+const policy = { request_id: "r", data: { policy: "POLICY", signature: "SIG", upload_dir: "dashscope-instant/u/2026-11-08/d", upload_host: "https://dashscope-instant.oss-cn-beijing.aliyuncs.com", expire_in_seconds: 300, oss_access_key_id: "AK", x_oss_object_acl: "private", x_oss_forbid_overwrite: "true" } }
 const transcript = { properties: { original_duration_in_milliseconds: 12_000 }, transcripts: [{ text: "你好。再见。", sentences: [{ begin_time: 100, end_time: 900, text: "你好。", speaker_id: 0 }, { begin_time: 1000, end_time: 1800, text: "再见。", speaker_id: 1 }] }] }
-const succeeded = { output: { task_status: "SUCCEEDED", results: [{ subtask_status: "SUCCEEDED", transcription_url: "https://result.example.com/t.json" }] } }
+const succeeded = { output: { task_status: "SUCCEEDED", results: [{ subtask_status: "SUCCEEDED", transcription_url: "https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/t.json" }] } }
 
 interface Script {
   policy?: FileAsrResponse
@@ -29,13 +29,13 @@ function flow(script: Script = {}) {
   const polls = [...(script.polls ?? [ok(succeeded)])]
   const post: FileAsrPost = async (url, headers, body) => {
     sent.push({ method: "POST", url, headers, body })
-    if (url === "https://oss.example.com") return script.upload ?? { status: 200, headers: {}, text: "" }
+    if (url === "https://dashscope-instant.oss-cn-beijing.aliyuncs.com") return script.upload ?? { status: 200, headers: {}, text: "" }
     return script.submit ?? ok({ request_id: "r", output: { task_id: "task-1", task_status: "PENDING" } })
   }
   const get: FileAsrGet = async (url, headers) => {
     sent.push({ method: "GET", url, headers })
     if (url.includes("/uploads")) return script.policy ?? ok(policy)
-    if (url.startsWith("https://result.example.com")) return script.result ?? ok(transcript)
+    if (url.startsWith("https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com")) return script.result ?? ok(transcript)
     return polls.shift() ?? ok({ output: { task_status: "RUNNING" } })
   }
   return { sent, post, get }
@@ -49,7 +49,7 @@ test("the flow: credential, multipart upload with the file last, task with the o
   const [credential, upload, submit, ...rest] = sent
   assert.equal(credential.url, "https://dashscope.aliyuncs.com/api/v1/uploads?action=getPolicy&model=fun-asr")
   assert.equal(credential.headers.Authorization, "Bearer sk-1")
-  assert.equal(upload.url, "https://oss.example.com")
+  assert.equal(upload.url, "https://dashscope-instant.oss-cn-beijing.aliyuncs.com")
   assert.match(upload.headers["Content-Type"], /^multipart\/form-data; boundary=/)
   const text = Buffer.from(upload.body as ArrayBuffer).toString("latin1")
   const names = [...text.matchAll(/; name="([^"]+)"/g)].map((m) => m[1])
@@ -61,7 +61,7 @@ test("the flow: credential, multipart upload with the file last, task with the o
   assert.equal(submit.headers["X-DashScope-Async"], "enable")
   assert.equal(submit.headers["X-DashScope-OssResourceResolve"], "enable")
   assert.deepEqual(JSON.parse(submit.body as string), { model: "fun-asr", input: { file_urls: ["oss://dashscope-instant/u/2026-11-08/d/audio.ogg"] }, parameters: { language_hints: ["zh"], diarization_enabled: true } })
-  assert.deepEqual(rest.map((r) => r.url), [...Array(3).fill("https://dashscope.aliyuncs.com/api/v1/tasks/task-1"), "https://result.example.com/t.json"])
+  assert.deepEqual(rest.map((r) => r.url), [...Array(3).fill("https://dashscope.aliyuncs.com/api/v1/tasks/task-1"), "https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/t.json"])
   assert.deepEqual(rest.at(-1)!.headers, {}, "the signed address takes no credentials")
   assert.equal(stages[0], "uploading")
   assert.ok(stages.includes("recognizing"))
@@ -94,6 +94,21 @@ test("errors say what to fix: key, access, quota, a refused upload, a failed sub
   await assert.rejects(dashScopeFileProvider(config()).transcribe(audio(), { speakers: false, post: flow().post }), /不能向阿里云百炼查询/)
 })
 
+test("an upload host or transcript address outside Alibaba Cloud is refused before anything is sent to it", async () => {
+  const run = async (script: Script) => {
+    const { sent, post, get } = flow(script)
+    await assert.rejects(dashScopeFileProvider(config()).transcribe(audio(), { speakers: false, post, get, sleep: async () => undefined }), /不在阿里云域名下/)
+    return sent
+  }
+  const elsewhere = { ...policy, data: { ...policy.data, upload_host: "https://evil.example.com" } }
+  const sent = await run({ policy: ok(elsewhere) })
+  assert.equal(sent.some((r) => r.method === "POST"), false, "the recording was never posted")
+  // A look-alike that merely ends the same way is not Alibaba Cloud either.
+  await run({ policy: ok({ ...policy, data: { ...policy.data, upload_host: "https://aliyuncs.com.evil.example" } }) })
+  const afterUpload = await run({ polls: [ok({ output: { task_status: "SUCCEEDED", results: [{ subtask_status: "SUCCEEDED", transcription_url: "https://evil.example.com/t.json" }] } })] })
+  assert.equal(afterUpload.some((r) => r.url.startsWith("https://evil.example.com")), false, "the transcript address was never fetched")
+})
+
 test("polling can be cancelled and gives up after the wait limit", async () => {
   const controller = new AbortController()
   const { post, get } = flow({ polls: Array(1000).fill(ok({ output: { task_status: "RUNNING" } })) })
@@ -116,7 +131,7 @@ test("settings: the key and region are all that is needed; the host, limit and c
   assert.equal(file.host, "dashscope.aliyuncs.com")
   assert.equal(file.model, "fun-asr")
   assert.deepEqual(file.capabilities, { language: true, diarization: true, fileSizeLimit: 1024 ** 3 })
-  assert.equal(file.directFormats.mp3, "mp3")
+  assert.deepEqual(file.directFormats, {}, "every recording is downmixed to mono first, since only channel 0 would be recognized")
   assert.deepEqual(destinations(settings).find((d) => d.kind === "file"), { kind: "file", name: "阿里云百炼", host: "dashscope.aliyuncs.com" })
   settings.providers.dashscope.region = "intl"
   assert.equal(destinations(settings).find((d) => d.kind === "file")?.host, "dashscope-intl.aliyuncs.com")

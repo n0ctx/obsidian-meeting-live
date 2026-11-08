@@ -8,7 +8,7 @@
 // Fun-ASR page while requiring it on the storage page. This path has not been run against the service.
 import type { PreparedAudio } from "../../../audio/transcode.ts"
 import { t } from "../../../i18n/index.ts"
-import { hostOf } from "../../../url.ts"
+import { hostOf, isLocalHost } from "../../../url.ts"
 import type { FileAsrCall, FileAsrProvider, FileAsrResponse, FileAsrResult, FileUtterance } from "../../fileAsr.ts"
 import { buildMultipart } from "../../multipart.ts"
 import { DASHSCOPE_FILE_CAPABILITIES, DASHSCOPE_FILE_MODEL, DASHSCOPE_ID } from "./info.ts"
@@ -22,8 +22,12 @@ export interface DashScopeFileConfig {
   language: string | undefined
 }
 
-/** Extension → format name; the service takes mainstream formats, and none of this list was read from its audio specification (not confirmed). */
-export const DASHSCOPE_DIRECT_FORMATS: Record<string, string> = { mp3: "mp3", m4a: "m4a", mp4: "mp4", wav: "wav", ogg: "ogg", opus: "ogg", flac: "flac", aac: "aac", webm: "webm" }
+/**
+ * No format is uploaded as it is: a job recognizes only channel 0 of a recording by default (channel_id defaults to [0], and speaker
+ * separation is for mono audio only), so a stereo file would silently lose its other channel. Every recording is downmixed to mono
+ * Ogg Opus first, which relies on Fun-ASR accepting Opus (its realtime format list names it; the file model's list was not read).
+ */
+export const DASHSCOPE_DIRECT_FORMATS: Record<string, string> = {}
 
 const MIME: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", mp4: "audio/mp4", wav: "audio/wav", ogg: "audio/ogg", flac: "audio/flac", aac: "audio/aac", webm: "audio/webm" }
 
@@ -73,6 +77,15 @@ function json(response: FileAsrResponse): Json {
   }
 }
 
+/**
+ * The upload host and the transcript address come back from the service at run time, and consent was given for the API host only.
+ * They must be on Alibaba Cloud (or this machine, for the mock server); anything else is refused rather than sent the recording.
+ */
+function assertAlibabaCloud(address: string): void {
+  const host = hostOf(address)
+  if (!host || !(host.replace(/:\d+$/, "").endsWith(".aliyuncs.com") || isLocalHost(host))) throw new Error(t("dashscope.foreignHost", host || address))
+}
+
 const bearer = (config: DashScopeFileConfig): Record<string, string> => ({ Authorization: `Bearer ${config.apiKey}` })
 
 /** Puts the recording in temporary storage and returns its oss:// address. */
@@ -82,6 +95,7 @@ async function upload(config: DashScopeFileConfig, audio: PreparedAudio, call: F
   const host = str(policy.upload_host)
   const dir = str(policy.upload_dir)
   if (!host || !dir) throw new Error(t("dashscope.noPolicy"))
+  assertAlibabaCloud(host)
   const key = `${dir}/audio.${audio.format}`
   // The file must be the last field, and the form carries the credential the policy call returned.
   const fields: [string, string][] = [
@@ -149,6 +163,7 @@ export async function dashScopeTranscribeFile(config: DashScopeFileConfig, audio
       if (status === "FAILED" || str(first.subtask_status) !== "SUCCEEDED") throw new Error(t("dashscope.jobFailed", [str(first.code) || str(output.code), str(first.message) || str(output.message)].filter(Boolean).join(" ")))
       const link = str(first.transcription_url)
       if (!link) throw new Error(t("dashscope.noTranscriptUrl"))
+      assertAlibabaCloud(link)
       // The signed address is on Alibaba Cloud storage and takes no credentials.
       return parseTranscript(json(await get(link, {})), call.speakers)
     }

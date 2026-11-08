@@ -27,7 +27,12 @@ export function openSocket(url: string, headers: Record<string, string>, refused
     socket.on("unexpected-response", (_request, response) => {
       let body = ""
       response.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")))
-      response.on("end", () => settle(() => reject(refused(response.statusCode ?? 0, body.trim()))))
+      response.on("end", () =>
+        settle(() => {
+          socket.terminate()
+          reject(refused(response.statusCode ?? 0, body.trim()))
+        }),
+      )
     })
     socket.on("error", (error) => settle(() => reject(new AsrError(t("asr.network", error.message), false))))
     socket.on("open", () =>

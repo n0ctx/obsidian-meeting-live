@@ -248,13 +248,14 @@ export const en: Dictionary = {
   "dashscope.fileRejected": (status, why) => `Alibaba Cloud Bailian rejected the transcription request (HTTP ${status})${why ? `: ${why}` : ""}`,
   "dashscope.fileNotJson": (status, body) => `Alibaba Cloud Bailian returned something that is not JSON (HTTP ${status}): ${body}`,
   "dashscope.noPolicy": "Alibaba Cloud Bailian did not return an upload credential for its temporary storage",
+  "dashscope.foreignHost": (host) => `Alibaba Cloud Bailian returned an address (${host}) that is not on an Alibaba Cloud domain, so nothing was uploaded or downloaded: the recording would go somewhere you did not agree to`,
   "dashscope.uploadFailed": (status, body) => `Uploading to Alibaba Cloud's temporary storage failed (HTTP ${status})${body ? `: ${body}` : ""}`,
   "dashscope.noGet": "This environment cannot ask Alibaba Cloud Bailian for the transcript",
   "dashscope.noTaskId": "Alibaba Cloud Bailian did not return a transcription task id",
   "dashscope.jobFailed": (detail) => `Alibaba Cloud Bailian transcription failed${detail ? `: ${detail}` : ""}`,
   "dashscope.noTranscriptUrl": "Alibaba Cloud Bailian did not return an address for the transcript",
   "dashscope.fileTimeout": (minutes) => `Recognition timed out: still not finished after ${minutes} minutes`,
-  "dashscope.settings.fileNote": "Recorded files use fun-asr: the file is first put in Alibaba Cloud's temporary storage (kept 48 hours, up to 1 GB, which the documentation calls suitable for development and testing only), then a transcription task is submitted and the result downloaded, which contacts a few hosts under aliyuncs.com. Speaker separation works only for mono recordings; keep a recording within 2 hours.",
+  "dashscope.settings.fileNote": "Recorded files use fun-asr: the file is first put in Alibaba Cloud's temporary storage (kept 48 hours, up to 1 GB, which the documentation calls suitable for development and testing only), then a transcription task is submitted and the result downloaded, which contacts a few hosts under aliyuncs.com. The recording is first converted to mono Opus locally (otherwise only its first channel would be recognized); keep a recording within 2 hours.",
 
   // ---- AssemblyAI
   "provider.assemblyai": "AssemblyAI",
