@@ -10,7 +10,8 @@ import { dashScopeConfig } from "./settings.ts"
 export function renderDashScopeSettings({ app, containerEl, settings, save, roles }: ProviderSettingsContext): void {
   const dashscope = settings.providers.dashscope
   new Setting(containerEl).setName(t("dashscope.settings.heading", t("provider.dashscope"))).setHeading()
-  containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("dashscope.settings.note") })
+  containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: roles.live ? t("dashscope.settings.note") : t("dashscope.settings.fileNote") })
+  if (roles.live && roles.file) containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("dashscope.settings.fileNote") })
   secretField(app, new Setting(containerEl).setName("API Key"), dashscope, "apiKeySecret", save)
   new Setting(containerEl)
     .setName(t("dashscope.settings.region.name"))

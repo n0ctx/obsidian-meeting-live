@@ -1,7 +1,8 @@
 import { readSecret, type SecretReader } from "../../../secrets.ts"
 import { languageHint, type AsrLanguage } from "../../language.ts"
 import { readSection } from "../readSection.ts"
-import { DASHSCOPE_LIVE_MODEL, DASHSCOPE_REGIONS, isDashScopeRegion, type DashScopeRegion } from "./info.ts"
+import { DASHSCOPE_FILE_MODEL, DASHSCOPE_LIVE_MODEL, DASHSCOPE_REGIONS, isDashScopeRegion, type DashScopeRegion } from "./info.ts"
+import type { DashScopeFileConfig } from "./file.ts"
 import type { DashScopeConfig } from "./live.ts"
 
 export interface DashScopeSettings {
@@ -33,4 +34,9 @@ export function dashScopeConfig(secrets: SecretReader, settings: DashScopeSettin
     language: languageHint(language),
     hotwords: hotwords.split(/\n|,|，/),
   }
+}
+
+/** The file service takes the key and region only; its model is fixed to the one that separates speakers. */
+export function dashScopeFileConfig(secrets: SecretReader, settings: DashScopeSettings, language: AsrLanguage): DashScopeFileConfig {
+  return { baseUrl: dashScopeEndpoints(settings).api, apiKey: readSecret(secrets, settings.apiKeySecret), model: DASHSCOPE_FILE_MODEL, language: languageHint(language) }
 }

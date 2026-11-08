@@ -1,4 +1,4 @@
-import type { LiveCapabilities } from "../types.ts"
+import type { FileCapabilities, LiveCapabilities } from "../types.ts"
 
 export const DASHSCOPE_ID = "dashscope"
 
@@ -30,3 +30,13 @@ export const takesInlineHotwords = (model: string): boolean => /^qwen-audio/i.te
 
 /** Takes a language hint; speakers are not separated while streaming (the model table lists no live diarization). */
 export const dashScopeLiveCapabilities = (model: string): LiveCapabilities => ({ hotwords: takesInlineHotwords(model), endWindow: false, language: true, diarization: false })
+
+/** The file model that separates speakers and takes up to 12 hours (https://www.alibabacloud.com/help/en/model-studio/asr-model). */
+export const DASHSCOPE_FILE_MODEL = "fun-asr"
+
+/**
+ * A file goes through temporary storage, which holds at most 1 GB (https://www.alibabacloud.com/help/en/model-studio/get-temporary-file-url);
+ * the model's own limit is 2 GB. Speakers are separated for mono audio and the job takes one language hint. The documentation advises
+ * keeping diarized recordings within 2 hours.
+ */
+export const DASHSCOPE_FILE_CAPABILITIES: FileCapabilities = { language: true, diarization: true, fileSizeLimit: 1024 * 1024 * 1024 }

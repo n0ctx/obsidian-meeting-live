@@ -89,7 +89,7 @@ test("a provider may be live-only or file-only: the choices list only capable on
   providers.push(liveOnly, fileOnly)
   try {
     assert.deepEqual(liveProviders().map((p) => p.id), ["volc", "dashscope", "assemblyai", "deepgram", "live-only"])
-    assert.deepEqual(fileProviders().map((p) => p.id), ["volc", "assemblyai", "deepgram", "openai-compat", "file-only"])
+    assert.deepEqual(fileProviders().map((p) => p.id), ["volc", "dashscope", "assemblyai", "deepgram", "openai-compat", "file-only"])
 
     const mixed = settings((s) => {
       s.liveProvider = "live-only"

@@ -232,6 +232,18 @@ export const en: Dictionary = {
   "dashscope.settings.region.intl": "International (Singapore)",
   "dashscope.settings.model.name": "Live recognition model",
   "dashscope.settings.model.desc": "Defaults to qwen-audio-3.1-asr-flash-streaming, the model the documentation recommends for meetings, which takes hotwords. Models such as fun-asr-realtime ignore the hotwords.",
+  "dashscope.fileRate": (why) => `Alibaba Cloud Bailian: too many requests or out of quota (HTTP 429)${why ? `: ${why}` : ""}`,
+  "dashscope.fileServer": (status, why) => `Alibaba Cloud Bailian failed (HTTP ${status})${why ? `: ${why}` : ""}`,
+  "dashscope.fileRejected": (status, why) => `Alibaba Cloud Bailian rejected the transcription request (HTTP ${status})${why ? `: ${why}` : ""}`,
+  "dashscope.fileNotJson": (status, body) => `Alibaba Cloud Bailian returned something that is not JSON (HTTP ${status}): ${body}`,
+  "dashscope.noPolicy": "Alibaba Cloud Bailian did not return an upload credential for its temporary storage",
+  "dashscope.uploadFailed": (status, body) => `Uploading to Alibaba Cloud's temporary storage failed (HTTP ${status})${body ? `: ${body}` : ""}`,
+  "dashscope.noGet": "This environment cannot ask Alibaba Cloud Bailian for the transcript",
+  "dashscope.noTaskId": "Alibaba Cloud Bailian did not return a transcription task id",
+  "dashscope.jobFailed": (detail) => `Alibaba Cloud Bailian transcription failed${detail ? `: ${detail}` : ""}`,
+  "dashscope.noTranscriptUrl": "Alibaba Cloud Bailian did not return an address for the transcript",
+  "dashscope.fileTimeout": (minutes) => `Recognition timed out: still not finished after ${minutes} minutes`,
+  "dashscope.settings.fileNote": "Recorded files use fun-asr: the file is first put in Alibaba Cloud's temporary storage (kept 48 hours, up to 1 GB, which the documentation calls suitable for development and testing only), then a transcription task is submitted and the result downloaded, which contacts a few hosts under aliyuncs.com. Speaker separation works only for mono recordings; keep a recording within 2 hours.",
 
   // ---- AssemblyAI
   "provider.assemblyai": "AssemblyAI",

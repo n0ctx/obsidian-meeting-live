@@ -1,9 +1,10 @@
 import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
-import { DASHSCOPE_ID, dashScopeLiveCapabilities } from "./info.ts"
+import { dashScopeFileProvider } from "./file.ts"
+import { DASHSCOPE_FILE_CAPABILITIES, DASHSCOPE_ID, dashScopeLiveCapabilities } from "./info.ts"
 import { dashScopeConfigProblem, dashScopeConnector } from "./live.ts"
-import { dashScopeConfig, dashScopeEndpoints } from "./settings.ts"
+import { dashScopeConfig, dashScopeEndpoints, dashScopeFileConfig } from "./settings.ts"
 import { renderDashScopeSettings } from "./ui.ts"
 
 const configOf = ({ secrets, settings }: ProviderEnv) => dashScopeConfig(secrets, settings.providers.dashscope, settings.asrLanguage, settings.hotwords)
@@ -22,6 +23,11 @@ export const dashScopeProvider: AsrProvider = {
       const problem = dashScopeConfigProblem(config)
       return problem ? { connect: null, problem } : { connect: dashScopeConnector(config) }
     },
+  },
+  file: {
+    capabilities: () => DASHSCOPE_FILE_CAPABILITIES,
+    host: (settings) => hostOf(dashScopeEndpoints(settings.providers.dashscope).api),
+    resolve: ({ secrets, settings }) => dashScopeFileProvider(dashScopeFileConfig(secrets, settings.providers.dashscope, settings.asrLanguage)),
   },
   renderSettings: renderDashScopeSettings,
 }

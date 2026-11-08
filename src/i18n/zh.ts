@@ -232,6 +232,18 @@ export const zh = {
   "dashscope.settings.region.intl": "国际（新加坡）",
   "dashscope.settings.model.name": "实时识别模型",
   "dashscope.settings.model.desc": "默认使用文档为会议推荐的 qwen-audio-3.1-asr-flash-streaming，支持热词。改用 fun-asr-realtime 等模型时热词不生效。",
+  "dashscope.fileRate": (why: string) => `阿里云百炼请求过于频繁或已超出额度（HTTP 429）${why ? `：${why}` : ""}`,
+  "dashscope.fileServer": (status: number, why: string) => `阿里云百炼服务出错（HTTP ${status}）${why ? `：${why}` : ""}`,
+  "dashscope.fileRejected": (status: number, why: string) => `阿里云百炼拒绝了识别请求（HTTP ${status}）${why ? `：${why}` : ""}`,
+  "dashscope.fileNotJson": (status: number, body: string) => `阿里云百炼返回了不是 JSON 的内容（HTTP ${status}）：${body}`,
+  "dashscope.noPolicy": "阿里云百炼没有返回临时存储的上传凭证",
+  "dashscope.uploadFailed": (status: number, body: string) => `上传到阿里云临时存储失败（HTTP ${status}）${body ? `：${body}` : ""}`,
+  "dashscope.noGet": "当前环境不能向阿里云百炼查询识别结果",
+  "dashscope.noTaskId": "阿里云百炼没有返回识别任务编号",
+  "dashscope.jobFailed": (detail: string) => `阿里云百炼识别失败${detail ? `：${detail}` : ""}`,
+  "dashscope.noTranscriptUrl": "阿里云百炼没有返回识别结果的下载地址",
+  "dashscope.fileTimeout": (minutes: number) => `识别超时：${minutes} 分钟后仍未完成`,
+  "dashscope.settings.fileNote": "录音文件识别使用 fun-asr：文件先传到阿里云的临时存储（保存 48 小时，上限 1 GB，文档注明仅适用于开发和测试），再提交识别任务并下载结果，会访问 aliyuncs.com 下的几个域名。区分说话人只对单声道录音有效，建议单个录音不超过 2 小时。",
 
   // ---- AssemblyAI
   "provider.assemblyai": "AssemblyAI",

@@ -9,6 +9,7 @@ import type { FileAsrPost } from "../src/asr/fileAsr.ts"
 import { deepgramFileProvider } from "../src/asr/providers/deepgram/file.ts"
 import { assemblyAiFileProvider } from "../src/asr/providers/assemblyai/file.ts"
 import { assemblyAiConnector } from "../src/asr/providers/assemblyai/live.ts"
+import { dashScopeFileProvider } from "../src/asr/providers/dashscope/file.ts"
 import { dashScopeConnector } from "../src/asr/providers/dashscope/live.ts"
 import { deepgramConnector } from "../src/asr/providers/deepgram/live.ts"
 import { openAiFileProvider } from "../src/asr/providers/openaiCompat/file.ts"
@@ -281,6 +282,23 @@ test("the Deepgram file adapter against the mock: timed utterances, speakers on 
   assert.deepEqual(labelled.utterances.slice(0, 3).map((u) => u.speaker), ["1", "2", "1"])
   await assert.rejects(file("bad").transcribe(upload(5), { speakers: false, post }), /鉴权失败.*Invalid credentials/)
   await assert.rejects(file().transcribe({ ...upload(1), data: new Uint8Array(0), bytes: 0 }, { speakers: false, post }), /HTTP 400.*audio is empty/)
+})
+
+test("the DashScope file flow against the mock: temporary upload, task, polling and result, with and without speakers, and a refused key", async () => {
+  const get = async (url: string, headers: Record<string, string>) => {
+    const response = await fetch(url, { headers })
+    return { status: response.status, headers: Object.fromEntries(response.headers), text: await response.text() }
+  }
+  const file = (apiKey = "k") => dashScopeFileProvider({ baseUrl: base, apiKey, model: "fun-asr", language: "zh" })
+  const plain = await file().transcribe(upload(30), { speakers: false, post, get, sleep: async () => undefined })
+  assert.equal(plain.durationMs, 30_000)
+  assert.ok(plain.utterances.length >= 7)
+  assert.equal(plain.utterances[1].startMs, 4200)
+  assert.equal(plain.utterances.every((u) => u.speaker === undefined), true)
+  const labelled = await file().transcribe(upload(30), { speakers: true, post, get, sleep: async () => undefined })
+  assert.deepEqual(labelled.utterances.slice(0, 3).map((u) => u.speaker), ["1", "2", "1"])
+  await assert.rejects(file("bad").transcribe(upload(5), { speakers: false, post, get }), /鉴权失败.*Invalid API-key provided/)
+  await assert.rejects(file().transcribe({ ...upload(1), data: new Uint8Array(0), bytes: 0 }, { speakers: false, post, get, sleep: async () => undefined }), /识别失败.*FILE_DOWNLOAD_FAILED/)
 })
 
 test("the Volcengine and LLM routes still answer", async () => {
