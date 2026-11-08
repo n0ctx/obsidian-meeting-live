@@ -1,6 +1,6 @@
 import { FuzzySuggestModal, Modal, Notice, TFile, setIcon, type App } from "obsidian"
 import { DECODABLE_EXTENSIONS } from "../audio/transcode.ts"
-import { TranscribeJob, type AudioSource, type TranscribeDeps, type TranscribeJobs } from "./transcribeJob.ts"
+import { TranscribeJob, launchJob, type AudioSource, type TranscribeDeps, type TranscribeJobs } from "./transcribeJob.ts"
 
 class AudioPicker extends FuzzySuggestModal<TFile> {
   private readonly extensions: string[]
@@ -108,15 +108,17 @@ export class TranscribeFileModal extends Modal {
       choose({ name: file.name, extension: file.name.split(".").pop()?.toLowerCase() ?? "", size: file.size, modified: file.lastModified, read: async () => new Uint8Array(await file.arrayBuffer()) })
     })
 
-    start.addEventListener("click", () => {
+    start.addEventListener("click", async () => {
       const source = this.source
       if (!source) return
       const current = this.deps.fileAsr()
       if (current.problem) return void new Notice(current.problem)
       const llmProblem = writeUp.checked ? this.deps.llm().problem : undefined
       if (llmProblem) return void new Notice(`${llmProblem}。可在设置中配置模型，或取消「用大模型整理」只写入原始转写`)
-      void this.jobs.start(new TranscribeJob(this.app, this.deps, this.target, source, current, { speakers: speakers.checked, writeUp: writeUp.checked }))
-      this.close()
+      const job = new TranscribeJob(this.app, this.deps, this.target, source, current, { speakers: speakers.checked, writeUp: writeUp.checked })
+      start.disabled = true
+      if (await launchJob(this.jobs, this.deps, job)) this.close()
+      else start.disabled = false
     })
   }
 

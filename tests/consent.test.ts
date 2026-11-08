@@ -109,3 +109,21 @@ test("agreeing to send text to a host does not cover sending audio to it", () =>
   settings.consent.push("live:api.example.com")
   assert.equal(needsConsent(settings), false)
 })
+
+test("a flow that sends data to some destinations asks about those and records only those", async () => {
+  const { settings } = loadSettings(null)
+  assert.equal(needsConsent(settings, ["file", "llm"]), true)
+  const yes = asker()
+  assert.equal(await ensureConsentFor(settings, yes.ask, noSave, ["file", "llm"]), true)
+  assert.deepEqual(yes.asked[0].map((d) => d.kind), ["file", "llm"])
+  assert.deepEqual(settings.consent, ["file:openspeech.bytedance.com", "llm:api.deepseek.com"])
+  // Live audio was not part of that agreement, so starting a recording still asks.
+  assert.equal(needsConsent(settings), true)
+  assert.equal(needsConsent(settings, ["file"]), false)
+  assert.equal(await ensureConsentFor(settings, never, noSave, ["file", "llm"]), true)
+})
+
+test("the author, who agreed under 1.0.1, is not asked before recording to notes", async () => {
+  const { settings } = loadSettings(authorData())
+  assert.equal(await ensureConsentFor(settings, never, noSave, ["file", "llm"]), true)
+})

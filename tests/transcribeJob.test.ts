@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { TFile } from "obsidian"
 import { volcFileProvider } from "../src/asr/providers/volc/file.ts"
-import { TranscribeJob, TranscribeJobs, type TranscribeDeps } from "../src/ui/transcribeJob.ts"
+import { TranscribeJob, TranscribeJobs, launchJob, type TranscribeDeps } from "../src/ui/transcribeJob.ts"
 
 // The stub's TFile takes a path; the real typings expose no public constructor.
 const file = (path: string) => new (TFile as unknown as new (path: string) => TFile)(path)
@@ -31,6 +31,7 @@ test("a failed write-up retries without re-running recognition, then replaces th
   let llmCalls = 0
   const asr = volcFileProvider({ apiKey: "k", appId: "", accessToken: "", resourceId: "volc.seedasr.auc" })
   const deps: TranscribeDeps = {
+    ensureConsent: async () => true,
     fileAsr: () => asr,
     post: async (url) => {
       asrCalls++
@@ -89,4 +90,42 @@ test("a failed write-up retries without re-running recognition, then replaces th
   assert.match(files["访谈.md"], /> 原始转写：\[\[Meetings\/录音转写\/访谈 原始转写\|/)
   assert.match(files["访谈.md"], /### 一、财务\n- 收入3亿\n$/)
   assert.equal(jobs.get(job.id), undefined)
+})
+
+test("recording to notes asks for consent before anything is uploaded, and only about what it sends", async () => {
+  const files: Record<string, string> = { "访谈.md": "" }
+  const { app } = fakeVault(files)
+  const asr = volcFileProvider({ apiKey: "k", appId: "", accessToken: "", resourceId: "volc.seedasr.auc" })
+  let posts = 0
+  const asked: string[][] = []
+  const make = (answer: boolean): TranscribeDeps => ({
+    ensureConsent: async (kinds) => (asked.push(kinds), answer),
+    fileAsr: () => asr,
+    post: async () => (posts++, { status: 500, headers: {}, text: "" }),
+    llm: () => ({ problem: undefined, model: "m", target: "t", complete: async () => "" }),
+    prompt: () => "",
+    transcriptFolder: () => "Meetings/录音转写",
+  })
+  const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: 0, read: async () => new Uint8Array([1, 2, 3]) }
+  const jobs = new TranscribeJobs(app, { addClass() {}, addEventListener() {}, toggleClass() {}, empty() {}, setText() {}, setAttr() {} } as never)
+
+  const declined = make(false)
+  const refused = new TranscribeJob(app, declined, file("访谈.md"), source, asr, { speakers: true, writeUp: true })
+  assert.equal(await launchJob(jobs, declined, refused), false)
+  assert.deepEqual(asked, [["file", "llm"]])
+  assert.equal(posts, 0, "nothing is uploaded after a refusal")
+  assert.equal(jobs.running, 0)
+  assert.doesNotMatch(files["访谈.md"], /meeting-live-job/)
+
+  // Without the write-up the model never sees the text, so its host is not part of the question.
+  const rawOnly = new TranscribeJob(app, declined, file("访谈.md"), source, asr, { speakers: true, writeUp: false })
+  await launchJob(jobs, declined, rawOnly)
+  assert.deepEqual(asked[1], ["file"])
+
+  const accepted = make(true)
+  const started = new TranscribeJob(app, accepted, file("访谈.md"), source, asr, { speakers: true, writeUp: true })
+  assert.equal(await launchJob(jobs, accepted, started), true)
+  assert.equal(jobs.running, 1)
+  assert.match(files["访谈.md"], /meeting-live-job/)
+  await new Promise((resolve) => setTimeout(resolve, 20))
 })

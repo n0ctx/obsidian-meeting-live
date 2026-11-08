@@ -37,17 +37,22 @@ export function seedConsent(settings: MeetingLiveSettings): string[] {
   return destinations(settings).map(destinationKey)
 }
 
-export function needsConsent(settings: MeetingLiveSettings): boolean {
-  return destinations(settings).some((d) => !settings.consent.includes(destinationKey(d)))
+/** Destinations of the given kinds (all by default); a flow that sends data to only some of them asks about only those. */
+function relevant(settings: MeetingLiveSettings, kinds?: Destination["kind"][]): Destination[] {
+  return destinations(settings).filter((d) => !kinds || kinds.includes(d.kind))
+}
+
+export function needsConsent(settings: MeetingLiveSettings, kinds?: Destination["kind"][]): boolean {
+  return relevant(settings, kinds).some((d) => !settings.consent.includes(destinationKey(d)))
 }
 
 /**
- * True when every current destination has been agreed to, asking first if one has not.
- * The question lists all current destinations; accepting records them all.
+ * True when every destination of the given kinds (all by default) has been agreed to, asking first if one has not.
+ * The question lists all of those destinations; accepting records them all.
  */
-export async function ensureConsentFor(settings: MeetingLiveSettings, ask: (destinations: Destination[]) => Promise<boolean>, save: () => Promise<void>): Promise<boolean> {
-  if (!needsConsent(settings)) return true
-  const current = destinations(settings)
+export async function ensureConsentFor(settings: MeetingLiveSettings, ask: (destinations: Destination[]) => Promise<boolean>, save: () => Promise<void>, kinds?: Destination["kind"][]): Promise<boolean> {
+  if (!needsConsent(settings, kinds)) return true
+  const current = relevant(settings, kinds)
   if (!(await ask(current))) return false
   settings.consent = [...new Set([...settings.consent, ...current.map(destinationKey)])]
   await save()

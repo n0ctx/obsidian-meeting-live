@@ -1,6 +1,7 @@
 import { Events, Notice, TFile, type App } from "obsidian"
 import { renderInterviewRecord, speakerUtterances, transcribeFile, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
 import { appendJobBlock, hasJobBlock, newJobId, placeJobResult, removeJobBlock } from "../asr/jobBlock.ts"
+import type { Destination } from "../consent.ts"
 import { prepareAudio } from "../audio/transcode.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { buildMinutesMessages, stripMeetingBlocks } from "../llm/minutes.ts"
@@ -17,6 +18,8 @@ export interface AudioSource {
 }
 
 export interface TranscribeDeps {
+  /** Asks the user to agree to the destinations of these kinds, if they have not; false when declined. */
+  ensureConsent: (kinds: Destination["kind"][]) => Promise<boolean>
   /** The recorded-file recognizer, resolved from the current settings. */
   fileAsr: () => FileAsrProvider
   post: FileAsrPost
@@ -35,6 +38,13 @@ export const STAGE_LABEL: Record<JobStage, string> = {
   writing: "整理中",
   done: "已完成",
   failed: "失败",
+}
+
+/** Starts a job once the user has agreed to where it sends data: the recognizer, and the model when it writes up. */
+export async function launchJob(jobs: TranscribeJobs, deps: TranscribeDeps, job: TranscribeJob): Promise<boolean> {
+  if (!(await deps.ensureConsent(job.writeUp ? ["file", "llm"] : ["file"]))) return false
+  await jobs.start(job)
+  return true
 }
 
 const normalizeFolder = (path: string) => path.trim().replace(/^\/+|\/+$/g, "") || "Meetings/录音转写"

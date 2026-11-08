@@ -1,5 +1,5 @@
 import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
-import { ensureConsentFor } from "./consent.ts"
+import { ensureConsentFor, type Destination } from "./consent.ts"
 import { resolveFile, resolveLive } from "./asr/providers/registry.ts"
 import type { ProviderEnv } from "./asr/providers/types.ts"
 import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
@@ -120,8 +120,9 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     return compatibleClient(llmConfig(this.app.secretStorage, this.settings), this.post)
   }
 
-  ensureConsent(): Promise<boolean> {
-    return ensureConsentFor(this.settings, (destinations) => new ConsentModal(this.app, destinations).ask(), () => this.saveSettings())
+  /** Asks about the destinations of the given kinds, all of them by default. */
+  ensureConsent(kinds?: Destination["kind"][]): Promise<boolean> {
+    return ensureConsentFor(this.settings, (destinations) => new ConsentModal(this.app, destinations).ask(), () => this.saveSettings(), kinds)
   }
 
   openMinutes(session: MeetingSession): void {
@@ -212,6 +213,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       {
         fileAsr: () => resolveFile(this.providerEnv()),
         post: this.filePost,
+        ensureConsent: (kinds) => this.ensureConsent(kinds),
         llm: () => this.llm(),
         prompt: () => this.settings.minutesPrompt,
         transcriptFolder: () => `${this.settings.folder}/录音转写`,
