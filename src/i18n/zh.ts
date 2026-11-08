@@ -586,6 +586,30 @@ export const zh = {
   "session.consentNeeded": "尚未确认把转写文本发送到当前的 LLM 服务（服务或地址已更改），请确认后再试",
   "card.alert.consent": (target: string) => `摘要已暂停：LLM 服务现在是 ${target}，需要先确认把转写文本发送到那里。`,
   "card.alert.confirm": "确认",
+
+  // ---- accounts
+  "region.cn": "中国内地",
+  "region.intl": "国际",
+  "service.dashscope": "阿里云百炼",
+  "service.volc": "火山引擎",
+  "service.kimi": "Kimi（月之暗面）",
+  "service.glm": "智谱 GLM",
+  "service.siliconflow": "硅基流动",
+  "service.minimax": "MiniMax",
+  "service.custom": "自定义（OpenAI 兼容）",
+  "asr.noAccount": "还没有添加账号",
+  "llm.noAccount": "还没有添加账号",
+  "volc.settings.resource.desc": "2.0 小时版 volc.seedasr.sauc.duration，1.0 小时版 volc.bigasr.sauc.duration。点「检查连接」会自动换成能用的那个。",
+
+  // ---- checking a key
+  "check.rejected": (status: number) => `服务器不认这个密钥（HTTP ${status}）。请确认复制完整，并选对了账号所在的地区。`,
+  "check.unreachable": (message: string) => `连不上服务器：${message}`,
+  "check.status": (status: number) => `服务器返回了 HTTP ${status}，暂时无法确认密钥。`,
+  "check.reachable": "地址可以连通（这个服务没有可用来检查的接口）。",
+  "check.badAddress": "地址格式不正确。",
+  "check.volcResource": (id: string) => `连接成功，使用资源 ${id}。`,
+  "check.volcRefused": (status: number) => `火山引擎拒绝了连接（HTTP ${status}）：密钥不对，或没有开通流式语音识别。`,
+  "check.llmReply": (reply: string) => `测试通过：${reply}`,
 }
 
 export type Dictionary = { [K in keyof typeof zh]: (typeof zh)[K] extends (...args: infer A) => string ? (...args: A) => string : string }

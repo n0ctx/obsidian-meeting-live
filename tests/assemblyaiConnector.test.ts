@@ -5,7 +5,9 @@ import { assemblyAiConfigProblem, assemblyAiConnector, assemblyAiUrl, closeError
 import { assemblyAiConfig, assemblyAiFileConfig } from "../src/asr/providers/assemblyai/settings.ts"
 import { resolveFile, resolveLive } from "../src/asr/providers/registry.ts"
 import { destinations } from "../src/consent.ts"
-import { loadSettings } from "../src/settings.ts"
+import { assemblyAiSettingsOf } from "../src/asr/providers/assemblyai/index.ts"
+import { SETTINGS_VERSION, loadSettings } from "../src/settings.ts"
+import { withOne } from "./support/accounts.ts"
 import { collect, fakeWs, pcm, waitFor } from "./support/fakeWs.ts"
 
 const config = (endpoint: string, patch: Partial<AssemblyAiConfig> = {}): AssemblyAiConfig => ({ endpoint, apiKey: "key-1", model: "universal-3-5-pro", diarize: false, keyterms: [], ...patch })
@@ -139,16 +141,14 @@ test("closing locally is silent and sending afterwards is an error the streamer 
 })
 
 test("settings: the key is all that is needed, the region picks the hosts for both roles, old data gains defaults", () => {
-  const defaults = loadSettings(null).settings
-  assert.deepEqual(defaults.providers.assemblyai, { region: "default", apiKeySecret: "", diarize: false, model: "universal-3-5-pro" })
-  assert.deepEqual(loadSettings({ version: 2, providers: { deepgram: {} } }).settings.providers.assemblyai, defaults.providers.assemblyai)
-  assert.equal(loadSettings({ version: 2, providers: { assemblyai: { region: "mars", apiKeySecret: "k" } } }).settings.providers.assemblyai.region, "default")
-  assert.deepEqual(loadSettings({ version: 2, providers: { assemblyai: { region: "eu", apiKeySecret: "k", diarize: true } } }).settings.providers.assemblyai, { region: "eu", apiKeySecret: "k", diarize: true, model: "universal-3-5-pro" })
+  const defaults = withOne("assemblyai").account
+  assert.deepEqual(assemblyAiSettingsOf(defaults), { region: "default", apiKeySecret: "", diarize: false, model: "universal-3-5-pro" })
+  const stored = (options: Record<string, unknown>) => loadSettings({ version: SETTINGS_VERSION, accounts: [{ id: "a", service: "assemblyai", apiKeySecret: "k", options }] }).settings.accounts[0]
+  assert.deepEqual(assemblyAiSettingsOf(stored({})), { ...assemblyAiSettingsOf(defaults), apiKeySecret: "k" })
+  assert.equal(assemblyAiSettingsOf(stored({ region: "mars" })).region, "default")
+  assert.deepEqual(assemblyAiSettingsOf(stored({ region: "eu", diarize: true })), { region: "eu", apiKeySecret: "k", diarize: true, model: "universal-3-5-pro" })
 
-  const { settings } = loadSettings(null)
-  settings.liveProvider = "assemblyai"
-  settings.fileProvider = "assemblyai"
-  settings.providers.assemblyai.apiKeySecret = "as"
+  const { settings, account } = withOne("assemblyai", { key: "as" })
   settings.asrLanguage = "zh"
   const secrets = (value: string | null) => ({ getSecret: () => value })
   assert.match(resolveLive({ secrets: secrets(null), settings }).problem ?? "", /API Key/)
@@ -158,10 +158,10 @@ test("settings: the key is all that is needed, the region picks the hosts for bo
   assert.equal(file.problem, undefined)
   assert.equal(file.host, "api.assemblyai.com")
   assert.deepEqual(destinations(settings).filter((d) => d.kind !== "llm").map((d) => [d.kind, d.host]), [["live", "streaming.assemblyai.com"], ["file", "api.assemblyai.com"]])
-  settings.providers.assemblyai.region = "eu"
+  account.options.region = "eu"
   assert.deepEqual(destinations(settings).filter((d) => d.kind !== "llm").map((d) => [d.kind, d.host]), [["live", "streaming.eu.assemblyai.com"], ["file", "api.eu.assemblyai.com"]])
-  assert.equal(assemblyAiConfig(secrets("k"), settings.providers.assemblyai, "科创板，某某").endpoint, "wss://streaming.eu.assemblyai.com/v3/ws")
-  assert.deepEqual(assemblyAiConfig(secrets("k"), settings.providers.assemblyai, "科创板，某某").keyterms, ["科创板", "某某"])
-  assert.deepEqual(assemblyAiFileConfig(secrets("k"), settings.providers.assemblyai, "zh"), { baseUrl: "https://api.eu.assemblyai.com", apiKey: "k", language: "zh" })
+  assert.equal(assemblyAiConfig(secrets("k"), assemblyAiSettingsOf(account), "科创板，某某").endpoint, "wss://streaming.eu.assemblyai.com/v3/ws")
+  assert.deepEqual(assemblyAiConfig(secrets("k"), assemblyAiSettingsOf(account), "科创板，某某").keyterms, ["科创板", "某某"])
+  assert.deepEqual(assemblyAiFileConfig(secrets("k"), assemblyAiSettingsOf(account), "zh"), { baseUrl: "https://api.eu.assemblyai.com", apiKey: "k", language: "zh" })
   assert.match(assemblyAiConfigProblem({ ...config("wss://x"), model: " " }) ?? "", /模型/)
 })

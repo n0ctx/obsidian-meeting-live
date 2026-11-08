@@ -15,6 +15,8 @@ export interface LlmConfig {
   headers: Record<string, string>
   /** Most a request may carry, in estimated tokens. */
   inputLimit: number
+  /** No account is chosen for the language model. */
+  noAccount?: boolean
 }
 
 export interface CompleteOptions {
@@ -33,8 +35,10 @@ export interface HttpResponse {
 }
 
 export type HttpPost = (url: string, headers: Record<string, string>, body: string) => Promise<HttpResponse>
+export type HttpGet = (url: string, headers: Record<string, string>) => Promise<HttpResponse>
 
 export function llmConfigProblem(config: LlmConfig): string | undefined {
+  if (config.noAccount) return t("llm.noAccount")
   if (!config.baseUrl.trim()) return t("llm.noBaseUrl")
   if (!config.model.trim()) return t("llm.noModel")
   if (config.preset.baseUrl.includes("YOUR-") && config.baseUrl.includes("YOUR-")) return t("llm.placeholderUrl")
@@ -102,13 +106,18 @@ export function chatRequestBody(config: LlmConfig, messages: ChatMessage[], opti
   return body
 }
 
-function requestHeaders(config: LlmConfig): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" }
+/** The credential header the preset wants and the headers the user added; every request to the service carries them. */
+export function authHeaders(config: LlmConfig): Record<string, string> {
+  const headers: Record<string, string> = {}
   if (config.apiKey || config.preset.keyRequired) {
     if (config.preset.auth === "api-key") headers["api-key"] = config.apiKey
     else headers.Authorization = `Bearer ${config.apiKey}`
   }
   return { ...headers, ...config.headers }
+}
+
+function requestHeaders(config: LlmConfig): Record<string, string> {
+  return { "Content-Type": "application/json", ...authHeaders(config) }
 }
 
 /** A failed request, with what a caller needs to tell whether asking for JSON was the cause. */

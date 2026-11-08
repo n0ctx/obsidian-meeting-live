@@ -8,7 +8,9 @@ import { deepgramConfigProblem, deepgramConnector, deepgramUrl, type DeepgramCon
 import { deepgramConfig } from "../src/asr/providers/deepgram/settings.ts"
 import { resolveFile, resolveLive } from "../src/asr/providers/registry.ts"
 import { destinations } from "../src/consent.ts"
-import { loadSettings } from "../src/settings.ts"
+import { deepgramSettingsOf } from "../src/asr/providers/deepgram/index.ts"
+import { SETTINGS_VERSION, loadSettings } from "../src/settings.ts"
+import { withAccount, withOne } from "./support/accounts.ts"
 
 const sockets = new Set<() => void>()
 after(() => sockets.forEach((close) => close()))
@@ -215,35 +217,34 @@ test("closing locally is silent, and sending after the socket is gone is an erro
 })
 
 test("Deepgram does live and recorded files: settings resolve both, the host is the endpoint's, and it is not offered where it cannot work", () => {
-  const { settings } = loadSettings(null)
-  settings.liveProvider = "deepgram"
-  settings.providers.deepgram.apiKeySecret = "dg"
+  const { settings, account } = withOne("deepgram", { key: "dg" })
   settings.asrLanguage = "zh"
   const secrets = (value: string | null) => ({ getSecret: () => value })
   assert.equal(resolveLive({ secrets: secrets(" k "), settings }).problem, undefined)
   assert.equal(typeof resolveLive({ secrets: secrets("k"), settings }).connect, "function")
   assert.match(resolveLive({ secrets: secrets(null), settings }).problem ?? "", /API Key/)
   assert.deepEqual(destinations(settings).find((d) => d.kind === "live"), { kind: "live", name: "Deepgram", host: "api.deepgram.com" })
-  settings.fileProvider = "deepgram"
   const file = resolveFile({ secrets: secrets("k"), settings })
   assert.equal(file.problem, undefined)
   assert.equal(file.host, "api.deepgram.com")
   assert.match(resolveFile({ secrets: secrets(null), settings }).problem ?? "", /API Key/)
   assert.deepEqual(destinations(settings).find((d) => d.kind === "file"), { kind: "file", name: "Deepgram", host: "api.deepgram.com" })
-  settings.providers.deepgram.endpoint = "ws://127.0.0.1:8790/v1/listen"
+  account.options.endpoint = "ws://127.0.0.1:8790/v1/listen"
   assert.equal(destinations(settings).find((d) => d.kind === "file")?.host, "127.0.0.1:8790")
-  settings.liveProvider = "openai-compat"
+  // An account whose service has no live recognizer is no live account: choosing it by hand is reported, not obeyed.
+  settings.roles.live = withAccount(settings, "openai").id
   assert.match(resolveLive({ secrets: secrets("k"), settings }).problem ?? "", /不支持实时识别/)
 })
 
 test("old settings gain Deepgram's defaults, its stored values are read back, and the language maps to its codes", () => {
-  assert.deepEqual(loadSettings({ version: 2 }).settings.providers.deepgram, { endpoint: "wss://api.deepgram.com/v1/listen", model: "nova-3", apiKeySecret: "", diarize: false })
-  assert.deepEqual(loadSettings({ version: 2, providers: { deepgram: { model: "nova-2", diarize: true, apiKeySecret: "k", endpoint: 7 } } }).settings.providers.deepgram, { endpoint: "wss://api.deepgram.com/v1/listen", model: "nova-2", apiKeySecret: "k", diarize: true })
-  const { settings } = loadSettings(null)
+  const stored = (options: Record<string, unknown>) => loadSettings({ version: SETTINGS_VERSION, accounts: [{ id: "a", service: "deepgram", apiKeySecret: "k", options }] }).settings.accounts[0]
+  assert.deepEqual(deepgramSettingsOf(withOne("deepgram").account), { endpoint: "wss://api.deepgram.com/v1/listen", model: "nova-3", apiKeySecret: "", diarize: false })
+  assert.deepEqual(deepgramSettingsOf(stored({ model: "nova-2", diarize: true, endpoint: 7 })), { endpoint: "wss://api.deepgram.com/v1/listen", model: "nova-2", apiKeySecret: "k", diarize: true })
+  const { settings, account } = withOne("deepgram")
   const secrets = { getSecret: () => "k" }
   const codes: [string, string][] = [["auto", "multi"], ["zh", "zh"], ["en", "en"], ["ja", "ja"]]
   for (const [language, code] of codes) {
-    const config = deepgramConfig(secrets, settings.providers.deepgram, language as typeof settings.asrLanguage)
+    const config = deepgramConfig(secrets, deepgramSettingsOf(account), language as typeof settings.asrLanguage)
     assert.equal(config.language, code)
     assert.equal(new URL(deepgramUrl(config)).searchParams.get("language"), code)
   }

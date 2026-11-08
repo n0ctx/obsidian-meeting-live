@@ -142,3 +142,53 @@ export function volcConnector(config: VolcConfig): AsrConnect {
       })
     })
 }
+
+export type HandshakeResult =
+  /** The server accepted the connection (HTTP 101). */
+  | { ok: true; logId?: string }
+  /** The server answered the upgrade with an HTTP error, which says whether the key or the resource was refused. */
+  | { ok: false; status: number; body: string }
+  /** No connection could be made. */
+  | { ok: false; status: 0; body: string }
+
+/**
+ * Opens the stream's socket with the credentials and the resource id, and closes it at once without sending the request or any audio.
+ * Whether the account may use the resource is decided in the upgrade: 101 when it may, 403 `requested resource not granted` when it may not
+ * (https://github.com/Open-Less/openless/issues/1071; the official pages document no status for it). Volcengine bills by audio duration
+ * (https://docs.volcengine.com/docs/6561/1359370), and nothing is sent here, though it does not say in so many words that a bare connection is free.
+ */
+export function volcHandshake(config: VolcConfig): Promise<HandshakeResult> {
+  return new Promise((resolve) => {
+    const headers: Record<string, string> = { "X-Api-Resource-Id": config.resourceId.trim(), "X-Api-Connect-Id": randomUUID() }
+    if (config.apiKey) headers["X-Api-Key"] = config.apiKey
+    else {
+      headers["X-Api-App-Key"] = config.appId
+      headers["X-Api-Access-Key"] = config.accessToken
+    }
+    let socket: WebSocket
+    try {
+      socket = new WebSocket(config.endpoint.trim(), { headers, handshakeTimeout: HANDSHAKE_TIMEOUT_MS })
+    } catch (error) {
+      return resolve({ ok: false, status: 0, body: (error as Error).message })
+    }
+    let logId: string | undefined
+    let settled = false
+    const done = (result: HandshakeResult) => {
+      if (settled) return
+      settled = true
+      socket.terminate()
+      resolve(result)
+    }
+    socket.on("upgrade", (response) => {
+      const value = response.headers["x-tt-logid"]
+      logId = Array.isArray(value) ? value[0] : value
+    })
+    socket.on("unexpected-response", (_request, response) => {
+      let body = ""
+      response.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")))
+      response.on("end", () => done({ ok: false, status: response.statusCode ?? 0, body: body.trim().slice(0, 200) }))
+    })
+    socket.on("open", () => done({ ok: true, logId }))
+    socket.on("error", (error) => done({ ok: false, status: 0, body: error.message }))
+  })
+}

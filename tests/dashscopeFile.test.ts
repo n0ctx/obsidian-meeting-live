@@ -6,7 +6,8 @@ import { dashScopeFileConfig } from "../src/asr/providers/dashscope/settings.ts"
 import { resolveFile } from "../src/asr/providers/registry.ts"
 import { destinations } from "../src/consent.ts"
 import type { PreparedAudio } from "../src/audio/transcode.ts"
-import { loadSettings } from "../src/settings.ts"
+import { dashScopeSettingsOf } from "../src/asr/providers/dashscope/index.ts"
+import { withOne } from "./support/accounts.ts"
 
 const config = (patch: Partial<DashScopeFileConfig> = {}): DashScopeFileConfig => ({ baseUrl: "https://dashscope.aliyuncs.com", apiKey: "sk-1", model: "fun-asr", language: "zh", ...patch })
 const audio = (n = 12): PreparedAudio => ({ data: new Uint8Array(n).fill(9), format: "ogg", transcoded: true, bytes: n })
@@ -120,9 +121,7 @@ test("polling can be cancelled and gives up after the wait limit", async () => {
 })
 
 test("settings: the key and region are all that is needed; the host, limit and capabilities are the service's", () => {
-  const { settings } = loadSettings(null)
-  settings.fileProvider = "dashscope"
-  settings.providers.dashscope.apiKeySecret = "ds"
+  const { settings, account } = withOne("dashscope", { key: "ds" })
   settings.asrLanguage = "ja"
   const secrets = (value: string | null) => ({ getSecret: () => value })
   assert.match(resolveFile({ secrets: secrets(null), settings }).problem ?? "", /API Key/)
@@ -133,7 +132,7 @@ test("settings: the key and region are all that is needed; the host, limit and c
   assert.deepEqual(file.capabilities, { language: true, diarization: true, fileSizeLimit: 1024 ** 3 })
   assert.deepEqual(file.directFormats, {}, "every recording is downmixed to mono first, since only channel 0 would be recognized")
   assert.deepEqual(destinations(settings).find((d) => d.kind === "file"), { kind: "file", name: "阿里云百炼", host: "dashscope.aliyuncs.com" })
-  settings.providers.dashscope.region = "intl"
+  account.options.region = "intl"
   assert.equal(destinations(settings).find((d) => d.kind === "file")?.host, "dashscope-intl.aliyuncs.com")
-  assert.deepEqual(dashScopeFileConfig(secrets("k"), settings.providers.dashscope, "ja"), { baseUrl: "https://dashscope-intl.aliyuncs.com", apiKey: "k", model: "fun-asr", language: "ja" })
+  assert.deepEqual(dashScopeFileConfig(secrets("k"), dashScopeSettingsOf(account), "ja"), { baseUrl: "https://dashscope-intl.aliyuncs.com", apiKey: "k", model: "fun-asr", language: "ja" })
 })

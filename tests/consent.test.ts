@@ -4,6 +4,10 @@ import { destinations, ensureConsentFor, liveIsLocal, needsConsent, type Destina
 import { tr } from "../src/i18n/index.ts"
 import { isLoopbackHost } from "../src/url.ts"
 import { loadSettings, storedSettings } from "../src/settings.ts"
+import { withAccount, volcAndDeepseek } from "./support/accounts.ts"
+
+/** The account of a service in settings made of a Volcengine and a DeepSeek account. */
+const account = (settings: ReturnType<typeof loadSettings>["settings"], service: string) => settings.accounts.find((a) => a.service === service)!
 
 /** The author's 1.0.1 data.json, as far as consent and destinations are concerned. */
 const authorData = () => ({
@@ -25,19 +29,21 @@ const never = async () => assert.fail("should not ask")
 const noSave = async () => undefined
 
 test("destinations name the live, file and LLM hosts under the current settings", () => {
-  const { settings } = loadSettings(null)
+  const settings = volcAndDeepseek()
   assert.deepEqual(destinations(settings), [
     { kind: "live", name: "火山引擎", host: "openspeech.bytedance.com" },
     { kind: "file", name: "火山引擎", host: "openspeech.bytedance.com" },
     { kind: "llm", name: "api.deepseek.com", host: "api.deepseek.com", detail: "deepseek-flash" },
   ])
-  settings.llmBaseUrl = ""
-  settings.providers.volc.endpoint = "nonsense"
+  account(settings, "deepseek").options.baseUrl = ""
+  account(settings, "volc").options.endpoint = "nonsense"
   assert.deepEqual(destinations(settings).map((d) => d.kind), ["file"])
+  // With no account in a role there is nowhere to send to, so nothing is listed.
+  assert.deepEqual(destinations(loadSettings(null).settings), [])
 })
 
 test("a new install is asked once; saying yes records every destination and stops the questions", async () => {
-  const { settings } = loadSettings(null)
+  const settings = volcAndDeepseek()
   const yes = asker()
   let saved = 0
   assert.equal(await ensureConsentFor(settings, yes.ask, async () => void saved++), true)
@@ -49,7 +55,7 @@ test("a new install is asked once; saying yes records every destination and stop
 })
 
 test("declining records nothing and blocks the start", async () => {
-  const { settings } = loadSettings(null)
+  const settings = volcAndDeepseek()
   let saved = 0
   assert.equal(await ensureConsentFor(settings, asker(false).ask, async () => void saved++), false)
   assert.deepEqual(settings.consent, [])
@@ -80,32 +86,33 @@ test("someone who never accepted 1.0.1 gets no seeded consent", () => {
 
 test("moving to a host the user has not agreed to asks again, and a different path on the same host does not", async () => {
   const { settings } = loadSettings(authorData())
-  settings.llmBaseUrl = "https://api.deepseek.com/v1"
+  const deepseek = account(settings, "deepseek")
+  deepseek.options.baseUrl = "https://api.deepseek.com/v1"
   assert.equal(await ensureConsentFor(settings, never, noSave), true)
 
-  settings.llmBaseUrl = "https://api.example.com/v1/chat/completions"
+  deepseek.options.baseUrl = "https://api.example.com/v1/chat/completions"
   const yes = asker()
   assert.equal(await ensureConsentFor(settings, yes.ask, noSave), true)
   assert.equal(yes.asked.length, 1)
   assert.deepEqual(yes.asked[0].find((d) => d.kind === "llm"), { kind: "llm", name: "api.example.com", host: "api.example.com", detail: "deepseek-flash" })
   assert.ok(settings.consent.includes("llm:api.example.com"))
   // Old agreements stay, so going back is not a new question.
-  settings.llmBaseUrl = "https://api.deepseek.com"
+  deepseek.options.baseUrl = "https://api.deepseek.com"
   assert.equal(await ensureConsentFor(settings, never, noSave), true)
 })
 
 test("a change of the live endpoint asks again", async () => {
   const { settings } = loadSettings(authorData())
-  settings.providers.volc.endpoint = "wss://asr.example.com/stream"
+  account(settings, "volc").options.endpoint = "wss://asr.example.com/stream"
   const yes = asker()
   assert.equal(await ensureConsentFor(settings, yes.ask, noSave), true)
   assert.equal(yes.asked.length, 1)
 })
 
 test("agreeing to send text to a host does not cover sending audio to it", () => {
-  const { settings } = loadSettings(null)
-  settings.providers.volc.endpoint = "wss://api.example.com/stream"
-  settings.llmBaseUrl = "https://api.example.com/v1"
+  const settings = volcAndDeepseek()
+  account(settings, "volc").options.endpoint = "wss://api.example.com/stream"
+  account(settings, "deepseek").options.baseUrl = "https://api.example.com/v1"
   settings.consent = ["llm:api.example.com", "file:openspeech.bytedance.com"]
   assert.equal(needsConsent(settings), true)
   settings.consent.push("live:api.example.com")
@@ -113,7 +120,7 @@ test("agreeing to send text to a host does not cover sending audio to it", () =>
 })
 
 test("a flow that sends data to some destinations asks about those and records only those", async () => {
-  const { settings } = loadSettings(null)
+  const settings = volcAndDeepseek()
   assert.equal(needsConsent(settings, ["file", "llm"]), true)
   const yes = asker()
   assert.equal(await ensureConsentFor(settings, yes.ask, noSave, ["file", "llm"]), true)
@@ -134,17 +141,22 @@ test("the new services are asked about per destination: a region or a model serv
   const volcUser = loadSettings(authorData()).settings
   assert.equal(needsConsent(volcUser), false, "the 1.0.1 yes still covers everything that user sends")
 
-  const { settings } = loadSettings(null)
-  settings.liveProvider = "dashscope"
-  settings.fileProvider = "assemblyai"
+  const settings = loadSettings(null).settings
+  const dashscope = withAccount(settings, "dashscope", { region: "cn" })
+  const assemblyai = withAccount(settings, "assemblyai")
+  withAccount(settings, "deepseek")
+  settings.roles.live = dashscope.id
+  settings.roles.file = assemblyai.id
+  settings.roles.llm.account = account(settings, "deepseek").id
+  settings.roles.llm.model = "deepseek-flash"
   const first = asker()
   assert.equal(await ensureConsentFor(settings, first.ask, noSave), true)
   assert.deepEqual(first.asked[0].map((d) => [d.kind, d.host]), [["live", "dashscope.aliyuncs.com"], ["file", "api.assemblyai.com"], ["llm", "api.deepseek.com"]])
   assert.equal(needsConsent(settings), false)
 
   // The same service in another region is another destination.
-  settings.providers.dashscope.region = "intl"
-  settings.providers.assemblyai.region = "eu"
+  dashscope.options.region = "intl"
+  assemblyai.options.region = "eu"
   assert.equal(needsConsent(settings, ["live"]), true)
   assert.equal(needsConsent(settings, ["file"]), true)
   const second = asker()
@@ -154,7 +166,7 @@ test("the new services are asked about per destination: a region or a model serv
   assert.equal(needsConsent(settings, ["file"]), true, "the file destination was not part of that question")
 
   // A model service preset on another host asks about the LLM only.
-  settings.llmBaseUrl = "https://api.moonshot.cn/v1"
+  account(settings, "deepseek").options.baseUrl = "https://api.moonshot.cn/v1"
   const third = asker()
   await ensureConsentFor(settings, third.ask, noSave, ["llm"])
   assert.deepEqual(third.asked[0].map((d) => d.host), ["api.moonshot.cn"])
@@ -162,7 +174,8 @@ test("the new services are asked about per destination: a region or a model serv
 
 
 test("a recognizer on this machine is still listed and agreed to, but marked as not leaving it; a LAN address is not", async () => {
-  const { settings } = loadSettings({ liveProvider: "sherpa-onnx" })
+  const settings = loadSettings(null).settings
+  withAccount(settings, "sherpa")
   assert.deepEqual(destinations(settings).find((d) => d.kind === "live"), { kind: "live", name: "本地识别（sherpa-onnx）", host: "127.0.0.1:6006", local: true })
   assert.equal(liveIsLocal(settings), true)
   assert.equal(needsConsent(settings, ["live"]), true, "agreement is still asked for")
@@ -172,12 +185,13 @@ test("a recognizer on this machine is still listed and agreed to, but marked as 
   assert.equal(await ensureConsentFor(settings, never, noSave, ["live"]), true)
 
   // Moving the recognizer to another machine is a new destination that leaves this computer, so it asks again.
-  settings.providers.sherpa.endpoint = "ws://192.168.1.20:6006"
+  const sherpa = account(settings, "sherpa")
+  sherpa.options.endpoint = "ws://192.168.1.20:6006"
   assert.equal(liveIsLocal(settings), false)
   assert.equal(destinations(settings).find((d) => d.kind === "live")?.local, undefined)
   assert.equal(needsConsent(settings, ["live"]), true)
   for (const endpoint of ["ws://localhost:6006", "ws://[::1]:6006", "ws://127.0.0.5:6006"]) {
-    settings.providers.sherpa.endpoint = endpoint
+    sherpa.options.endpoint = endpoint
     assert.equal(liveIsLocal(settings), true, endpoint)
   }
   for (const host of ["127.0.0.1:6006", "localhost", "[::1]:6006", "127.1.2.3"]) assert.equal(isLoopbackHost(host), true, host)

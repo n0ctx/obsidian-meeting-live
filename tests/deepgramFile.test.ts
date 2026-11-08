@@ -3,7 +3,8 @@ import { test } from "node:test"
 import type { FileAsrPost, FileAsrResponse } from "../src/asr/fileAsr.ts"
 import { deepgramFileProvider, deepgramFileUrl, parseDeepgramFile, type DeepgramFileConfig } from "../src/asr/providers/deepgram/file.ts"
 import { deepgramFileConfig } from "../src/asr/providers/deepgram/settings.ts"
-import { loadSettings } from "../src/settings.ts"
+import { deepgramSettingsOf } from "../src/asr/providers/deepgram/index.ts"
+import { withOne } from "./support/accounts.ts"
 import type { PreparedAudio } from "../src/audio/transcode.ts"
 
 const config = (patch: Partial<DeepgramFileConfig> = {}): DeepgramFileConfig => ({ url: "https://api.deepgram.com/v1/listen", apiKey: "dg-key", model: "nova-3", language: "zh", ...patch })
@@ -77,7 +78,6 @@ test("declared capabilities and configuration problems", () => {
   assert.equal(deepgramFileProvider(config({ apiKey: "", url: "http://localhost:8080/v1/listen" })).problem, undefined)
   assert.match(deepgramFileProvider(config({ url: "" })).problem ?? "", /地址/)
   assert.match(deepgramFileProvider(config({ model: "" })).problem ?? "", /模型/)
-  const { settings } = loadSettings(null)
-  settings.providers.deepgram.apiKeySecret = "dg"
-  assert.deepEqual(deepgramFileConfig({ getSecret: () => " k " }, settings.providers.deepgram, "auto"), { url: "https://api.deepgram.com/v1/listen", apiKey: "k", model: "nova-3", language: undefined })
+  const { account } = withOne("deepgram", { key: "dg" })
+  assert.deepEqual(deepgramFileConfig({ getSecret: () => " k " }, deepgramSettingsOf(account), "auto"), { url: "https://api.deepgram.com/v1/listen", apiKey: "k", model: "nova-3", language: undefined })
 })

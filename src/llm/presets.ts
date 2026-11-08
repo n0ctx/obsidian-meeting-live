@@ -366,6 +366,24 @@ export const LLM_PRESETS: readonly LlmPreset[] = [
     inputTokens: 128_000,
   },
   {
+    // https://console.groq.com/docs/openai (https://api.groq.com/openai/v1, Bearer; "mostly compatible")
+    // https://console.groq.com/docs/api-reference#chat-create (temperature 0 to 2; reasoning_effort takes different values per model and "unsupported values are rejected with a 400", so none is sent)
+    // https://console.groq.com/docs/structured-outputs (json_object is listed for all models, and needs the prompt to ask for JSON)
+    // https://console.groq.com/docs/models (openai/gpt-oss-120b is the featured production model, 131,072 tokens of context)
+    id: "groq",
+    name: "Groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    model: "openai/gpt-oss-120b",
+    matches: (url) => url.hostname === "api.groq.com",
+    temperature: true,
+    effort: "none",
+    json: "always",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 128_000,
+  },
+  {
     // https://docs.ollama.com/api/openai-compatibility (base URL, key ignored locally, temperature, JSON mode, reasoning_effort)
     // The OpenAI endpoint cannot set the context size, and the docs give no default, hence the small limit.
     id: "ollama",

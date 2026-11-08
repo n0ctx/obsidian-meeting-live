@@ -1,6 +1,7 @@
 // Consent is given per destination: where audio or text actually goes, by role and host.
 // Changing a provider or an endpoint to a host the user has not agreed to asks again.
-import { asrProvider } from "./asr/providers/registry.ts"
+import { providerOf } from "./asr/providers/registry.ts"
+import { accountLabel, roleAccount } from "./accounts/roles.ts"
 import { chatCompletionsUrl } from "./llm/client.ts"
 import type { MeetingLiveSettings } from "./settings.ts"
 import { hostOf, isLoopbackHost } from "./url.ts"
@@ -19,13 +20,14 @@ export interface Destination {
 
 /** Where the plugin would send data under these settings. Destinations that cannot be resolved to a host are left out. */
 export function destinations(settings: MeetingLiveSettings): Destination[] {
-  const live = asrProvider(settings.liveProvider)
-  const file = asrProvider(settings.fileProvider)
-  const llmHost = hostOf(chatCompletionsUrl(settings.llmBaseUrl))
+  const live = roleAccount(settings, "live")
+  const file = roleAccount(settings, "file")
+  const llm = roleAccount(settings, "llm")
+  const llmHost = llm ? hostOf(chatCompletionsUrl(String(llm.options.baseUrl ?? ""))) : ""
   const list: Destination[] = [
-    { kind: "live", name: live?.name ?? settings.liveProvider, host: live?.live?.host(settings) ?? "" },
-    { kind: "file", name: file?.name ?? settings.fileProvider, host: file?.file?.host(settings) ?? "" },
-    { kind: "llm", name: llmHost, host: llmHost, detail: settings.llmModel.trim() || undefined },
+    { kind: "live", name: live ? accountLabel(settings.accounts, live) : "", host: (live && providerOf(live)?.live?.host(live)) || "" },
+    { kind: "file", name: file ? accountLabel(settings.accounts, file) : "", host: (file && providerOf(file)?.file?.host(file)) || "" },
+    { kind: "llm", name: llmHost, host: llmHost, detail: settings.roles.llm.model.trim() || undefined },
   ]
   return list.filter((d) => d.host).map((d) => (isLoopbackHost(d.host) ? { ...d, local: true as const } : d))
 }

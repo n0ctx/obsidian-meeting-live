@@ -2,8 +2,7 @@ import { MarkdownView, Notice, Plugin, TFile, normalizePath, requestUrl, type Ed
 import { inBackground } from "./background.ts"
 import { ensureConsentFor, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
 import { t } from "./i18n/index.ts"
-import { resolveFile, resolveLive } from "./asr/providers/registry.ts"
-import type { ProviderEnv } from "./asr/providers/types.ts"
+import { resolveFile, resolveLive, type ResolveEnv } from "./asr/providers/registry.ts"
 import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import { MeetingManager } from "./meeting/manager.ts"
@@ -118,7 +117,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
 
   // ---------------------------------------------------------------- CardHost
 
-  private providerEnv(): ProviderEnv {
+  private providerEnv(): ResolveEnv {
     return { secrets: this.app.secretStorage, settings: this.settings }
   }
 

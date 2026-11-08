@@ -5,7 +5,9 @@ import { dashScopeConfigProblem, dashScopeConnector, finishTaskMessage, runTaskM
 import { dashScopeConfig } from "../src/asr/providers/dashscope/settings.ts"
 import { resolveLive } from "../src/asr/providers/registry.ts"
 import { destinations } from "../src/consent.ts"
-import { loadSettings } from "../src/settings.ts"
+import { dashScopeSettingsOf } from "../src/asr/providers/dashscope/index.ts"
+import { SETTINGS_VERSION, loadSettings } from "../src/settings.ts"
+import { withOne } from "./support/accounts.ts"
 import { collect, fakeWs, pcm, waitFor } from "./support/fakeWs.ts"
 
 const config = (endpoint: string, patch: Partial<DashScopeConfig> = {}): DashScopeConfig => ({ endpoint, apiKey: "sk-test", model: "qwen-audio-3.1-asr-flash-streaming", language: undefined, hotwords: [], ...patch })
@@ -164,15 +166,14 @@ test("closing locally is silent and sending afterwards is an error the streamer 
 })
 
 test("settings: a key is all that is needed, the region picks the host, and old data gains the defaults", () => {
-  const defaults = loadSettings(null).settings
-  assert.deepEqual(defaults.providers.dashscope, { region: "cn", apiKeySecret: "", model: "qwen-audio-3.1-asr-flash-streaming" })
-  assert.deepEqual(loadSettings({ version: 2, providers: { volc: {} } }).settings.providers.dashscope, defaults.providers.dashscope)
-  assert.equal(loadSettings({ version: 2, providers: { dashscope: { region: "mars", model: 4, apiKeySecret: "k" } } }).settings.providers.dashscope.region, "cn")
-  assert.deepEqual(loadSettings({ version: 2, providers: { dashscope: { region: "intl", apiKeySecret: "k", model: "fun-asr-realtime" } } }).settings.providers.dashscope, { region: "intl", apiKeySecret: "k", model: "fun-asr-realtime" })
+  const defaults = withOne("dashscope").account
+  assert.deepEqual(dashScopeSettingsOf(defaults), { region: "cn", apiKeySecret: "", model: "qwen-audio-3.1-asr-flash-streaming" })
+  const stored = (options: Record<string, unknown>) => loadSettings({ version: SETTINGS_VERSION, accounts: [{ id: "a", service: "dashscope", apiKeySecret: "k", options }] }).settings.accounts[0]
+  assert.deepEqual(dashScopeSettingsOf(stored({})), { ...dashScopeSettingsOf(defaults), apiKeySecret: "k" })
+  assert.equal(dashScopeSettingsOf(stored({ region: "mars", model: 4 })).region, "cn")
+  assert.deepEqual(dashScopeSettingsOf(stored({ region: "intl", model: "fun-asr-realtime" })), { region: "intl", apiKeySecret: "k", model: "fun-asr-realtime" })
 
-  const { settings } = loadSettings(null)
-  settings.liveProvider = "dashscope"
-  settings.providers.dashscope.apiKeySecret = "ds"
+  const { settings, account } = withOne("dashscope", { key: "ds" })
   settings.asrLanguage = "zh"
   settings.hotwords = "科创板\n某某资本"
   const secrets = (value: string | null) => ({ getSecret: () => value })
@@ -182,11 +183,11 @@ test("settings: a key is all that is needed, the region picks the host, and old 
   assert.equal(typeof live.connect, "function")
   assert.deepEqual([live.id, live.name], ["dashscope", "阿里云百炼"])
   assert.deepEqual(destinations(settings).find((d) => d.kind === "live"), { kind: "live", name: "阿里云百炼", host: "dashscope.aliyuncs.com" })
-  settings.providers.dashscope.region = "intl"
+  account.options.region = "intl"
   assert.equal(destinations(settings).find((d) => d.kind === "live")?.host, "dashscope-intl.aliyuncs.com")
 
-  const built = dashScopeConfig(secrets("sk-1"), settings.providers.dashscope, "zh", settings.hotwords)
+  const built = dashScopeConfig(secrets("sk-1"), dashScopeSettingsOf(account), "zh", settings.hotwords)
   assert.deepEqual([built.endpoint, built.apiKey, built.language, built.hotwords], ["wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference", "sk-1", "zh", ["科创板", "某某资本"]])
-  assert.equal(dashScopeConfig(secrets("sk-1"), settings.providers.dashscope, "auto", "").language, undefined)
+  assert.equal(dashScopeConfig(secrets("sk-1"), dashScopeSettingsOf(account), "auto", "").language, undefined)
   assert.match(dashScopeConfigProblem({ ...built, model: " " }) ?? "", /模型/)
 })

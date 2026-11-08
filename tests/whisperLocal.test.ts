@@ -5,12 +5,21 @@ import { resolveFile } from "../src/asr/providers/registry.ts"
 import { WHISPER_LOCAL_FILE_LIMIT } from "../src/asr/providers/whisperLocal/info.ts"
 import { destinations } from "../src/consent.ts"
 import { loadSettings } from "../src/settings.ts"
+import { withOne } from "./support/accounts.ts"
+import type { AsrLanguage } from "../src/asr/language.ts"
+
+/** Settings with a Local Whisper account, which is the file role's. */
+const local = (language: AsrLanguage = "auto") => {
+  const { settings, account } = withOne("whisper-local")
+  settings.asrLanguage = language
+  return { settings, account }
+}
 
 const noSecrets = { getSecret: () => null }
 const audio = { data: new Uint8Array([1, 2, 3]), format: "ogg", transcoded: false, bytes: 3 }
 
 test("picking Local needs no address, key or limit: the default points at whisper-server on this machine", () => {
-  const { settings } = loadSettings({ fileProvider: "whisper-local" })
+  const { settings } = local()
   const file = resolveFile({ secrets: noSecrets, settings })
   assert.deepEqual([file.id, file.name, file.host, file.model, file.problem], ["whisper-local", "本地 Whisper（whisper.cpp）", "127.0.0.1:8080", "whisper", undefined])
   assert.equal(file.capabilities.fileSizeLimit, WHISPER_LOCAL_FILE_LIMIT)
@@ -20,7 +29,7 @@ test("picking Local needs no address, key or limit: the default points at whispe
 })
 
 test("it requests <address>/audio/transcriptions with the language, no Authorization header, and reads timed segments", async () => {
-  const { settings } = loadSettings({ fileProvider: "whisper-local", asrLanguage: "zh" })
+  const { settings } = local("zh")
   const requests: { url: string; headers: Record<string, string>; body: string }[] = []
   const post: FileAsrPost = async (url, headers, body) => {
     requests.push({ url, headers, body: Buffer.from(body as ArrayBuffer).toString("utf8") })
@@ -38,7 +47,7 @@ test("it requests <address>/audio/transcriptions with the language, no Authoriza
 
 test("Chinese is steered towards simplified characters; other languages and auto-detect send no prompt", async () => {
   for (const [language, prompt] of [["zh", true], ["en", false], ["auto", false]] as const) {
-    const { settings } = loadSettings({ fileProvider: "whisper-local", asrLanguage: language })
+    const { settings } = local(language)
     let body = ""
     const post: FileAsrPost = async (_url, _headers, data) => ((body = Buffer.from(data as ArrayBuffer).toString("utf8")), { status: 200, headers: {}, text: JSON.stringify({ text: "x", segments: [{ start: 0, end: 1, text: "x" }] }) })
     await resolveFile({ secrets: noSecrets, settings }).transcribe(audio, { speakers: false, post })
@@ -47,23 +56,23 @@ test("Chinese is steered towards simplified characters; other languages and auto
 })
 
 test("a server address and model that the user changed are kept, and a bad address is reported", () => {
-  const { settings } = loadSettings({ version: 2, providers: { whisperLocal: { baseUrl: " http://127.0.0.1:9000/v1 ", model: "Systran/faster-whisper-small" } } })
-  settings.fileProvider = "whisper-local"
+  const { settings } = loadSettings({ version: 2, fileProvider: "whisper-local", providers: { whisperLocal: { baseUrl: " http://127.0.0.1:9000/v1 ", model: "Systran/faster-whisper-small" } } })
   const file = resolveFile({ secrets: noSecrets, settings })
   assert.deepEqual([file.host, file.model], ["127.0.0.1:9000", "Systran/faster-whisper-small"])
-  settings.providers.whisperLocal.baseUrl = "not a url"
+  settings.accounts[0].options.baseUrl = "not a url"
   assert.match(resolveFile({ secrets: noSecrets, settings }).problem ?? "", /./)
 })
 
 test("the recording's destination is listed as on this machine, and a server on another host is not", () => {
-  const { settings } = loadSettings({ fileProvider: "whisper-local" })
+  const { settings, account } = local()
   assert.deepEqual(destinations(settings).find((d) => d.kind === "file"), { kind: "file", name: "本地 Whisper（whisper.cpp）", host: "127.0.0.1:8080", local: true })
-  settings.providers.whisperLocal.baseUrl = "http://192.168.1.9:8080/v1"
+  account.options.baseUrl = "http://192.168.1.9:8080/v1"
   assert.equal(destinations(settings).find((d) => d.kind === "file")?.local, undefined)
 })
 
-test("existing settings are unchanged by the new provider: the same file and live providers, and a default section", () => {
-  const { settings } = loadSettings({ version: 2, liveProvider: "volc", fileProvider: "volc", providers: { openaiCompat: { baseUrl: "https://api.groq.com/openai/v1" } } })
-  assert.deepEqual([settings.liveProvider, settings.fileProvider, settings.providers.openaiCompat.baseUrl], ["volc", "volc", "https://api.groq.com/openai/v1"])
-  assert.deepEqual(settings.providers.whisperLocal, { baseUrl: "http://127.0.0.1:8080/v1", model: "whisper" })
+test("existing settings are unchanged by the new provider: the same file and live providers, and no local account", () => {
+  const { settings } = loadSettings({ version: 2, liveProvider: "volc", fileProvider: "volc", providers: { volc: { apiKeySecret: "k" }, openaiCompat: { baseUrl: "https://api.groq.com/openai/v1" } } })
+  assert.deepEqual([settings.roles.live, settings.roles.file], ["volc", "volc"])
+  // The Groq address was set, so it is kept, as an account of its own that no role uses.
+  assert.deepEqual(settings.accounts.map((a) => [a.service, a.options.baseUrl ?? "-"]), [["volc", "-"], ["groq", "https://api.groq.com/openai/v1"]])
 })

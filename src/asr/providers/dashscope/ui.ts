@@ -1,18 +1,12 @@
-import { Notice, Setting } from "obsidian"
+import { Setting } from "obsidian"
 import { t } from "../../../i18n/index.ts"
-import { secretField, textField } from "../../../ui/settingFields.ts"
-import { testLiveConnection } from "../liveTest.ts"
-import type { ProviderSettingsContext } from "../types.ts"
-import { DASHSCOPE_LIVE_MODEL, isDashScopeRegion, DASHSCOPE_LIVE_PACING } from "./info.ts"
-import { dashScopeConfigProblem, dashScopeConnector } from "./live.ts"
-import { dashScopeConfig } from "./settings.ts"
+import { presetById } from "../../../llm/presets.ts"
+import { textField } from "../../../ui/settingFields.ts"
+import type { AdvancedSettingsContext } from "../types.ts"
+import { DASHSCOPE_LIVE_MODEL, isDashScopeRegion } from "./info.ts"
 
-export function renderDashScopeSettings({ app, containerEl, settings, save, roles }: ProviderSettingsContext): void {
-  const dashscope = settings.providers.dashscope
-  new Setting(containerEl).setName(t("dashscope.settings.heading", t("provider.dashscope"))).setHeading()
-  containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: roles.live ? t("dashscope.settings.note") : t("dashscope.settings.fileNote") })
-  if (roles.live && roles.file) containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("dashscope.settings.fileNote") })
-  secretField(app, new Setting(containerEl).setName("API Key"), dashscope, "apiKeySecret", save)
+export function renderDashScopeAdvanced({ containerEl, account, save, refresh }: AdvancedSettingsContext): void {
+  const options = account.options
   new Setting(containerEl)
     .setName(t("dashscope.settings.region.name"))
     .setDesc(t("dashscope.settings.region.desc"))
@@ -20,25 +14,16 @@ export function renderDashScopeSettings({ app, containerEl, settings, save, role
       d
         .addOption("cn", t("dashscope.settings.region.cn"))
         .addOption("intl", t("dashscope.settings.region.intl"))
-        .setValue(dashscope.region)
+        .setValue(String(options.region))
         .onChange((v) => {
           if (!isDashScopeRegion(v)) return
-          dashscope.region = v
+          options.region = v
+          // The language model's address follows the region, so a change of region moves it too.
+          options.baseUrl = presetById(v === "intl" ? "qwen-intl" : "qwen").baseUrl
           save()
+          refresh()
         }),
     )
-  if (roles.live) {
-    textField(new Setting(containerEl).setName(t("dashscope.settings.model.name")).setDesc(t("dashscope.settings.model.desc")), dashscope, "model", save, DASHSCOPE_LIVE_MODEL)
-    new Setting(containerEl)
-      .setName(t("settings.liveTest.name"))
-      .setDesc(t("settings.liveTest.desc"))
-      .addButton((b) =>
-        b.setButtonText(t("settings.test")).onClick(() => {
-          const config = dashScopeConfig(app.secretStorage, dashscope, settings.asrLanguage, settings.hotwords)
-          const problem = dashScopeConfigProblem(config)
-          if (problem) return void new Notice(problem)
-          void testLiveConnection(dashScopeConnector(config), DASHSCOPE_LIVE_PACING, t("provider.dashscope"), b.buttonEl)
-        }),
-      )
-  }
+  textField(new Setting(containerEl).setName(t("dashscope.settings.model.name")).setDesc(t("dashscope.settings.model.desc")), options, "model", save, DASHSCOPE_LIVE_MODEL)
+  containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("dashscope.settings.fileNote") })
 }

@@ -5,6 +5,7 @@ import type { AsrUpdate } from "../src/asr/contract.ts"
 import { buildVolcRequest } from "../src/asr/providers/volc/live.ts"
 import { volcProvider } from "../src/asr/providers/volc/index.ts"
 import { loadSettings } from "../src/settings.ts"
+import { withOne } from "./support/accounts.ts"
 
 const payload = (utterances: unknown[]) => ({ result: { text: "", utterances } })
 
@@ -100,9 +101,9 @@ test("the streaming request asks for speakers only when they are turned on, and 
   assert.equal(request({ speakers: true }).show_utterances, true, "speaker_id only comes with show_utterances")
   assert.equal(request({ speakers: true }).enable_nonstream, true, "the async endpoint needs enable_nonstream with it")
 
-  const off = loadSettings({ version: 2 }).settings
-  assert.equal(volcProvider.live!.capabilities(off).diarization, false)
-  const on = loadSettings({ version: 2, providers: { volc: { speakers: true } } }).settings
-  assert.equal(volcProvider.live!.capabilities(on).diarization, true)
-  assert.equal(loadSettings({ volcAppId: "a" }).settings.providers.volc.speakers, false, "1.0.x settings migrate with it off")
+  const { account } = withOne("volc")
+  assert.equal(volcProvider.live!.capabilities(account).diarization, false)
+  account.options.speakers = true
+  assert.equal(volcProvider.live!.capabilities(account).diarization, true)
+  assert.equal(loadSettings({ volcAppId: "a" }).settings.accounts[0].options.speakers, false, "1.0.x settings migrate with it off")
 })

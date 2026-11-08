@@ -5,7 +5,9 @@ import { resolveFile } from "../src/asr/providers/registry.ts"
 import { OPENAI_FILE_LIMIT } from "../src/asr/providers/openaiCompat/info.ts"
 import { asrProvider } from "../src/asr/providers/registry.ts"
 import { buildMultipart, errorOf, parseTranscription, responseFormatFor, transcriptionsUrl, type OpenAiFileConfig, openAiFileProvider } from "../src/asr/providers/openaiCompat/file.ts"
-import { loadSettings, type MeetingLiveSettings } from "../src/settings.ts"
+import { openAiSettingsOf } from "../src/asr/providers/openaiCompat/index.ts"
+import { SETTINGS_VERSION, loadSettings, type MeetingLiveSettings } from "../src/settings.ts"
+import { withOne } from "./support/accounts.ts"
 import { isLocalHost } from "../src/url.ts"
 
 const audio = { data: new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0, 255, 10, 13]), format: "ogg", transcoded: true, bytes: 8 }
@@ -153,20 +155,20 @@ test("the transcription URL accepts a base with or without the path, and replies
 })
 
 const secrets = (values: Record<string, string>) => ({ getSecret: (id: string) => values[id] ?? null })
-const settings = (patch: (s: MeetingLiveSettings) => void) => {
-  const { settings } = loadSettings(null)
-  settings.fileProvider = "openai-compat"
-  patch(settings)
+/** Settings with one OpenAI-compatible account, which is the file role's, changed by `patch` (given the account's options). */
+const settings = (patch: (s: MeetingLiveSettings, options: Record<string, unknown>) => void) => {
+  const { settings, account } = withOne("custom", { key: "", options: { baseUrl: "https://api.openai.com/v1" } })
+  patch(settings, account.options)
   return settings
 }
 
 test("the provider resolves from settings: host, model, the user's size limit, language and what is missing", () => {
   const registered = asrProvider("openai-compat")!
   assert.equal(registered.live, undefined)
-  const s = settings((x) => {
-    x.providers.openaiCompat.baseUrl = " https://api.groq.com/openai/v1 "
-    x.providers.openaiCompat.model = "whisper-large-v3-turbo"
-    x.providers.openaiCompat.apiKeySecret = "groq-key"
+  const s = settings((x, o) => {
+    o.baseUrl = " https://api.groq.com/openai/v1 "
+    o.model = "whisper-large-v3-turbo"
+    x.accounts[0].apiKeySecret = "groq-key"
     x.asrLanguage = "zh"
   })
   const file = resolveFile({ secrets: secrets({ "groq-key": " gk " }), settings: s })
@@ -174,26 +176,26 @@ test("the provider resolves from settings: host, model, the user's size limit, l
   assert.equal(file.model, "whisper-large-v3-turbo")
   assert.equal(file.problem, undefined)
   assert.equal(file.capabilities.fileSizeLimit, 25 * 1024 * 1024)
-  assert.equal(registered.file!.host(s), "api.groq.com")
-  assert.deepEqual(registered.file!.capabilities(s), { language: true, diarization: false, fileSizeLimit: 25 * 1024 * 1024 })
+  assert.equal(registered.file!.host(s.accounts[0]), "api.groq.com")
+  assert.deepEqual(registered.file!.capabilities(s.accounts[0]), { language: true, diarization: false, fileSizeLimit: 25 * 1024 * 1024 })
 
-  s.providers.openaiCompat.fileSizeLimitMb = 100
+  s.accounts[0].options.fileSizeLimitMb = 100
   assert.equal(resolveFile({ secrets: secrets({ "groq-key": "gk" }), settings: s }).capabilities.fileSizeLimit, 100 * 1024 * 1024)
-  assert.equal(registered.file!.capabilities(s).fileSizeLimit, 100 * 1024 * 1024)
+  assert.equal(registered.file!.capabilities(s.accounts[0]).fileSizeLimit, 100 * 1024 * 1024)
 
   assert.match(resolveFile({ secrets: secrets({}), settings: s }).problem ?? "", /API Key/)
-  const local = settings((x) => {
-    x.providers.openaiCompat.baseUrl = "http://localhost:8000/v1"
-    x.providers.openaiCompat.model = "large-v3"
+  const local = settings((_, o) => {
+    o.baseUrl = "http://localhost:8000/v1"
+    o.model = "large-v3"
   })
   assert.equal(resolveFile({ secrets: secrets({}), settings: local }).problem, undefined)
-  assert.match(resolveFile({ secrets: secrets({}), settings: settings((x) => (x.providers.openaiCompat.model = " ")) }).problem ?? "", /模型/)
-  assert.match(resolveFile({ secrets: secrets({}), settings: settings((x) => (x.providers.openaiCompat.baseUrl = "")) }).problem ?? "", /API 地址/)
+  assert.match(resolveFile({ secrets: secrets({}), settings: settings((_, o) => (o.model = " ")) }).problem ?? "", /模型/)
+  assert.match(resolveFile({ secrets: secrets({}), settings: settings((_, o) => (o.baseUrl = "")) }).problem ?? "", /API 地址/)
 })
 
 test("the generic language reaches the request, and auto sends none", async () => {
-  const s = settings((x) => {
-    x.providers.openaiCompat.baseUrl = "http://127.0.0.1:9/v1"
+  const s = settings((x, o) => {
+    o.baseUrl = "http://127.0.0.1:9/v1"
     x.asrLanguage = "en"
   })
   const sent = service({ body: { text: "hello", duration: 1, segments: [{ start: 0, end: 1, text: "hello" }] } })
@@ -206,9 +208,11 @@ test("the generic language reaches the request, and auto sends none", async () =
 })
 
 test("old settings gain the new provider's defaults, and its stored values are read back", () => {
-  assert.deepEqual(loadSettings({ version: 2, providers: { volc: {} } }).settings.providers.openaiCompat, { baseUrl: "https://api.openai.com/v1", model: "whisper-1", apiKeySecret: "", fileSizeLimitMb: 0 })
-  const stored = loadSettings({ version: 2, providers: { openaiCompat: { baseUrl: "http://localhost:8000/v1", model: "large-v3", fileSizeLimitMb: 200, apiKeySecret: 5 } } }).settings.providers.openaiCompat
-  assert.deepEqual(stored, { baseUrl: "http://localhost:8000/v1", model: "large-v3", apiKeySecret: "", fileSizeLimitMb: 200 })
+  const stored = (options: Record<string, unknown>) => loadSettings({ version: SETTINGS_VERSION, accounts: [{ id: "a", service: "openai", options }] }).settings.accounts[0]
+  assert.deepEqual(openAiSettingsOf(stored({})), { baseUrl: "https://api.openai.com/v1", model: "whisper-1", apiKeySecret: "", fileSizeLimitMb: 0 })
+  assert.deepEqual(openAiSettingsOf(stored({ baseUrl: "http://localhost:8000/v1", model: "large-v3", fileSizeLimitMb: 200, apiKeySecret: 5 })), { baseUrl: "http://localhost:8000/v1", model: "large-v3", apiKeySecret: "", fileSizeLimitMb: 200 })
+  // Each OpenAI-compatible service starts at its own address and model.
+  assert.deepEqual([withOne("groq").account, withOne("openai").account].map((a) => [openAiSettingsOf(a).baseUrl, openAiSettingsOf(a).model]), [["https://api.groq.com/openai/v1", "whisper-large-v3"], ["https://api.openai.com/v1", "whisper-1"]])
 })
 
 test("whisper-1 stays the default while its documented successor returns no times, and the settings page says it is being shut down", async () => {

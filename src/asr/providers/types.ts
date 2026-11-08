@@ -1,4 +1,5 @@
 import type { App } from "obsidian"
+import type { Account } from "../../accounts/account.ts"
 import type { Lang } from "../../i18n/index.ts"
 import type { SecretReader } from "../../secrets.ts"
 import type { MeetingLiveSettings } from "../../settings.ts"
@@ -30,6 +31,8 @@ export interface FileCapabilities {
 export interface ProviderEnv {
   secrets: SecretReader
   settings: MeetingLiveSettings
+  /** The account the service runs for: its key and the service's own settings. */
+  account: Account
 }
 
 /** The live recognizer for one run: a connector, or why there is none. */
@@ -38,30 +41,30 @@ export interface LiveAsr {
   problem?: string
 }
 
-export interface ProviderSettingsContext {
+export interface AdvancedSettingsContext {
   app: App
   containerEl: HTMLElement
-  settings: MeetingLiveSettings
+  account: Account
   save: () => void
-  /** What the provider is selected for, so its section shows only the settings that matter. */
-  roles: { live: boolean; file: boolean }
+  /** Draws the account's advanced settings again, for a setting that changes which others there are. */
+  refresh: () => void
 }
 
-/** Live transcription while recording. Settings-dependent answers take the current settings. */
+/** Live transcription while recording. Answers that depend on settings take the account the service runs for. */
 export interface LiveService {
-  capabilities(settings: MeetingLiveSettings): LiveCapabilities
+  capabilities(account: Account): LiveCapabilities
   /** The fastest the service takes audio, with the documentation that says so next to the value. Never faster than the documented limit. */
-  pacing(settings: MeetingLiveSettings): LivePacing
-  /** Host live audio goes to under these settings, for privacy text and consent. Empty when it cannot be told. */
-  host(settings: MeetingLiveSettings): string
+  pacing(account: Account): LivePacing
+  /** Host live audio goes to for this account, for privacy text and consent. Empty when it cannot be told. */
+  host(account: Account): string
   resolve(env: ProviderEnv): LiveAsr
 }
 
 /** Transcription of recorded files. */
 export interface FileService {
-  capabilities(settings: MeetingLiveSettings): FileCapabilities
+  capabilities(account: Account): FileCapabilities
   /** Host recorded files are uploaded to. */
-  host(settings: MeetingLiveSettings): string
+  host(account: Account): string
   resolve(env: ProviderEnv): FileAsrProvider
 }
 
@@ -77,6 +80,6 @@ export interface AsrProvider {
   nameIn?(lang: Lang): string
   readonly live?: LiveService
   readonly file?: FileService
-  /** Draws the provider's section of the settings page, including its connection test. */
-  renderSettings(context: ProviderSettingsContext): void
+  /** Draws the provider's advanced settings of one account: endpoints, model names and the like. */
+  renderAdvanced(context: AdvancedSettingsContext): void
 }

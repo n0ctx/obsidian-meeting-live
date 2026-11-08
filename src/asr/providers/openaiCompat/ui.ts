@@ -1,32 +1,26 @@
 import { Setting } from "obsidian"
 import { t } from "../../../i18n/index.ts"
-import { secretField, textField } from "../../../ui/settingFields.ts"
-import type { ProviderSettingsContext } from "../types.ts"
+import { textField } from "../../../ui/settingFields.ts"
+import type { AdvancedSettingsContext } from "../types.ts"
 import { OPENAI_FILE_LIMIT } from "./info.ts"
 import { DEFAULT_OPENAI_COMPAT } from "./settings.ts"
 
-export function renderOpenAiCompatSettings({ app, containerEl, settings, save }: ProviderSettingsContext): void {
-  const openai = settings.providers.openaiCompat
-  new Setting(containerEl).setName(t("openai.settings.heading", t("provider.openaiCompat"))).setHeading()
-  containerEl.createDiv({
-    cls: "setting-item-description ml-settings-note",
-    text: t("openai.settings.note"),
-  })
-  textField(new Setting(containerEl).setName(t("openai.settings.url")), openai, "baseUrl", save, "https://api.openai.com/v1")
-  textField(new Setting(containerEl).setName(t("openai.settings.model")), openai, "model", save, "whisper-1")
+/** The address is the account's own (it is shared with the language model), so only the transcription model and the upload limit are here. */
+export function renderOpenAiCompatAdvanced({ containerEl, account, save }: AdvancedSettingsContext): void {
+  const options = account.options
+  textField(new Setting(containerEl).setName(t("openai.settings.model")), options, "model", save, "whisper-1")
   // https://developers.openai.com/api/docs/deprecations (whisper-1 shuts down 2027-02-26; replacement gpt-transcribe, which the guide shows without timestamps)
-  if (openai.model.trim() === DEFAULT_OPENAI_COMPAT.model) containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("openai.settings.deprecated") })
-  secretField(app, new Setting(containerEl).setName("API Key"), openai, "apiKeySecret", save)
+  if (String(options.model).trim() === DEFAULT_OPENAI_COMPAT.model) containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("openai.settings.deprecated") })
   new Setting(containerEl)
     .setName(t("openai.settings.limit.name"))
     .setDesc(t("openai.settings.limit.desc", OPENAI_FILE_LIMIT / 1024 / 1024))
     .addText((field) =>
       field
         .setPlaceholder(String(OPENAI_FILE_LIMIT / 1024 / 1024))
-        .setValue(openai.fileSizeLimitMb > 0 ? String(openai.fileSizeLimitMb) : "")
+        .setValue(Number(options.fileSizeLimitMb) > 0 ? String(options.fileSizeLimitMb) : "")
         .onChange((v) => {
           const n = Number(v)
-          openai.fileSizeLimitMb = Number.isFinite(n) && n > 0 ? n : 0
+          options.fileSizeLimitMb = Number.isFinite(n) && n > 0 ? n : 0
           save()
         }),
     )

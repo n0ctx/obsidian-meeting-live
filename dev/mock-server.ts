@@ -9,7 +9,9 @@
 //   DashScope recorded files:     http://127.0.0.1:<port>/api/v1   (temporary upload, task submit and poll; the key "bad" gets a 401)
 //   Deepgram pre-recorded:        http://127.0.0.1:<port>/v1/listen   (POST raw audio, Authorization: Token <key>; the key "bad" gets a 401)
 //   OpenAI-style transcription:   http://127.0.0.1:<port>/v1   (POST /audio/transcriptions; the key "bad" gets a 401)
-//   OpenAI-compatible LLM:        http://127.0.0.1:<port>/v1   (POST /chat/completions)
+//   OpenAI-compatible LLM:        http://127.0.0.1:<port>/v1   (POST /chat/completions; the key "bad" gets a 401)
+//   Model lists and key checks:   GET /v1/models, GET /api/v1/models (DashScope's own), GET /v1/auth/token (Deepgram), GET /v2/transcript (AssemblyAI); the key "bad" gets a 401
+//   Volcengine resources:         the key "key-1.0-only" is refused the 2.0 resource id (volc.seedasr.*) with a 403, as an account without it is
 //   POST /drop closes every ASR socket to simulate a network failure.
 //   GET /stats counts what the streaming routes have seen, for tests.
 import { createServer, type IncomingMessage } from "node:http"
@@ -20,6 +22,7 @@ import { deepgramPrerecorded } from "./mock/deepgramFile.ts"
 import { dashscopeFileRoutes } from "./mock/dashscopeFile.ts"
 import { DASHSCOPE_PATH, dashscopeSession } from "./mock/dashscope.ts"
 import { ASSEMBLYAI_WS_PATH, assemblyaiRest, assemblyaiSession } from "./mock/assemblyai.ts"
+import { keyCheckRoutes } from "./mock/keyChecks.ts"
 import { SENTENCES, SENTENCE_MS, readBody, stats } from "./mock/shared.ts"
 
 const port = Number(process.argv[2] ?? 8790)
@@ -73,6 +76,7 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(stats))
     return
   }
+  if (keyCheckRoutes(req, res)) return
   if (await deepgramPrerecorded(req, res)) return
   if (await dashscopeFileRoutes(req, res, `http://127.0.0.1:${(server.address() as AddressInfo).port}`)) return
   if (await assemblyaiRest(req, res, `http://127.0.0.1:${(server.address() as AddressInfo).port}`)) return
@@ -96,6 +100,12 @@ const server = createServer(async (req, res) => {
     return
   }
   if (req.method === "POST" && req.url?.endsWith("/chat/completions")) {
+    if (req.headers.authorization === "Bearer bad") {
+      res.statusCode = 401
+      res.setHeader("Content-Type", "application/json")
+      res.end(JSON.stringify({ error: { message: "Incorrect API key provided: bad", type: "invalid_request_error" } }))
+      return
+    }
     let body = ""
     req.on("data", (c) => (body += c))
     req.on("end", () => {
@@ -138,6 +148,12 @@ server.on("upgrade", (req, socket, head) => {
   const key = deepgram ? req.headers.authorization?.replace(/^Token /, "") : bearer ? req.headers.authorization?.replace(/^Bearer /, "") : raw ? undefined : (req.headers["x-api-key"] ?? req.headers["x-api-access-key"])
   if (key === "bad") {
     socket.end("HTTP/1.1 401 Unauthorized\r\nContent-Length: 12\r\n\r\ninvalid key\n")
+    return
+  }
+  const resource = req.headers["x-api-resource-id"]
+  if (key === "key-1.0-only" && typeof resource === "string" && resource.startsWith("volc.seedasr.")) {
+    const body = JSON.stringify({ error: `[resource_id=${resource}] requested resource not granted` })
+    socket.end(`HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`)
     return
   }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req))

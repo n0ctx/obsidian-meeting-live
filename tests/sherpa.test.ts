@@ -9,7 +9,9 @@ import { floatFrame, sherpaConfigProblem, sherpaConnector } from "../src/asr/pro
 import { SherpaNormalizer } from "../src/asr/providers/sherpa/normalize.ts"
 import { resolveLive } from "../src/asr/providers/registry.ts"
 import { AsrStreamer } from "../src/asr/streamer.ts"
-import { loadSettings, DEFAULT_SETTINGS } from "../src/settings.ts"
+import { sherpaSettingsOf } from "../src/asr/providers/sherpa/index.ts"
+import { loadSettings } from "../src/settings.ts"
+import { withOne } from "./support/accounts.ts"
 import type { Utterance } from "../src/meeting/types.ts"
 
 // ---------------------------------------------------------------- the normalizer, on messages a real server sent
@@ -211,22 +213,26 @@ test("through the streamer: finals arrive in order on the meeting timeline, a dr
 // ---------------------------------------------------------------- settings and registration
 
 test("settings without a local recognizer get the default address; a stored address is kept; nothing else changes for an existing user", () => {
-  const fresh = loadSettings({ version: 2, liveProvider: "volc", providers: { volc: { endpoint: "wss://example/x" } } })
-  assert.equal(fresh.settings.providers.sherpa.endpoint, "ws://127.0.0.1:6006")
-  assert.equal(fresh.settings.liveProvider, "volc")
-  const stored = loadSettings({ version: 2, providers: { sherpa: { endpoint: "ws://127.0.0.1:7000" } } })
-  assert.equal(stored.settings.providers.sherpa.endpoint, "ws://127.0.0.1:7000")
-  const legacy = loadSettings({ volcAppId: "a", volcAccessToken: "b" })
-  assert.equal(legacy.settings.liveProvider, "volc")
-  assert.equal(DEFAULT_SETTINGS.providers.sherpa.endpoint, "ws://127.0.0.1:6006")
+  const volc = loadSettings({ version: 2, liveProvider: "volc", providers: { volc: { endpoint: "wss://example/x" } } }).settings
+  assert.deepEqual(volc.accounts.map((a) => a.service), ["volc"], "no local recognizer is added to someone who did not choose one")
+  assert.equal(volc.roles.live, "volc")
+  assert.equal(sherpaSettingsOf(withOne("sherpa").account).endpoint, "ws://127.0.0.1:6006")
+  const stored = loadSettings({ version: 2, providers: { sherpa: { endpoint: "ws://127.0.0.1:7000" } } }).settings
+  assert.equal(sherpaSettingsOf(stored.accounts.find((a) => a.service === "sherpa")!).endpoint, "ws://127.0.0.1:7000")
+  const legacy = loadSettings({ volcAppId: "a", volcAccessTokenSecret: "b" }).settings
+  assert.equal(legacy.roles.live, "volc")
+  assert.equal(legacy.accounts.some((a) => a.service === "sherpa"), false)
+  // Choosing the local recognizer in a development build is kept even with its address untouched, since it has no key to show it was set up.
+  const chosen = loadSettings({ version: 2, liveProvider: "sherpa-onnx" }).settings
+  assert.deepEqual([chosen.accounts.map((a) => a.service), chosen.roles.live], [["sherpa"], "sherpa"])
 })
 
 test("the local recognizer resolves without any secret and reports a bad address as a problem", () => {
-  const settings = loadSettings({ liveProvider: "sherpa-onnx" }).settings
+  const { settings, account } = withOne("sherpa")
   const ok = resolveLive({ secrets: { getSecret: () => null }, settings })
   assert.equal(typeof ok.connect, "function")
   assert.equal(ok.name, "本地识别（sherpa-onnx）")
-  settings.providers.sherpa.endpoint = "nonsense"
+  account.options.endpoint = "nonsense"
   const bad = resolveLive({ secrets: { getSecret: () => null }, settings })
   assert.equal(bad.connect, null)
   assert.match(bad.problem ?? "", /格式不正确/)

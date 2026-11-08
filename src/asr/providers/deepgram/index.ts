@@ -1,13 +1,16 @@
+import { sectionOf, type Account } from "../../../accounts/account.ts"
 import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { deepgramFileProvider } from "./file.ts"
 import { DEEPGRAM_FILE_CAPABILITIES, DEEPGRAM_ID, DEEPGRAM_LIVE_CAPABILITIES, DEEPGRAM_LIVE_PACING } from "./info.ts"
 import { deepgramConfigProblem, deepgramConnector } from "./live.ts"
-import { deepgramConfig, deepgramFileConfig, deepgramFileUrlOf } from "./settings.ts"
-import { renderDeepgramSettings } from "./ui.ts"
+import { deepgramConfig, deepgramFileConfig, deepgramFileUrlOf, readDeepgramSettings } from "./settings.ts"
+import { renderDeepgramAdvanced } from "./ui.ts"
 
-const configOf = ({ secrets, settings }: ProviderEnv) => deepgramConfig(secrets, settings.providers.deepgram, settings.asrLanguage)
+export const deepgramSettingsOf = (account: Account) => readDeepgramSettings(sectionOf(account))
+
+const configOf = ({ secrets, settings, account }: ProviderEnv) => deepgramConfig(secrets, deepgramSettingsOf(account), settings.asrLanguage)
 
 export const deepgramProvider: AsrProvider = {
   id: DEEPGRAM_ID,
@@ -18,7 +21,7 @@ export const deepgramProvider: AsrProvider = {
   live: {
     capabilities: () => DEEPGRAM_LIVE_CAPABILITIES,
     pacing: () => DEEPGRAM_LIVE_PACING,
-    host: (settings) => hostOf(settings.providers.deepgram.endpoint.replace(/^ws/, "http")),
+    host: (account) => hostOf(deepgramSettingsOf(account).endpoint.replace(/^ws/, "http")),
     resolve: (env) => {
       const config = configOf(env)
       const problem = deepgramConfigProblem(config)
@@ -27,8 +30,8 @@ export const deepgramProvider: AsrProvider = {
   },
   file: {
     capabilities: () => DEEPGRAM_FILE_CAPABILITIES,
-    host: (settings) => hostOf(deepgramFileUrlOf(settings.providers.deepgram)),
-    resolve: ({ secrets, settings }) => deepgramFileProvider(deepgramFileConfig(secrets, settings.providers.deepgram, settings.asrLanguage)),
+    host: (account) => hostOf(deepgramFileUrlOf(deepgramSettingsOf(account))),
+    resolve: ({ secrets, settings, account }) => deepgramFileProvider(deepgramFileConfig(secrets, deepgramSettingsOf(account), settings.asrLanguage)),
   },
-  renderSettings: renderDeepgramSettings,
+  renderAdvanced: renderDeepgramAdvanced,
 }

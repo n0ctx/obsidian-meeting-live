@@ -1,12 +1,15 @@
+import { sectionOf, type Account } from "../../../accounts/account.ts"
 import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { openAiFileProvider, isDiarizeModel } from "./file.ts"
 import { OPENAI_COMPAT_ID } from "./info.ts"
-import { fileSizeLimit, openAiFileConfig } from "./settings.ts"
-import { renderOpenAiCompatSettings } from "./ui.ts"
+import { fileSizeLimit, openAiFileConfig, readOpenAiCompatSettings } from "./settings.ts"
+import { renderOpenAiCompatAdvanced } from "./ui.ts"
 
-const configOf = ({ secrets, settings }: ProviderEnv) => openAiFileConfig(secrets, settings.providers.openaiCompat, settings.asrLanguage)
+export const openAiSettingsOf = (account: Account) => readOpenAiCompatSettings(sectionOf(account))
+
+const configOf = ({ secrets, settings, account }: ProviderEnv) => openAiFileConfig(secrets, openAiSettingsOf(account), settings.asrLanguage)
 
 export const openAiCompatProvider: AsrProvider = {
   id: OPENAI_COMPAT_ID,
@@ -15,9 +18,9 @@ export const openAiCompatProvider: AsrProvider = {
   },
   nameIn: (lang: Lang) => tr(lang, "provider.openaiCompat"),
   file: {
-    capabilities: (settings) => ({ language: true, diarization: isDiarizeModel(settings.providers.openaiCompat.model), fileSizeLimit: fileSizeLimit(settings.providers.openaiCompat) }),
-    host: (settings) => hostOf(settings.providers.openaiCompat.baseUrl),
+    capabilities: (account) => ({ language: true, diarization: isDiarizeModel(openAiSettingsOf(account).model), fileSizeLimit: fileSizeLimit(openAiSettingsOf(account)) }),
+    host: (account) => hostOf(openAiSettingsOf(account).baseUrl),
     resolve: (env) => openAiFileProvider(configOf(env)),
   },
-  renderSettings: renderOpenAiCompatSettings,
+  renderAdvanced: renderOpenAiCompatAdvanced,
 }

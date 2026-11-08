@@ -6,7 +6,9 @@ import { AsrError, CAUTIOUS_LIVE_PACING, type AsrConnectionHandlers, type LivePa
 import { ASR_PROVIDERS, liveProviders, resolveLive } from "../src/asr/providers/registry.ts"
 import { AsrStreamer, DEFAULT_FLUSH_MS, type AsrEvents } from "../src/asr/streamer.ts"
 import type { TranscriptGap } from "../src/meeting/types.ts"
+import { SERVICES } from "../src/accounts/services.ts"
 import { DEFAULT_SETTINGS } from "../src/settings.ts"
+import { withAccount, withOne } from "./support/accounts.ts"
 
 const RATE = 16000
 const TICK_MS = 100
@@ -15,7 +17,7 @@ const CHUNK = 0.2 * RATE
 const flush = () => new Promise((r) => setImmediate(r))
 
 /** What each live provider declares under the default settings. */
-const declared = liveProviders().map((p) => ({ id: p.id, pacing: p.live!.pacing(DEFAULT_SETTINGS) }))
+const declared = liveProviders().map((p) => ({ id: p.id, pacing: p.live!.pacing(withOne(SERVICES.find((s) => s.asr === p.id)!.id).account) }))
 
 class Server {
   sent = 0
@@ -101,12 +103,15 @@ test("a resolved recognizer carries its provider's pace, also when it has no con
   const secrets = { getSecret: () => null }
   for (const { id, pacing } of declared) {
     const settings = structuredClone(DEFAULT_SETTINGS)
-    settings.liveProvider = id
+    withAccount(settings, SERVICES.find((s) => s.asr === id)!.id)
+    assert.equal(settings.roles.live !== "", true, `${id} is the live account`)
     assert.deepEqual(resolveLive({ secrets, settings }).pacing, pacing, id)
   }
   const unknown = structuredClone(DEFAULT_SETTINGS)
-  unknown.liveProvider = "gone"
+  unknown.accounts.push({ id: "gone", service: "gone", name: "", apiKeySecret: "", options: {}, llm: { temperature: 0, effort: "off", inputLimit: 0, headers: "" } })
+  unknown.roles.live = "gone"
   assert.deepEqual(resolveLive({ secrets, settings: unknown }).pacing, CAUTIOUS_LIVE_PACING)
+  assert.deepEqual(resolveLive({ secrets, settings: structuredClone(DEFAULT_SETTINGS) }).pacing, CAUTIOUS_LIVE_PACING, "no account at all")
 })
 
 // ---------------------------------------------------------------- catching up and steady state

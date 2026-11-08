@@ -1,14 +1,17 @@
 import { languageHint } from "../../language.ts"
+import { sectionOf, type Account } from "../../../accounts/account.ts"
 import { t, tr, type Lang } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import type { AsrProvider, ProviderEnv } from "../types.ts"
 import { assemblyAiFileProvider } from "./file.ts"
 import { ASSEMBLYAI_FILE_CAPABILITIES, ASSEMBLYAI_ID, ASSEMBLYAI_LIVE_CAPABILITIES, ASSEMBLYAI_LIVE_PACING } from "./info.ts"
 import { assemblyAiConfigProblem, assemblyAiConnector } from "./live.ts"
-import { assemblyAiConfig, assemblyAiEndpoints, assemblyAiFileConfig } from "./settings.ts"
-import { renderAssemblyAiSettings } from "./ui.ts"
+import { assemblyAiConfig, assemblyAiEndpoints, assemblyAiFileConfig, readAssemblyAiSettings } from "./settings.ts"
+import { renderAssemblyAiAdvanced } from "./ui.ts"
 
-const configOf = ({ secrets, settings }: ProviderEnv) => assemblyAiConfig(secrets, settings.providers.assemblyai, settings.hotwords)
+export const assemblyAiSettingsOf = (account: Account) => readAssemblyAiSettings(sectionOf(account))
+
+const configOf = ({ secrets, settings, account }: ProviderEnv) => assemblyAiConfig(secrets, assemblyAiSettingsOf(account), settings.hotwords)
 
 export const assemblyAiProvider: AsrProvider = {
   id: ASSEMBLYAI_ID,
@@ -19,7 +22,7 @@ export const assemblyAiProvider: AsrProvider = {
   live: {
     capabilities: () => ASSEMBLYAI_LIVE_CAPABILITIES,
     pacing: () => ASSEMBLYAI_LIVE_PACING,
-    host: (settings) => hostOf(assemblyAiEndpoints(settings.providers.assemblyai).live.replace(/^ws/, "http")),
+    host: (account) => hostOf(assemblyAiEndpoints(assemblyAiSettingsOf(account)).live.replace(/^ws/, "http")),
     resolve: (env) => {
       const config = configOf(env)
       const problem = assemblyAiConfigProblem(config)
@@ -28,8 +31,8 @@ export const assemblyAiProvider: AsrProvider = {
   },
   file: {
     capabilities: () => ASSEMBLYAI_FILE_CAPABILITIES,
-    host: (settings) => hostOf(assemblyAiEndpoints(settings.providers.assemblyai).api),
-    resolve: ({ secrets, settings }) => assemblyAiFileProvider(assemblyAiFileConfig(secrets, settings.providers.assemblyai, languageHint(settings.asrLanguage))),
+    host: (account) => hostOf(assemblyAiEndpoints(assemblyAiSettingsOf(account)).api),
+    resolve: ({ secrets, settings, account }) => assemblyAiFileProvider(assemblyAiFileConfig(secrets, assemblyAiSettingsOf(account), languageHint(settings.asrLanguage))),
   },
-  renderSettings: renderAssemblyAiSettings,
+  renderAdvanced: renderAssemblyAiAdvanced,
 }

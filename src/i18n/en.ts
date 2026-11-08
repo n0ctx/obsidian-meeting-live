@@ -586,4 +586,28 @@ export const en: Dictionary = {
   "session.consentNeeded": "You have not yet agreed to send the transcript to the current LLM service (the service or address changed). Confirm and try again.",
   "card.alert.consent": (target) => `Summaries are paused: the LLM service is now ${target}, and you need to confirm sending the transcript there first.`,
   "card.alert.confirm": "Confirm",
+
+  // ---- accounts
+  "region.cn": "China (mainland)",
+  "region.intl": "International",
+  "service.dashscope": "Alibaba Cloud Bailian (Qwen)",
+  "service.volc": "Volcengine",
+  "service.kimi": "Moonshot Kimi",
+  "service.glm": "Zhipu GLM",
+  "service.siliconflow": "SiliconFlow",
+  "service.minimax": "MiniMax",
+  "service.custom": "Custom (OpenAI-compatible)",
+  "asr.noAccount": "No account added yet",
+  "llm.noAccount": "No account added yet",
+  "volc.settings.resource.desc": "2.0 hourly plan: volc.seedasr.sauc.duration; 1.0 hourly plan: volc.bigasr.sauc.duration. Check connection switches to whichever works.",
+
+  // ---- checking a key
+  "check.rejected": (status) => `The service did not accept this key (HTTP ${status}). Check that it was copied in full and that the region is the one it was made in.`,
+  "check.unreachable": (message) => `Could not reach the server: ${message}`,
+  "check.status": (status) => `The server answered HTTP ${status}, so the key could not be confirmed.`,
+  "check.reachable": "The address answers (this service has nothing to check a key with).",
+  "check.badAddress": "That address is not valid.",
+  "check.volcResource": (id) => `Connected, using resource ${id}.`,
+  "check.volcRefused": (status) => `Volcengine refused the connection (HTTP ${status}): the key is wrong, or streaming recognition is not enabled for it.`,
+  "check.llmReply": (reply) => `Test passed: ${reply}`,
 }
