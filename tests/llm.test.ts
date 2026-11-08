@@ -4,7 +4,7 @@ import { chat, chatCompletionsUrl, chatRequestBody, compatibleClient, extractCom
 import { LLM_PRESETS, parseHeaders, presetById, presetForUrl } from "../src/llm/presets.ts"
 import { DEFAULT_SETTINGS, llmConfig, loadSettings } from "../src/settings.ts"
 import { buildMinutesMessages, stripMeetingBlocks } from "../src/llm/minutes.ts"
-import { buildOverviewMessages, buildSummaryMessages, overviewMarkdown, parseSummary, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
+import { buildOverviewMessages, buildSummaryMessages, overviewMarkdown, parseSummary, splitFigures, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
 import { dueCutoff, uncovered } from "../src/meeting/schedule.ts"
 import type { MeetingMeta, SummaryRecord, Utterance } from "../src/meeting/types.ts"
 
@@ -289,4 +289,45 @@ test("extra headers are parsed from lines and only presets that allow them use t
   assert.deepEqual(llmConfig(secrets, { ...settings, llmPreset: "custom" }).headers, { "X-Org": "acme" })
   assert.deepEqual(llmConfig(secrets, { ...settings, llmPreset: "azure" }).headers, { "X-Org": "acme" })
   assert.deepEqual(llmConfig(secrets, { ...settings, llmPreset: "deepseek" }).headers, {})
+})
+
+// ---------------------------------------------------------------- figures in English and Chinese
+
+const figures = (text: string, unverified: string[] = []) =>
+  splitFigures({ text, unverified })
+    .filter((p) => p.figure)
+    .map((p) => p.text)
+
+test("English magnitudes, percentages and currency symbols are one figure", () => {
+  assert.deepEqual(figures("Revenue was $1.2 million, up 12% on 3.5bn last year."), ["$1.2 million", "12%", "3.5bn"])
+  assert.deepEqual(figures("About 5k users, 40K seats and 3M events, 2 billion in total, 7 thousand units, 1 trillion."), ["5k", "40K", "3M", "2 billion", "7 thousand", "1 trillion"])
+  assert.deepEqual(figures("€3bn and £2,500 and ¥300 and $ 15 and US$20."), ["€3bn", "£2,500", "¥300", "$ 15", "$20"])
+  assert.deepEqual(figures("It cost $4.5B, or 4.5 B in the notes."), ["$4.5B", "4.5"])
+  assert.deepEqual(figures("A 10 Million round at 8 % margin."), ["10 Million", "8 %"])
+})
+
+test("units that only look like magnitudes, and numbers inside words, are not swallowed", () => {
+  assert.deepEqual(figures("Speed of 5Mbps, 3 Mb, 2Kg, 4Bits."), ["5", "3", "2", "4"])
+  assert.deepEqual(figures("Model H2O and v1.2 and A100"), [])
+  assert.deepEqual(figures("From 2026-10-27 at 14:30:05"), ["2026", "10", "27", "14:30:05"])
+  assert.deepEqual(figures("5 millions? no"), ["5"])
+})
+
+test("the Chinese figures are still recognized as before", () => {
+  assert.deepEqual(figures("收入 3 亿，毛利 40%，订单 1.5亿，补贴 ¥500万，回款 3000万元，共 2万亿。"), ["3 亿", "40%", "1.5亿", "¥500万", "3000万元", "2万亿"])
+  assert.deepEqual(figures("增长 50 %，约 300 元"), ["50 %", "300 元"])
+})
+
+test("a figure with a currency symbol is flagged by the number in it, in either language", () => {
+  const point = { text: "Revenue $1.5 billion, headcount 40, 年收入 ¥500万", unverified: ["1.5", "500"] }
+  assert.deepEqual(splitFigures(point).filter((p) => p.unverified).map((p) => p.text), ["$1.5 billion", "¥500万"])
+  assert.deepEqual(unverifiedNumbers("Revenue was $1.5 billion", "revenue was 1.5 billion dollars"), [])
+  assert.deepEqual(unverifiedNumbers("Revenue was $1.5 billion", "revenue was 1.2 billion dollars"), ["1.5"])
+  assert.deepEqual(unverifiedNumbers("About 3,000k users", "about 3000k users"), [])
+  assert.deepEqual(unverifiedNumbers("Margin of 12%", "margin of 12 percent"), [])
+})
+
+test("a highlighted figure lands in the note with the whole figure inside the highlight", () => {
+  const record = { index: 1, startMs: 0, endMs: 1000, trigger: "auto" as const, status: "done" as const, attempts: 1, utterances: [], content: { title: "", paragraphs: [{ topic: "", text: "Revenue $1.5 billion.", unverified: ["1.5"] }], todos: [], open: [] } }
+  assert.match(summaryMarkdown(record, String, "##", undefined, "en"), /Revenue ==\$1\.5 billion==\./)
 })

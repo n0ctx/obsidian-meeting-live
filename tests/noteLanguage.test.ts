@@ -170,3 +170,14 @@ test("switching the note language back and forth never duplicates the region or 
   await session.publishSummary()
   assert.equal(note.text, before)
 })
+
+test("a to-do ticked while the highlight sat beside the currency symbol stays ticked now that the symbol is inside it", () => {
+  const link = "[[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]"
+  const written = `${LEGACY_START}\n## AI 阶段摘要\n\n**待办**\n- [x] 交方案 ¥==500万== ${link} ^${ID}-t9100\n- [ ] 补数据 ${link}\n\n%% /meeting-live-summary ${ID} %%`
+  const note = `\`\`\`meeting-live\nid: ${ID}\n\`\`\`\n\n${written}\n`
+  const body = `## AI 阶段摘要\n\n**待办**\n- [ ] 交方案 ==¥500万== ${link} ^${ID}-t9100\n- [ ] 补数据 ${link}`
+  const next = applyEdit(note, placeSummary(note, ID, body, "zh")!)
+  assert.match(next, /- \[x\] 交方案 ==¥500万== /)
+  assert.match(next, /- \[ \] 补数据/)
+  assert.equal(count(next, "%% meeting-live-summary "), 1)
+})

@@ -114,8 +114,13 @@ export function buildOverviewMessages(title: string, focus: string, overview: Su
 }
 
 const NUMBER = /\d+(?:[.,]\d+)*/g
-/** A number with its separators and magnitude, highlighted as one figure. */
-const FIGURE = /(?<![A-Za-z\d.])\d+(?:[.,:]\d+)*(?:\s?(?:%|[万亿]*元|[万亿]+))?/g
+/**
+ * A figure highlighted as one piece: a number with its separators, an optional currency symbol in front and a magnitude after it.
+ * Chinese magnitudes (万, 亿, 元) may follow after a space; English ones are the words thousand, million, billion and trillion
+ * (a space allowed) and the abbreviations k, K, M, B and bn, which must touch the number and end the word, so "5Mbps" and "3 Mb" are
+ * not read as millions. A symbol only counts when it does not follow a digit or point, and the number never starts inside a word.
+ */
+const FIGURE = /(?:(?<![\d.])[$€£¥￥]\s?)?(?<![A-Za-z\d.])\d+(?:[.,:]\d+)*(?:\s?(?:%|[万亿]*元|[万亿]+|(?:[Tt]housand|[Mm]illion|[Bb]illion|[Tt]rillion)\b)|(?:bn|[kKMB])\b)?/g
 
 const numbersIn = (text: string) => (text.match(NUMBER) ?? []).map((n) => n.replace(/,/g, ""))
 

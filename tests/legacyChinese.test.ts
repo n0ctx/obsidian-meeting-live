@@ -8,6 +8,8 @@ import { gapLine, transcriptHeader, utteranceLine } from "../src/meeting/transcr
 import { formatShortDateTime } from "../src/meeting/types.ts"
 import { fakeSession, meetingMeta } from "./support/labelFixtures.ts"
 
+// One deliberate difference from 1.0.1: a currency symbol is now inside the highlight of a figure (==¥500万==, where 1.0.1 wrote ¥==500万==).
+// Opening an old note rewrites that region once; ticked to-dos are matched without the highlight, so they stay ticked (see noteLanguage.test.ts).
 const NOTE_SUMMARY = [
   "## AI 阶段摘要",
   "",
@@ -18,7 +20,7 @@ const NOTE_SUMMARY = [
   "- **预算**：收入 3 亿，毛利 ==40%==。 [[Meetings/周会/周会 原始转写#^t3200-5600|00:03]]",
   "",
   "**待办**",
-  "- [ ] 交方案 ¥==500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
+  "- [ ] 交方案 ==¥500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
   "",
   "### 阶段 1",
   "",
@@ -26,7 +28,7 @@ const NOTE_SUMMARY = [
   "收入 3 亿，毛利 ==40%==。 ^m-20261027-abc123-s1",
   "",
   "**待办**",
-  "- [ ] 交方案 ¥==500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]] ^m-20261027-abc123-t9100",
+  "- [ ] 交方案 ==¥500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]] ^m-20261027-abc123-t9100",
   "- [ ] 补数据 [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
   "",
   "**未决**",
@@ -56,7 +58,7 @@ const NOTE_SUMMARY_EMPTY_STAGE = [
   "- **预算**：收入 3 亿，毛利 ==40%==。 [[Meetings/周会/周会 原始转写#^t3200-5600|00:03]]",
   "",
   "**待办**",
-  "- [ ] 交方案 ¥==500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
+  "- [ ] 交方案 ==¥500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]",
   "",
   "### 阶段 2",
   "",
