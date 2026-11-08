@@ -131,3 +131,21 @@ test("auto leaves the language to the service, anything else is passed on as its
   assert.equal(languageHint("auto"), undefined)
   assert.equal(languageHint("zh"), "zh")
 })
+
+test("settings saved before the second provider batch load with defaults for the new providers, unflagged, and keep every old value", () => {
+  const fresh = loadSettings(null).settings
+  const before = JSON.parse(JSON.stringify({ ...fresh, liveProvider: "deepgram", asrLanguage: "zh", providers: { volc: fresh.providers.volc, deepgram: { ...fresh.providers.deepgram, apiKeySecret: "dg" }, openaiCompat: fresh.providers.openaiCompat } }))
+  const loaded = loadSettings(before)
+  assert.equal(loaded.migrated, false, "nothing in the stored shape was out of date")
+  assert.equal(loaded.settings.liveProvider, "deepgram")
+  assert.equal(loaded.settings.providers.deepgram.apiKeySecret, "dg")
+  assert.deepEqual(loaded.settings.providers.dashscope, DEFAULT_SETTINGS.providers.dashscope)
+  assert.deepEqual(loaded.settings.providers.assemblyai, DEFAULT_SETTINGS.providers.assemblyai)
+  // Saving adds the new sections, and loading that again changes nothing.
+  const saved = storedSettings(loaded.settings, loaded.legacy)
+  assert.deepEqual(Object.keys(saved.providers as object).sort(), ["assemblyai", "dashscope", "deepgram", "openaiCompat", "volc"])
+  assert.deepEqual(loadSettings(JSON.parse(JSON.stringify(saved))).settings, loaded.settings)
+  // The new sections never share objects with the defaults.
+  loaded.settings.providers.dashscope.region = "intl"
+  assert.equal(DEFAULT_SETTINGS.providers.dashscope.region, "cn")
+})
