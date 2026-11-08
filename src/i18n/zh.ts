@@ -100,7 +100,7 @@ export const zh = {
 
   // ---- settings page
   "settings.privacy.title": "数据去向",
-  "settings.privacy.body": (provider: string) => `：原始录音和转写只保存在本库。录音时音频实时上传至${provider}识别；摘要和纪要会把转写文本发送到下方配置的 LLM 服务。凭证保存在 Obsidian 的密钥存储中，不写入笔记、会议文件或插件配置。`,
+  "settings.privacy.body": (provider: string) => `：原始录音和转写保存在本库。录音时音频实时上传至${provider}识别；使用「录音生成访谈记录」时，所选录音会上传至下方选择的录音文件识别服务；摘要和纪要会把转写文本发送到下方配置的 LLM 服务。凭证保存在 Obsidian 的密钥存储中，不写入笔记、会议文件或插件配置。`,
   "settings.recording": "录音",
   "settings.folder.name": "会议数据目录",
   "settings.folder.desc": "每场会议一个子文件夹，包含录音、原始转写、AI 摘要与元数据。",
@@ -352,8 +352,8 @@ export const zh = {
 
   // ---- dialogs
   "consent.title": "开始前请确认数据去向",
-  "consent.local.title": "原始录音只保存在本地",
-  "consent.local.text": "录音、原始转写和会议元数据写入当前 Vault 的会议目录，插件不会上传录音文件。",
+  "consent.local.title": "原始录音保存在本库",
+  "consent.local.text": "录音、原始转写和会议元数据写入当前 Vault 的会议目录。录音文件只在你使用「录音生成访谈记录」时上传，见下一条。",
   "consent.live.title": (name: string) => `音频实时上传至${name}`,
   "consent.live.text": (name: string, host: string) => `录音时，音频流会实时发送到${name}语音识别服务（${host}）进行转写。`,
   "consent.file.title": (name: string) => `录音文件上传至${name}`,

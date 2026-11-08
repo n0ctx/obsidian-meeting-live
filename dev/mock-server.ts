@@ -116,13 +116,12 @@ const server = createServer(async (req, res) => {
         const last = lines[lines.length - 1] ?? first
         content = JSON.stringify({
           title: "经营情况",
-          items: [
-            { kind: "fact", text: `讨论了${first.text.slice(0, 18)}…等问题`, t: first.t },
-            { kind: "fact", text: "毛利率 45%（测试用错误数字）", t: first.t },
-            { kind: "opinion", text: last.text.replace(/。$/, ""), t: last.t },
-            { kind: "todo", text: "财务补充收入口径说明", t: last.t },
-            { kind: "open", text: "收入为预计值，尚未经审计", t: last.t },
+          paragraphs: [
+            { topic: "经营情况", text: `讨论了${first.text.slice(0, 18)}…等问题，毛利率 45%（测试用错误数字）。`, t: first.t },
+            { topic: "判断", text: last.text.replace(/。$/, ""), t: last.t },
           ],
+          todos: [{ text: "财务补充收入口径说明", t: last.t }],
+          open: [{ text: "收入为预计值，尚未经审计", t: last.t }],
         })
       } else {
         content = `1.业务情况\n公司今年收入预计三点二亿元，去年为两亿一千万。\n\n待核实事项\n- 毛利率口径（来源 ${lines[1]?.t ?? "00:00:00"}）`

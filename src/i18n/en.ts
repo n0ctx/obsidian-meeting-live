@@ -100,7 +100,7 @@ export const en: Dictionary = {
 
   // ---- settings page
   "settings.privacy.title": "Where your data goes",
-  "settings.privacy.body": (provider) => `: recordings and transcripts stay in this vault only. While recording, audio is streamed to ${provider} for recognition; summaries and minutes send the transcript text to the LLM service configured below. Credentials live in Obsidian's secret storage and are never written to notes, meeting files or the plugin's configuration.`,
+  "settings.privacy.body": (provider) => `: recordings and transcripts are kept in this vault. While recording, audio is streamed to ${provider} for recognition; "Generate notes from a recording" uploads the recording you choose to the recorded-file service selected below; summaries and minutes send the transcript text to the LLM service configured below. Credentials live in Obsidian's secret storage and are never written to notes, meeting files or the plugin's configuration.`,
   "settings.recording": "Recording",
   "settings.folder.name": "Meeting data folder",
   "settings.folder.desc": "One subfolder per meeting, holding the recording, raw transcript, AI summaries and metadata.",
@@ -352,8 +352,8 @@ export const en: Dictionary = {
 
   // ---- dialogs
   "consent.title": "Confirm where your data goes before starting",
-  "consent.local.title": "Raw recordings stay local",
-  "consent.local.text": "Recordings, raw transcripts and meeting metadata are written to the meeting folder in this vault. The plugin does not upload recording files.",
+  "consent.local.title": "Recordings are kept in this vault",
+  "consent.local.text": "Recordings, raw transcripts and meeting metadata are written to the meeting folder in this vault. A recording file is uploaded only when you use \"Generate notes from a recording\", as described next.",
   "consent.live.title": (name) => `Audio is streamed to ${name} live`,
   "consent.live.text": (name, host) => `While recording, the audio stream is sent to ${name}'s speech recognition service (${host}) to be transcribed.`,
   "consent.file.title": (name) => `Recording files are uploaded to ${name}`,
