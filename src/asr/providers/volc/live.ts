@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import WebSocket, { type RawData } from "ws"
-import { AsrError, type AsrConnect, type AsrConnection } from "../../streamer.ts"
+import { AsrError, type AsrConnect, type AsrConnection } from "../../contract.ts"
+import { volcResultSink } from "./normalize.ts"
 import { decodeServerFrame, encodeAudio, encodeFullRequest } from "./protocol.ts"
 
 export interface VolcConfig {
@@ -70,6 +71,7 @@ export function volcConnector(config: VolcConfig): AsrConnect {
       let ready = false
       let closedLocally = false
       let finished = false
+      const feed = volcResultSink(handlers)
 
       const fail = (error: AsrError) => {
         if (finished) return
@@ -126,7 +128,7 @@ export function volcConnector(config: VolcConfig): AsrConnect {
           resolve({ connection, logId })
           return
         }
-        handlers.onResult(frame.data, frame.last)
+        feed(frame.data, frame.last)
       })
       socket.on("error", (error) => fail(new AsrError(`网络错误：${error.message}`, false)))
       socket.on("close", (code) => {

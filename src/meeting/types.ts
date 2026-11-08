@@ -24,6 +24,8 @@ export interface Utterance {
   startMs: number
   endMs: number
   text: string
+  /** Speaker label when the recognizer separates speakers; not yet stored in transcripts. */
+  speaker?: string
 }
 
 export interface SummaryPoint {

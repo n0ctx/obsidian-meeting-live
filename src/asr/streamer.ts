@@ -1,28 +1,6 @@
 import { ASR_RATE, PcmRing, msToSamples, samplesToMs } from "../audio/pcm.ts"
 import type { TranscriptGap, Utterance } from "../meeting/types.ts"
-
-export class AsrError extends Error {
-  /** Fatal errors (bad credentials, bad parameters) are not retried automatically. */
-  readonly fatal: boolean
-
-  constructor(message: string, fatal: boolean) {
-    super(message)
-    this.fatal = fatal
-  }
-}
-
-export interface AsrConnection {
-  sendAudio(pcm: Int16Array, last: boolean): void
-  close(): void
-}
-
-export interface AsrConnectionHandlers {
-  onResult(data: unknown, last: boolean): void
-  /** Called once when the connection ends without being closed locally. */
-  onClose(error: AsrError): void
-}
-
-export type AsrConnect = (handlers: AsrConnectionHandlers) => Promise<{ connection: AsrConnection; logId?: string }>
+import { AsrError, type AsrConnect, type AsrConnection, type AsrUpdate, type AsrUtterance } from "./contract.ts"
 
 export type AsrState = "disabled" | "idle" | "connecting" | "live" | "reconnecting" | "failed"
 
@@ -58,27 +36,11 @@ const DEFAULTS: AsrOptions = {
 
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000]
 
-interface RawUtterance {
-  text?: unknown
-  start_time?: unknown
-  end_time?: unknown
-  definite?: unknown
-  words?: { start_time?: unknown }[]
-}
-
-/** The first utterance of a connection arrives without start_time; fall back to its first word, then the previous utterance. */
-function startOf(item: RawUtterance, previousEnd: number): number {
-  const direct = Number(item.start_time)
-  if (item.start_time !== undefined && Number.isFinite(direct)) return direct
-  const word = Number(Array.isArray(item.words) ? item.words[0]?.start_time : undefined)
-  return Number.isFinite(word) ? word : previousEnd
-}
-
-export function utterancesOf(data: unknown): RawUtterance[] {
-  if (!data || typeof data !== "object") return []
-  const result = (data as { result?: unknown }).result
-  const list = Array.isArray(result) ? result.flatMap((r) => (r as { utterances?: unknown }).utterances ?? []) : (result as { utterances?: unknown } | undefined)?.utterances
-  return Array.isArray(list) ? list.filter((u): u is RawUtterance => !!u && typeof u === "object") : []
+/** Shifts a connection-relative utterance onto the meeting timeline. */
+function onTimeline(item: AsrUtterance, text: string, baseMs: number): Utterance {
+  const u: Utterance = { startMs: baseMs + item.startMs, endMs: baseMs + Math.max(item.startMs, item.endMs), text }
+  if (item.speaker) u.speaker = item.speaker
+  return u
 }
 
 export class AsrStreamer {
@@ -221,12 +183,13 @@ export class AsrStreamer {
     if (!this.connect) return
     const generation = ++this.generation
     this.setState(state)
-    const base = this.cursor
+    // Result times count from the first sample sent on this connection, which is where the cursor stands once it is ready.
+    let base = this.cursor
     const attempt = (async () => {
       try {
         const { connection, logId } = await this.connect!({
-          onResult: (data, last) => {
-            if (generation === this.generation) this.handleResult(data, last, base)
+          onResult: (update, last) => {
+            if (generation === this.generation) this.handleResult(update, last, base)
           },
           onClose: (error) => {
             if (generation === this.generation) this.handleDrop(error)
@@ -236,6 +199,7 @@ export class AsrStreamer {
           connection.close()
           return
         }
+        base = this.cursor
         this.connection = connection
         this.retryIndex = 0
         if (logId) this.events.onLogId?.(logId)
@@ -278,25 +242,14 @@ export class AsrStreamer {
     }, delay)
   }
 
-  private handleResult(data: unknown, last: boolean, base: number): void {
+  private handleResult(update: AsrUpdate, last: boolean, base: number): void {
     const baseMs = samplesToMs(base)
-    const raw = utterancesOf(data)
-    const parsed: { u: Utterance; definite: boolean }[] = []
-    let previousEnd = 0
-    for (const item of raw) {
-      const text = typeof item.text === "string" ? item.text.trim() : ""
-      const start = startOf(item, previousEnd)
-      const end = Number(item.end_time)
-      if (Number.isFinite(end)) previousEnd = end
-      if (!text) continue
-      parsed.push({ u: { startMs: baseMs + start, endMs: baseMs + (Number.isFinite(end) && end >= start ? end : start), text }, definite: item.definite === true })
-    }
-    // An unconfirmed utterance the recognizer moved past without confirming is kept as it stands.
-    const latestStart = Math.max(...parsed.map((p) => p.u.startMs))
-    for (const u of this.interims) if (u.startMs < latestStart && u.endMs - 1000 <= latestStart) this.acceptFinal(u)
-    for (const p of parsed) if (p.definite) this.acceptFinal(p.u)
-    const interims = parsed.filter((p) => !p.definite && !this.finalKeys.has(Math.round(p.u.startMs))).map((p) => p.u)
-    if (raw.length > 0 || last) this.setInterims(interims)
+    const items = update.utterances.flatMap((item) => {
+      const text = item.text.trim()
+      return text ? [{ final: item.final, u: onTimeline(item, text, baseMs) }] : []
+    })
+    for (const item of items) if (item.final) this.acceptFinal(item.u)
+    if (!update.keepInterims) this.setInterims(items.filter((item) => !item.final && !this.finalKeys.has(Math.round(item.u.startMs))).map((item) => item.u))
     if (last) this.finalWaiter?.()
     else if (!this.ending && this.interims.some((u) => u.endMs - u.startMs > this.options.maxInterimMs)) this.restartStuck()
   }
