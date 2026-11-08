@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A live meeting workspace that lives inside your Markdown notes. Record locally, transcribe in real time, get AI summaries every few minutes, and turn a meeting or an existing recording into structured notes. You bring your own speech recognition and language model accounts; the plugin itself is free.
+A live meeting workspace that lives inside your Markdown notes. Record locally, transcribe in real time, get AI summaries every few minutes, and turn a meeting or an existing recording into structured notes. You bring your own speech recognition and language model accounts, added by picking a service and pasting its key; the plugin itself is free.
 
 Desktop only. Developed and tested on macOS; Windows and Linux are supported in code but have not been tested, so reports from those systems are welcome. Requires Obsidian 1.11.4 or later. The interface is in English or Simplified Chinese and follows Obsidian's language.
 
@@ -15,53 +15,75 @@ Desktop only. Developed and tested on macOS; Windows and Linux are supported in 
 - **Meeting minutes.** After the meeting, generate minutes from the transcript, the stage summaries and your own notes, using a prompt you control.
 - **Recording to notes.** Pick an audio file from your vault or disk. It is transcribed, with speaker labels where the service supports them, and written up as notes in the current note, in the background, with a progress bar shown in the note.
 
-## Supported services
+## Set up
 
-You choose a service for each role in **Settings → Meeting Live**. Credentials are picked from Obsidian's secret storage.
+Everything starts in **Settings → Meeting Live → Accounts**.
 
-### Live transcription (while recording)
+1. Press **Add account…**, pick a service, paste its API key (for a service with regions, choose the one the key was made in), press **Add**.
+2. The plugin checks the key and shows a ✓ or the reason in plain words. Where the service documents a call that costs nothing (a model list, an authentication test), the check runs by itself; where it does not, the account shows a **Test** button and says it may count as usage.
+3. That is all. A new account takes every job it can do and that is still empty, so one DeepSeek key gives you the language model, and one Volcengine key gives you live transcription and recorded files. **What each account does** changes this: live transcription, recorded files and language model each list only the accounts that can do the job, and the language model has a model picker.
 
-| Service | What to fill in | Notes |
+The key is kept in Obsidian's secret storage, never in the plugin's settings file. Nothing is sent anywhere until you add an account and start something that uses it.
+
+### Services
+
+One key covers all the jobs listed for it (taken from each service's documentation).
+
+| Service | Live | Files | Model | Get a key |
+| :-- | :-: | :-: | :-: | :-- |
+| Alibaba Cloud Bailian (China or International) | ✓ | ✓ | ✓ Qwen | [China](https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key), [International](https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key) |
+| Volcengine speech | ✓ | ✓ | | [console](https://console.volcengine.com/speech/new/setting/apikeys?projectName=default) |
+| Deepgram | ✓ | ✓ | | [console](https://console.deepgram.com) |
+| AssemblyAI | ✓ | ✓ | | [dashboard](https://www.assemblyai.com/dashboard/api-keys) |
+| OpenAI | | ✓ | ✓ | [API keys](https://platform.openai.com/settings/organization/api-keys) |
+| Groq | | ✓ | ✓ | [console](https://console.groq.com/keys) |
+| DeepSeek, Anthropic, Gemini, OpenRouter, xAI Grok, Mistral | | | ✓ | [DeepSeek](https://platform.deepseek.com/api_keys), [Anthropic](https://platform.claude.com/settings/keys), [Gemini](https://aistudio.google.com/apikey), [OpenRouter](https://openrouter.ai/keys), [xAI](https://console.x.ai/team/default/api-keys), [Mistral](https://console.mistral.ai/api-keys) |
+| Kimi, Zhipu GLM, SiliconFlow, MiniMax (China or International) | | | ✓ | [Kimi](https://platform.kimi.com/console/api-keys), [GLM](https://bigmodel.cn/usercenter/proj-mgmt/apikeys), [SiliconFlow](https://cloud.siliconflow.cn/account/ak), [MiniMax](https://platform.minimax.cn/user-center/basic-information/interface-key) (the International pages are linked from the add form) |
+| Volcengine Ark (Doubao) | | | ✓ | [Ark console](https://ark.volcengine.com/region:cn-beijing/apiKey); a separate service from Volcengine speech, with its own key |
+| Azure OpenAI | | | ✓ | Azure portal → your resource → Keys and Endpoint; fill in the resource address and, as the model, the deployment name |
+| Custom (OpenAI-compatible) | | ✓ | ✓ | Any server with `/audio/transcriptions` or `/chat/completions`: its address and key |
+| Local (sherpa-onnx) | ✓ | | | No key; address prefilled. [Set-up steps](#speech-recognition-on-your-own-computer) |
+| Local Whisper (whisper.cpp) | | ✓ | | No key; address prefilled |
+| Ollama, LM Studio | | | ✓ | No key; address prefilled. Set the input limit to your model's real context length |
+
+Volcengine speech and the Ark language model are different services with different keys; so are the two regions of Alibaba Cloud, Kimi, GLM, SiliconFlow and MiniMax, which is why those ask where the key was made.
+
+### What the check does
+
+| Service | Check on paste | Free? |
 | :-- | :-- | :-- |
-| Volcengine | An API key (new console), or an App ID and Access Token (old console); the Resource ID of the streaming service you enabled, such as `volc.seedasr.sauc.duration` | The WebSocket address is prefilled. Supports hotwords and a sentence-pause setting. The language is detected by the service. **Separate speakers** (off by default) asks the stream to label speakers, as Volcengine's speaker-separation documentation describes; it has only been tested against a local stand-in for the service. |
-| Alibaba Cloud Bailian | An API key, and the region it belongs to (Mainland China or International); keys are created in the [Model Studio console](https://www.alibabacloud.com/help/en/model-studio/get-api-key) | The model is prefilled with `qwen-audio-3.1-asr-flash-streaming`, the one the documentation recommends for meetings; it takes the hotwords list. The language follows the **Recognition language** setting; auto-detect lets the service decide. No speaker labels while streaming. |
-| AssemblyAI | An API key from the [dashboard](https://www.assemblyai.com/dashboard/home) | The model is prefilled with `universal-3-5-pro`, which lists Mandarin and Japanese among its languages and handles several languages in one meeting without a setting. Takes the hotwords list. An option labels speakers while streaming. A region choice (default or EU) keeps data in the EU. Billing follows how long the connection stays open. |
-| Deepgram | An API key; the model (prefilled with `nova-3`) | The language follows the **Recognition language** setting; auto-detect uses Deepgram's multilingual mode. **Separate speakers** labels each line `Speaker 1`, `Speaker 2` … in the transcript. Change the WebSocket address only for a self-hosted server. |
-| Local (sherpa-onnx) | Nothing: the address `ws://127.0.0.1:6006` is prefilled | Runs on your computer, free and offline. Chinese and English, no speaker labels. See [Speech recognition on your own computer](#speech-recognition-on-your-own-computer). |
+| DeepSeek, OpenAI, Anthropic, Gemini, OpenRouter, Kimi, SiliconFlow, MiniMax (International), xAI, Mistral, Groq, Azure, Ollama, LM Studio, Custom | `GET /models` with the key (OpenRouter: `/key`), which also fills the model picker | No charge is documented for it; it runs no model |
+| Alibaba Cloud Bailian | `GET /api/v1/models`, the model list of its own API | Same |
+| Deepgram | `GET /v1/auth/token`, documented as "a quick test to see if your key is validating correctly" | Same |
+| AssemblyAI | `GET /v2/transcript?limit=1`, a read | Same |
+| Volcengine speech | A WebSocket handshake with no audio, trying the 2.0 streaming resource `volc.seedasr.sauc.duration` and then the 1.0 one `volc.bigasr.sauc.duration`, and keeping the one that is accepted (an account that already has a resource keeps it if it works) | Billing is by audio duration and nothing is sent, but the documentation does not say a bare connection is free |
+| Zhipu GLM, Volcengine Ark, MiniMax (China) | None documented. **Test** sends one tiny chat request | May count as usage |
+| Local services | Whether the address answers (sherpa-onnx: a connection with no audio) | Free |
 
-### Recorded files (Generate notes from a recording)
+Recorded-file resources (Volcengine `volc.seedasr.auc` or `volc.bigasr.auc`) have no free check; a new account that falls back to the 1.0 streaming resource gets the 1.0 file resource with it, which is an inference from the naming.
 
-| Service | What to fill in | Notes |
-| :-- | :-- | :-- |
-| Volcengine | The same credentials as above; the Resource ID of the file service, such as `volc.seedasr.auc` | Separates speakers. |
-| Alibaba Cloud Bailian | The same key and region as above | Uses `fun-asr`, which separates speakers (best within 2 hours). Recordings are converted to mono Opus locally first. The file goes to Alibaba Cloud's temporary storage first (kept 48 hours, up to 1 GB; the documentation calls it suitable for development and testing), then a task is submitted and the transcript downloaded. |
-| AssemblyAI | The same key and region as above | Uploads the file, then waits for the transcript, with speaker labels on request. Takes files up to 2.2 GB. |
-| Deepgram | The same key, model and address as live transcription | Timed sentences, with speaker numbers when you ask for speakers. The language follows **Recognition language**; auto-detect picks the dominant language. Files up to 2 GB; processing over 10 minutes times out, so very long recordings should be cut shorter. |
-| OpenAI-compatible | The API address up to `/v1`, a model, and an API key | For OpenAI use `https://api.openai.com/v1` with `whisper-1` (deprecated, shutting down 2027-02-26; its replacement `gpt-transcribe` is not documented to return times); for Groq `https://api.groq.com/openai/v1` with `whisper-large-v3`; for a local Whisper server its own address, where the key can stay empty. `gpt-4o-transcribe-diarize` separates speakers; `gpt-*-transcribe` returns text without times. A file size limit can be set for servers that differ from OpenAI's 25 MB. |
-| Local Whisper (whisper.cpp) | Nothing: the address `http://127.0.0.1:8080/v1` is prefilled | Runs on your computer, free and offline; recordings up to 200 MB are sent as they are. No speaker labels. See the section below. |
+### Model picker
 
-Recordings over the size limit are compressed locally first, and if still too large are cut into timed pieces and uploaded in turn.
+The language-model account has a model list fetched from the service when you pick the account or press refresh, and a short list of common models when it cannot be fetched. **Other model…** takes any name. Speech models use each service's defaults and are under the account's advanced settings.
 
-### Language model (summaries and minutes)
+### Advanced
 
-Any OpenAI-compatible Chat Completions service. A preset fills in the address and a suggested model, and shapes the request the way that service's documentation asks.
+Collapsed by default, per account (the gear on its row) and for the whole plugin (**Advanced** at the bottom): server addresses, extra request headers, temperature, reasoning effort, input limit, Volcengine's old-console App ID and Access Token and its end-of-sentence window, speaker labels, model names, the AssemblyAI EU region, upload size limits, and for the whole plugin recording format, voice processing, hotwords and recognition language.
 
-| Preset | What to fill in |
-| :-- | :-- |
-| DeepSeek, OpenAI, OpenRouter | An API key. |
-| Anthropic and Gemini (their OpenAI-compatible endpoints) | An API key. |
-| Alibaba Qwen, Moonshot Kimi, Zhipu GLM, SiliconFlow, MiniMax (one preset per region: China or International) | An API key created on that region's platform. Keys do not work across regions, so choosing the preset chooses the address. |
-| Volcengine Ark (Doubao) | An API key from the Ark console; the model is prefilled and must be enabled in your account (an endpoint id `ep-…` also works). |
-| xAI Grok, Mistral | An API key. xAI lists Chat Completions as a legacy endpoint, still working, with no shutdown date announced. |
-| Azure OpenAI | The address of your resource, the deployment name as the model, an API key, and extra headers if you need them. |
-| Ollama, LM Studio | The model name you run; the key is optional. Set the input limit to your model's real context length. |
-| Custom | The address, model and key of any other OpenAI-compatible service, plus optional headers. |
+### Notes on each speech service
 
-Reasoning effort, temperature and an input limit (long transcripts are condensed in parts before the minutes are written) can be adjusted. The prompts have defaults that are short and language-neutral: the model answers in the language of the transcript. Replace them with your own.
+- **Alibaba Cloud Bailian.** Live uses `qwen-audio-3.1-asr-flash-streaming` (hotwords supported, language from **Recognition language**), files use `fun-asr` (separates speakers; the recording is converted to mono Opus first and goes through Alibaba Cloud's temporary storage, kept 48 hours, up to 1 GB; the documentation calls this suitable for development and testing).
+- **Volcengine speech.** Supports hotwords and a sentence-pause setting; **Separate speakers** is off by default and has only been tested against a local stand-in for the service. Files separate speakers.
+- **AssemblyAI.** Live model `universal-3-5-pro` (Mandarin and Japanese among its languages, hotwords, optional speaker labels); billing follows how long the connection is open. Files up to 2.2 GB, speakers on request.
+- **Deepgram.** Model `nova-3`; the language follows **Recognition language**, and auto-detect uses the multilingual mode. Files up to 2 GB; processing over 10 minutes times out.
+- **OpenAI and Groq files.** `whisper-1` (OpenAI) and `whisper-large-v3` (Groq) are the defaults. OpenAI lists `whisper-1` as deprecated, shutting down 2027-02-26; its replacement `gpt-transcribe` is not documented to return times, which a timed transcript needs. `gpt-4o-transcribe-diarize` separates speakers. The upload limit is 25 MB and can be changed in advanced settings.
+- Recordings over a service's size limit are compressed locally first, and if still too large are cut into timed pieces and uploaded in turn.
+
+The prompts for summaries and minutes have defaults that are short and language-neutral: the model answers in the language of the transcript. Replace them with your own.
 
 ## Speech recognition on your own computer
 
-Free, offline and without an account or key: the audio never leaves your computer. Each of the two programs below is started by you; the plugin neither installs nor starts them. In **Settings → Meeting Live**, pick **Local (sherpa-onnx)** for live transcription and **Local Whisper (whisper.cpp)** for recorded files. The addresses are prefilled.
+Free, offline and without an account or key: the audio never leaves your computer. Each of the two programs below is started by you; the plugin neither installs nor starts them. In **Settings → Meeting Live → Add account…**, add **Local (sherpa-onnx)** for live transcription and **Local Whisper (whisper.cpp)** for recorded files. The addresses are prefilled.
 
 ### Live transcription: sherpa-onnx
 
@@ -98,7 +120,7 @@ $M = "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-20
 .\sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts\bin\sherpa-onnx-online-websocket-server.exe --port=6006 --num-work-threads=2 --num-threads=2 --tokens=$M/tokens.txt --encoder=$M/encoder.int8.onnx --decoder=$M/decoder.onnx --joiner=$M/joiner.int8.onnx
 ```
 
-The server is ready when it prints `Started!`. In the plugin the address is `ws://127.0.0.1:6006`; **Test** checks it for free. Things to know:
+The server is ready when it prints `Started!`. In the plugin the address is `ws://127.0.0.1:6006`; **Check** tests it for free. Things to know:
 
 - The server listens on every network interface of the computer, not only on this one. Keep your firewall from admitting connections to port 6006 unless you mean to share it.
 - The language is whatever the model knows (Chinese and English together); there is no language setting and no speaker labels. Text is cut into lines at pauses of a second or more, so a line can hold more than one sentence.
@@ -146,7 +168,7 @@ Network use. The plugin contacts only the services you configure, and each only 
 - **Consent per destination.** Before anything is sent, a dialog lists the destinations and what each receives. Agreement is recorded per role and host, so changing a service or an address to a host you have not agreed to asks again. This also applies to minutes and summaries of a meeting that has finished: if the model's host changed since the recording, nothing is sent until you confirm.
 - **Secrets.** API keys are kept in Obsidian's secret storage. The settings file holds only each secret's name, never the key.
 - **Stored locally.** Recordings, raw transcripts and meeting metadata go to a folder in your vault (default `Meetings/`), one subfolder per meeting, named after the note and renamed with it once the meeting is no longer recording. A new meeting's raw transcript is named in the note language (`… Raw transcript.md` or `… 原始转写.md`) and keeps that name; meetings from earlier versions keep theirs. Stage summaries are written into the meeting note; AI output never overwrites the raw transcript or audio. Raw transcripts of recorded files go to a `Recording transcripts` folder inside it (an existing `录音转写` folder keeps being used). Settings and prompts are saved in the plugin's `data.json` inside your vault.
-- **Accounts and fees.** The services above need your own accounts and API keys, and most charge for use. The plugin is free and has no account of its own. The connection test buttons can incur a very small charge.
+- **Accounts and fees.** The services above need your own accounts and API keys, and most charge for use. The plugin is free and has no account of its own. **Check** uses only calls the services document without charge, and Volcengine's handshake sends no audio; **Test**, shown for services that have no free check, may count as usage.
 - **Files outside the vault.** The plugin only reads an audio file you pick with the system file dialog, and only to transcribe it. "Show meeting folder" asks your system's file manager to open the meeting's folder.
 - No telemetry, no ads.
 
@@ -171,7 +193,7 @@ npm run build   # type check and production build
 node --import ./tests/support/register.mjs dev/mock-server.ts 8790   # local stand-in for the speech and model services
 ```
 
-The mock server speaks the wire formats of Volcengine, Alibaba Cloud Bailian, AssemblyAI, Deepgram, OpenAI-style transcription and an OpenAI-compatible model, so nothing needs a paid key. The loader stands in for Obsidian's module, which the shared code imports.
+The mock server speaks the wire formats of Volcengine, Alibaba Cloud Bailian, AssemblyAI, Deepgram, OpenAI-style transcription and an OpenAI-compatible model, including the model lists and key checks the settings page calls (the key `bad` is refused; `key-1.0-only` is refused Volcengine's 2.0 resource), so nothing needs a paid key. The loader stands in for Obsidian's module, which the shared code imports.
 
 ## License
 

@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-嵌入 Markdown 笔记正文的实时会议工作台：本地录音，实时转写，每隔几分钟由 AI 生成阶段摘要，并能把会议或已有录音整理成结构化纪要。语音识别和大模型使用你自己的账号，插件本身免费。
+嵌入 Markdown 笔记正文的实时会议工作台：本地录音，实时转写，每隔几分钟由 AI 生成阶段摘要，并能把会议或已有录音整理成结构化纪要。语音识别和大模型使用你自己的账号：选服务、粘贴密钥就能添加，插件本身免费。
 
 仅支持桌面版。在 macOS 上开发和测试；代码支持 Windows 和 Linux，但尚未测试，欢迎反馈。需要 Obsidian 1.11.4 或更高版本。界面为简体中文或英文，跟随 Obsidian 的语言。
 
@@ -15,53 +15,75 @@
 - **会议纪要**：会后根据转写、阶段摘要和你的笔记生成纪要，Prompt 可自行修改。
 - **录音生成纪要**：从库中或电脑上选一个录音文件，转写后（服务支持时带说话人）整理成纪要写入当前笔记。在后台进行，笔记中显示进度横条。
 
-## 支持的服务
+## 设置
 
-在「设置 → Meeting Live」中为每个环节选择服务。凭证从 Obsidian 的密钥存储中选取。
+一切从「设置 → Meeting Live → 账号」开始。
 
-### 实时转写（录音时）
+1. 点**添加账号…**，选服务，粘贴它的 API Key（有地区的服务，选创建密钥的那个地区），点**添加**。
+2. 插件会检查密钥，用大白话显示 ✓ 或失败原因。服务文档里有不花钱的接口（模型列表、鉴权测试）时，粘贴后自动检查；没有时，账号旁显示**测试**按钮，并注明它可能计入用量。
+3. 就这样。新账号会接管它能做、且还空着的用途：一个 DeepSeek 密钥就有了大模型，一个火山引擎密钥就有了实时转写和录音文件识别。想改的话看**每个账号的用途**：实时转写、录音文件转写、语言模型各自只列出能做这件事的账号，语言模型还有模型选择。
 
-| 服务 | 需要填写 | 说明 |
+密钥保存在 Obsidian 的密钥库里，不会写进插件的设置文件。添加账号并开始用它之前，什么都不会发出去。
+
+### 支持的服务
+
+一个密钥能做下表里列出的所有用途（依据各服务的官方文档）。
+
+| 服务 | 实时 | 文件 | 大模型 | 获取密钥 |
+| :-- | :-: | :-: | :-: | :-- |
+| 阿里云百炼（中国内地或国际） | ✓ | ✓ | ✓ 通义千问 | [中国内地](https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key)、[国际](https://modelstudio.console.alibabacloud.com/ap-southeast-1/settings/api-key) |
+| 火山引擎语音 | ✓ | ✓ | | [控制台](https://console.volcengine.com/speech/new/setting/apikeys?projectName=default) |
+| Deepgram | ✓ | ✓ | | [控制台](https://console.deepgram.com) |
+| AssemblyAI | ✓ | ✓ | | [控制台](https://www.assemblyai.com/dashboard/api-keys) |
+| OpenAI | | ✓ | ✓ | [API Keys](https://platform.openai.com/settings/organization/api-keys) |
+| Groq | | ✓ | ✓ | [控制台](https://console.groq.com/keys) |
+| DeepSeek、Anthropic、Gemini、OpenRouter、xAI Grok、Mistral | | | ✓ | [DeepSeek](https://platform.deepseek.com/api_keys)、[Anthropic](https://platform.claude.com/settings/keys)、[Gemini](https://aistudio.google.com/apikey)、[OpenRouter](https://openrouter.ai/keys)、[xAI](https://console.x.ai/team/default/api-keys)、[Mistral](https://console.mistral.ai/api-keys) |
+| Kimi、智谱 GLM、硅基流动、MiniMax（中国内地或国际） | | | ✓ | [Kimi](https://platform.kimi.com/console/api-keys)、[GLM](https://bigmodel.cn/usercenter/proj-mgmt/apikeys)、[硅基流动](https://cloud.siliconflow.cn/account/ak)、[MiniMax](https://platform.minimax.cn/user-center/basic-information/interface-key)（国际站的页面在添加表单里有链接） |
+| 火山方舟（豆包） | | | ✓ | [方舟控制台](https://ark.volcengine.com/region:cn-beijing/apiKey)；和火山引擎语音是两个服务，密钥各用各的 |
+| Azure OpenAI | | | ✓ | Azure 门户 → 你的资源 → 密钥和终结点；填资源地址，模型处填部署名称 |
+| 自定义（OpenAI 兼容） | | ✓ | ✓ | 任何提供 `/audio/transcriptions` 或 `/chat/completions` 的服务：填它的地址和密钥 |
+| 本地识别（sherpa-onnx） | ✓ | | | 无需密钥，地址已预填。[搭建步骤](#在自己电脑上做语音识别) |
+| 本地 Whisper（whisper.cpp） | | ✓ | | 无需密钥，地址已预填 |
+| Ollama、LM Studio | | | ✓ | 无需密钥，地址已预填。输入上限请按模型实际的上下文长度设置 |
+
+火山引擎语音和方舟大模型是不同的服务，密钥不通用；阿里云、Kimi、智谱、硅基流动、MiniMax 的两个地区之间也不通用，所以这些服务会问你密钥是在哪里创建的。
+
+### 检查做了什么
+
+| 服务 | 粘贴后的检查 | 是否免费 |
 | :-- | :-- | :-- |
-| 火山引擎 | 新版控制台填 API Key，旧版控制台填 App ID 和 Access Token；再填已开通的流式服务的 Resource ID，如 `volc.seedasr.sauc.duration` | WebSocket 地址已预填。支持热词和断句静音时长。语言由服务自动检测。「区分说话人」（默认关闭）会按火山引擎说话人分离文档的写法让流式识别标注说话人；目前只用本地模拟的服务测试过。 |
-| 阿里云百炼 | API Key，以及它所属的地域（中国内地或国际）；Key 在[百炼控制台](https://www.alibabacloud.com/help/en/model-studio/get-api-key)创建 | 模型预填 `qwen-audio-3.1-asr-flash-streaming`，即文档为会议推荐的模型，支持热词。语言跟随「识别语言」设置，选自动检测时由服务判断。实时转写时不区分说话人。 |
-| AssemblyAI | [控制台](https://www.assemblyai.com/dashboard/home)里的 API Key | 模型预填 `universal-3-5-pro`，文档列出的语种包含普通话和日语，一场会议里多种语言混说也不用设置。支持热词。有一个实时区分说话人的选项。数据区域可选默认或欧盟，选欧盟则数据只在欧盟处理。按连接保持的时长计费。 |
-| Deepgram | API Key；模型（预填 `nova-3`） | 语言跟随「识别语言」设置，选自动检测时使用 Deepgram 的多语言模式。「区分说话人」选项会在转写里把每一行标成「说话人 1」「说话人 2」……。只有自建服务才需要改 WebSocket 地址。 |
-| 本地识别（sherpa-onnx） | 无需填写，已预填地址 `ws://127.0.0.1:6006` | 在你的电脑上运行，免费、离线。中英文，没有说话人标签。见 [在自己电脑上做语音识别](#在自己电脑上做语音识别)。 |
+| DeepSeek、OpenAI、Anthropic、Gemini、OpenRouter、Kimi、SiliconFlow、MiniMax（国际）、xAI、Mistral、Groq、Azure、Ollama、LM Studio、自定义 | 带密钥请求 `GET /models`（OpenRouter 用 `/key`），同时填充模型选择 | 文档没有写计费，也不会运行模型 |
+| 阿里云百炼 | `GET /api/v1/models`，它自己的模型列表接口 | 同上 |
+| Deepgram | `GET /v1/auth/token`，文档说明是「检查密钥是否有效的快速测试」 | 同上 |
+| AssemblyAI | `GET /v2/transcript?limit=1`，只读 | 同上 |
+| 火山引擎语音 | 不发音频的 WebSocket 握手，先试 2.0 流式资源 `volc.seedasr.sauc.duration`，再试 1.0 的 `volc.bigasr.sauc.duration`，记下能通过的那个（账号已有的资源只要能用就保留） | 按音频时长计费且这里不发音频，但文档没有明说只建立连接不收费 |
+| 智谱 GLM、火山方舟、MiniMax（中国内地） | 文档里没有可用的接口。**测试**会发一条很小的对话请求 | 可能计入用量 |
+| 本地服务 | 地址能否连通（sherpa-onnx：建立连接、不发音频） | 免费 |
 
-### 录音文件（录音生成访谈记录）
+录音文件的资源（火山引擎 `volc.seedasr.auc` 或 `volc.bigasr.auc`）没有免费的检查方式；新账号如果流式只能用 1.0 资源，录音文件资源也会跟着改成 1.0，这是根据命名做的推断。
 
-| 服务 | 需要填写 | 说明 |
-| :-- | :-- | :-- |
-| 火山引擎 | 与上面相同的凭证；再填录音文件服务的 Resource ID，如 `volc.seedasr.auc` | 区分说话人。 |
-| 阿里云百炼 | 与上面相同的 Key 和地域 | 使用 `fun-asr`，可区分说话人（建议单个录音不超过 2 小时）。录音先在本地转成单声道 Opus。文件再传到阿里云的临时存储（保存 48 小时，上限 1 GB，文档注明仅适用于开发和测试），再提交任务并下载转写结果。 |
-| AssemblyAI | 与上面相同的 Key 和地域 | 上传文件后等待转写结果，可按需区分说话人。支持最大 2.2 GB 的文件。 |
-| Deepgram | 与实时转写相同的 Key、模型和地址 | 返回带时间的句子，需要区分说话人时会给说话人编号。语言跟随「识别语言」，选自动检测时由 Deepgram 判断主要语种。文件最大 2 GB，处理超过 10 分钟会超时，过长的录音请先切短。 |
-| OpenAI 兼容接口 | 填到 `/v1` 的 API 地址、模型和 API Key | OpenAI 填 `https://api.openai.com/v1`，模型 `whisper-1`（已弃用，将于 2027-02-26 停止服务；替代品 `gpt-transcribe` 文档中未说明会返回时间点）；Groq 填 `https://api.groq.com/openai/v1`，模型 `whisper-large-v3`；本地 Whisper 服务填它自己的地址，Key 可以留空。`gpt-4o-transcribe-diarize` 可区分说话人；`gpt-*-transcribe` 只返回文本，没有时间点。服务的文件大小上限与 OpenAI 的 25 MB 不同时，可以在设置里改。 |
-| 本地 Whisper（whisper.cpp） | 无需填写，已预填地址 `http://127.0.0.1:8080/v1` | 在你的电脑上运行，免费、离线，200 MB 以内的录音原样发送。没有说话人标签。见下一节。 |
+### 模型选择
 
-超过大小上限的录音会先在本地压缩，仍然过大则按时间切成几段依次上传。
+语言模型账号的模型列表，在你选中该账号或点刷新时从服务获取；取不到时显示一份常用模型的短列表。**其他模型…**可以填任意名称。语音识别的模型沿用各服务的默认值，在账号的高级设置里。
 
-### 大模型（摘要和纪要）
+### 高级设置
 
-任意 OpenAI 兼容的 Chat Completions 服务。预设会填入地址和建议的模型，并按该服务文档的要求组织请求。
+默认折叠，分账号（账号那一行的齿轮）和整个插件（页面底部的**高级设置**）两处：服务地址、额外请求头、温度、推理强度、输入上限、火山引擎旧版控制台的 App ID 和 Access Token 与断句静音时长、区分说话人、模型名称、AssemblyAI 的欧盟区域、上传大小上限；整个插件层面是录音格式、语音增强、热词和识别语言。
 
-| 预设 | 需要填写 |
-| :-- | :-- |
-| DeepSeek、OpenAI、OpenRouter | API Key。 |
-| Anthropic 和 Gemini（它们的 OpenAI 兼容接口） | API Key。 |
-| 通义千问、Kimi、智谱 GLM、硅基流动、MiniMax（每个地域一个预设：中国内地或国际） | 在对应地域的平台创建的 API Key。不同地域的 Key 不通用，所以选哪个预设就决定了地址。 |
-| 火山方舟（豆包） | 方舟控制台的 API Key；模型已预填，需要先在你的账号里开通（也可以填接入点 ID `ep-…`）。 |
-| xAI Grok、Mistral | API Key。xAI 把 Chat Completions 列为旧接口，目前仍可用，没有公布下线日期。 |
-| Azure OpenAI | 你的资源地址，部署名称（填在模型一栏），API Key，需要时再加额外请求头。 |
-| Ollama、LM Studio | 你运行的模型名称；Key 可选。把输入上限设为模型实际的上下文长度。 |
-| 自定义 | 其他任意 OpenAI 兼容服务的地址、模型和 Key，可加额外请求头。 |
+### 各语音服务的说明
 
-可以调整推理强度、温度和输入上限（转写太长时，会先分段压缩再写纪要）。提示词默认简短，不限定语言：模型用转写的语言作答。建议换成自己的。
+- **阿里云百炼**：实时用 `qwen-audio-3.1-asr-flash-streaming`（支持热词，语言跟随**识别语言**），录音文件用 `fun-asr`（可区分说话人；录音先在本地转成单声道 Opus，再经过阿里云的临时存储，保存 48 小时、上限 1 GB，文档注明仅适用于开发和测试）。
+- **火山引擎语音**：支持热词和断句静音时长；「区分说话人」默认关闭，只用本地仿真服务测试过；录音文件可区分说话人。
+- **AssemblyAI**：实时模型 `universal-3-5-pro`（语种含中文普通话和日语，支持热词，可选说话人标注），按连接保持打开的时间计费；文件最大 2.2 GB，勾选后区分说话人。
+- **Deepgram**：模型 `nova-3`；语言跟随**识别语言**，自动检测时使用多语言模式。文件最大 2 GB，处理超过 10 分钟会超时。
+- **OpenAI 和 Groq 的录音文件**：默认分别是 `whisper-1` 和 `whisper-large-v3`。OpenAI 已将 `whisper-1` 列为弃用，2027-02-26 停止服务；它的替代品 `gpt-transcribe` 文档里没有说明会返回带时间的分段，而带时间的转写需要分段时间。`gpt-4o-transcribe-diarize` 可区分说话人。上传上限 25 MB，可在高级设置里调整。
+- 超过服务大小上限的录音，会先在本地压缩，仍然过大则按时间切段依次上传。
+
+摘要和纪要的提示词有默认值，简短且与语言无关：模型用转写所用的语言回答。可以换成你自己的。
 
 ## 在自己电脑上做语音识别
 
-免费、离线，不需要账号和密钥，音频不会离开你的电脑。下面两个程序都由你自己启动，插件不会安装或启动它们。在「设置 → Meeting Live」中，实时转写选「本地识别（sherpa-onnx）」，录音文件选「本地 Whisper（whisper.cpp）」，地址已经预填好。
+免费、离线，不需要账号和密钥，音频不会离开你的电脑。下面两个程序都由你自己启动，插件不会安装或启动它们。在「设置 → Meeting Live → 添加账号…」中，实时转写添加「本地识别（sherpa-onnx）」，录音文件添加「本地 Whisper（whisper.cpp）」，地址已经预填好。
 
 ### 实时转写：sherpa-onnx
 
@@ -98,7 +120,7 @@ $M = "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-20
 .\sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts\bin\sherpa-onnx-online-websocket-server.exe --port=6006 --num-work-threads=2 --num-threads=2 --tokens=$M/tokens.txt --encoder=$M/encoder.int8.onnx --decoder=$M/decoder.onnx --joiner=$M/joiner.int8.onnx
 ```
 
-服务打印出 `Started!` 就可以用了。插件里的地址是 `ws://127.0.0.1:6006`，点「测试」可以免费检查。需要知道：
+服务打印出 `Started!` 就可以用了。插件里的地址是 `ws://127.0.0.1:6006`，点「检查」可以免费检测。需要知道：
 
 - 服务监听这台电脑的所有网络接口，而不只是本机。除非你打算共享，请不要让防火墙放行 6006 端口的外来连接。
 - 语言由模型决定（中英文混合），没有语言设置，也没有说话人标签。停顿一秒以上就会分行，所以一行里可能有不止一句。
@@ -146,7 +168,7 @@ Windows（未测试）：从 [发布页](https://github.com/ggml-org/whisper.cpp
 - **按去向确认。** 发送任何数据之前，会有对话框列出去向和各自收到的内容。同意按环节和主机记录，所以把服务或地址换成你没同意过的主机会再次询问。对已经结束的会议生成纪要和摘要也一样：如果模型的主机在录音之后换了，确认之前不会发送任何内容。
 - **密钥。** API Key 保存在 Obsidian 的密钥存储中，设置文件里只记录密钥名称，不含密钥本身。
 - **本地保存。** 录音、原始转写和会议信息保存在库中的会议目录（默认 `Meetings/`），每场会议一个子文件夹，以笔记名命名，笔记改名后，会在不录音时跟着改名。新会议的原始转写按写入笔记的语言命名（`… 原始转写.md` 或 `… Raw transcript.md`），之后不再改变；旧版本的会议保持原名。阶段摘要写入会议笔记，AI 生成的内容不会覆盖原始转写和录音。录音文件的原始转写保存在其中的 `Recording transcripts` 文件夹（已有的 `录音转写` 文件夹会继续使用）。设置和提示词保存在库内插件目录的 `data.json` 中。
-- **账号与费用。** 上述服务需要你自己的账号和 API Key，大多数按用量收费。插件本身免费，也没有自己的账号体系。各个「测试」按钮可能产生极少量费用。
+- **账号与费用。** 上述服务需要你自己的账号和 API Key，大多数按用量收费。插件本身免费，也没有自己的账号体系。「检查」只用服务文档里不收费的接口，火山引擎的握手也不发音频；没有免费检查方式的服务才显示「测试」，它可能计入用量。
 - **库之外的文件。** 插件只读取你用系统文件对话框选择的音频文件，且只为转写它。「在文件管理器中显示会议文件夹」会请系统的文件管理器打开会议所在文件夹。
 - 没有统计上报，没有广告。
 
@@ -171,7 +193,7 @@ npm run build   # 类型检查与生产构建
 node --import ./tests/support/register.mjs dev/mock-server.ts 8790   # 本地模拟语音和模型服务
 ```
 
-模拟服务器说火山引擎、阿里云百炼、AssemblyAI、Deepgram、OpenAI 风格转写和 OpenAI 兼容模型的协议，因此不需要任何付费密钥。其中的加载器代替 Obsidian 的模块，共享代码会引用它。
+模拟服务器说火山引擎、阿里云百炼、AssemblyAI、Deepgram、OpenAI 风格转写和 OpenAI 兼容模型的协议，也包括设置页调用的模型列表和密钥检查（密钥 `bad` 会被拒绝；`key-1.0-only` 会被拒绝使用火山引擎的 2.0 资源），因此不需要任何付费密钥。其中的加载器代替 Obsidian 的模块，共享代码会引用它。
 
 ## 许可
 
