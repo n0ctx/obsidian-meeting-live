@@ -1,4 +1,5 @@
 import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
+import { ensureConsentFor } from "./consent.ts"
 import { resolveFile, resolveLive } from "./asr/providers/registry.ts"
 import type { ProviderEnv } from "./asr/providers/types.ts"
 import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
@@ -118,14 +119,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     return compatibleClient(llmConfig(this.app.secretStorage, this.settings), this.post)
   }
 
-  async ensureConsent(): Promise<boolean> {
-    if (this.settings.consentAccepted) return true
-    const ok = await new ConsentModal(this.app, this.llm().target).ask()
-    if (ok) {
-      this.settings.consentAccepted = true
-      await this.saveSettings()
-    }
-    return ok
+  ensureConsent(): Promise<boolean> {
+    return ensureConsentFor(this.settings, (destinations) => new ConsentModal(this.app, destinations).ask(), () => this.saveSettings())
   }
 
   openMinutes(session: MeetingSession): void {

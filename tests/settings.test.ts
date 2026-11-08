@@ -62,6 +62,8 @@ test("what is saved keeps the 1.0.1 keys exactly as found and drops the dead one
   assert.equal(saved.volcResourceId, "volc.bigasr.sauc.duration")
   assert.equal(saved.fileAsrResourceId, "volc.seedasr.auc")
   assert.equal(saved.volcApiKeySecret, "volc-api-key")
+  assert.equal(saved.consentAccepted, true)
+  assert.equal(Array.isArray(saved.consent), true)
   assert.equal(saved.volcEndWindowMs, 600)
   assert.equal((saved.providers as { volc: { resourceId: string } }).volc.resourceId, "volc.seedasr.sauc.duration")
   for (const dead of ["llmProvider", "chatgptModel", "chatgptEffort", "transcriptShare"]) assert.equal(dead in saved, false, dead)

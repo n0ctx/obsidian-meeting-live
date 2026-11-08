@@ -1,14 +1,15 @@
 import { FuzzySuggestModal, Modal, Notice, TFile, setIcon, type App } from "obsidian"
 import { DEFAULT_MINUTES_PROMPT, stripMeetingBlocks } from "../llm/minutes.ts"
+import type { Destination } from "../consent.ts"
 import type { MeetingSession } from "../meeting/session.ts"
 
 export class ConsentModal extends Modal {
   private resolve: (ok: boolean) => void = () => undefined
-  private readonly llmTarget: string
+  private readonly destinations: Destination[]
 
-  constructor(app: App, llmTarget: string) {
+  constructor(app: App, destinations: Destination[]) {
     super(app)
-    this.llmTarget = llmTarget
+    this.destinations = destinations
   }
 
   ask(): Promise<boolean> {
@@ -30,9 +31,12 @@ export class ConsentModal extends Modal {
       t.createDiv({ cls: "ml-consent-text", text })
     }
     item("hard-drive", "原始录音只保存在本地", "录音、原始转写和会议元数据写入当前 Vault 的会议目录，插件不会上传录音文件。")
-    item("captions", "音频实时上传至火山引擎", "录音时，音频流会实时发送到字节跳动火山引擎语音识别服务（openspeech.bytedance.com）进行转写。")
-    item("send", "转写文本发送至 LLM 服务", `阶段摘要和正式纪要会把转写文本与所选笔记发送到你配置的模型服务：${this.llmTarget}。`)
-    list.createDiv({ cls: "ml-consent-note", text: "请确保已获得参会者对录音和使用云端服务处理的同意。此确认只需进行一次。" })
+    for (const d of this.destinations) {
+      if (d.kind === "live") item("captions", `音频实时上传至${d.name}`, `录音时，音频流会实时发送到${d.name}语音识别服务（${d.host}）进行转写。`)
+      else if (d.kind === "file") item("file-audio", `录音文件上传至${d.name}`, `使用「录音生成访谈记录」时，所选录音文件会上传到${d.name}录音文件识别服务（${d.host}）进行转写。`)
+      else item("send", "转写文本发送至 LLM 服务", `阶段摘要和正式纪要会把转写文本与所选笔记发送到你配置的模型服务：${d.host}${d.detail ? ` · ${d.detail}` : ""}。`)
+    }
+    list.createDiv({ cls: "ml-consent-note", text: "请确保已获得参会者对录音和使用云端服务处理的同意。同一去向只需确认一次，更换服务或地址后会再次确认。" })
     const buttons = this.contentEl.createDiv({ cls: "modal-button-container" })
     buttons.createEl("button", { text: "取消" }).addEventListener("click", () => this.close())
     const ok = buttons.createEl("button", { cls: "mod-cta", text: "同意并开始" })

@@ -2,6 +2,7 @@ import type { CompatibleEffort, LlmConfig } from "./llm/client.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type { AudioFormat } from "./meeting/types.ts"
+import { seedConsent } from "./consent.ts"
 import { DEFAULT_VOLC, VOLC_FLAT_KEYS, readVolcSettings, type VolcSettings } from "./asr/providers/volc/settings.ts"
 import { readSecret, type SecretReader } from "./secrets.ts"
 
@@ -30,7 +31,8 @@ export interface MeetingLiveSettings {
   summaryIntervalMin: number
   summaryFocus: string
   minutesPrompt: string
-  consentAccepted: boolean
+  /** Destinations the user agreed to send data to, as "live:host", "file:host" or "llm:host". */
+  consent: string[]
 }
 
 export const DEFAULT_SETTINGS: MeetingLiveSettings = {
@@ -52,8 +54,11 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   summaryIntervalMin: 5,
   summaryFocus: DEFAULT_SUMMARY_FOCUS,
   minutesPrompt: DEFAULT_MINUTES_PROMPT,
-  consentAccepted: false,
+  consent: [],
 }
+
+/** Keys of the 1.0.x settings shape. They are written back untouched while 1.0.x remains a version to return to. */
+const LEGACY_KEYS = [...VOLC_FLAT_KEYS, "consentAccepted"]
 
 export interface LoadedSettings {
   settings: MeetingLiveSettings
@@ -69,14 +74,17 @@ export function loadSettings(raw: unknown): LoadedSettings {
   const stored = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
   const settings = structuredClone(DEFAULT_SETTINGS)
   for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof MeetingLiveSettings)[]) {
-    if (key === "providers" || key === "version") continue
+    if (key === "providers" || key === "version" || key === "consent") continue
     const value = stored[key]
     if (typeof value === typeof DEFAULT_SETTINGS[key]) (settings[key] as string | number | boolean) = value as string | number | boolean
   }
   const current = typeof stored.version === "number" && stored.version >= SETTINGS_VERSION
   settings.providers.volc = readVolcSettings(current ? (stored.providers as { volc?: unknown } | undefined)?.volc : stored, !current)
+  if (Array.isArray(stored.consent)) settings.consent = stored.consent.filter((entry): entry is string => typeof entry === "string")
+  // The single yes of 1.0.x covered the destinations configured at the time, which are the ones to be seeded.
+  if (settings.consent.length === 0 && stored.consentAccepted === true) settings.consent = seedConsent(settings)
   const legacy: Record<string, unknown> = {}
-  for (const key of VOLC_FLAT_KEYS) if (key in stored) legacy[key] = stored[key]
+  for (const key of LEGACY_KEYS) if (key in stored) legacy[key] = stored[key]
   return { settings, legacy }
 }
 
