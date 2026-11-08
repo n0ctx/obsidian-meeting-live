@@ -99,6 +99,13 @@ test("a to-do ticked under a stage in the old layout stays ticked in the merged 
   assert.ok(!next.includes("[!caution]") && !next.includes("**待办**"), "rewritten into the new layout")
 })
 
+test("a to-do ticked in the earliest layout (bold figures, a leading 【待办】) stays ticked too", () => {
+  const old = `%% meeting-live-summary ${ID} · 由 Meeting Live 自动更新，此区域内的修改会被覆盖 %%\n### 阶段 1 · 00:00:00 – 00:05:00 · 预算\n- [x] 【待办】交方案 ¥**500万** [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]] ^${ID}-t9100\n\n%% /meeting-live-summary ${ID} %%`
+  const note = `\`\`\`meeting-live\nid: ${ID}\n\`\`\`\n\n${old}\n`
+  const next = applyEdit(note, placeSummary(note, ID, fakeSession().session.noteSummary().markdown)!)
+  assert.match(next, /^- \[x\] 交方案 ==¥500万== /m)
+})
+
 test("a rewrite is stable: publishing the same summary again changes nothing, and ticks survive each time", async () => {
   const { session, note } = fakeSession({ meta: twoStages([1]) })
   await session.publishSummary()
@@ -138,11 +145,13 @@ test("regions are found by their markers, old wording and new, in the lines of a
   assert.deepEqual(summaryRegions([`%% meeting-live-summary ${ID} %%`, `%% /meeting-live-summary ${ID} %%`]), [{ start: 0, end: 1, first: 0, last: 0 }])
 })
 
-test("lines of a region say where they sit: markers fold away, the first and last text line close the panel, blanks are gaps", () => {
+test("lines of a region say where they sit: markers and the blanks next to them fold away, the first and last text line close the panel, blanks are gaps", () => {
   const span = { start: 1, end: 9, first: 3, last: 7 }
   assert.deepEqual(panelClasses(span, 1, false), ["ml-sum-marker"])
   assert.deepEqual(panelClasses(span, 9, false), ["ml-sum-marker"])
-  assert.deepEqual(panelClasses(span, 2, true), ["ml-sum", "ml-sum-gap"])
+  assert.deepEqual(panelClasses(span, 2, true), ["ml-sum-marker"], "the blank line under the start marker is not part of the panel")
+  assert.deepEqual(panelClasses(span, 8, true), ["ml-sum-marker"], "nor the one above the end marker")
+  assert.deepEqual(panelClasses(span, 5, true), ["ml-sum", "ml-sum-gap"])
   assert.deepEqual(panelClasses(span, 3, false), ["ml-sum", "ml-sum-first"])
   assert.deepEqual(panelClasses(span, 5, false), ["ml-sum"])
   assert.deepEqual(panelClasses(span, 7, false), ["ml-sum", "ml-sum-last"])

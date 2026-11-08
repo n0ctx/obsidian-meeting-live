@@ -319,6 +319,14 @@ A 28px round Cream Key play button, mono times, a 4px hairline track with an oli
 ### Job Bar
 The card's surface and border with a 15px state icon (olive while running, red when failed, `ink-3` when lost), step names joined by 14px hairline connectors with an olive tick on done steps, a mono clock, and a 2px olive sweep along the bottom edge while running.
 
+### Summary Panel
+The AI summary in the note, a sibling of the card: same ground, hairline, 8px corners and 18px gutter, quiet ink for body text and `ink-3` for the header, foot, labels and times. It is plain Markdown dressed by classes alone (`ml-sum`), in Live Preview and in reading view.
+- **Header and foot:** one 12px `ink-3` line each, the header above the overview, the foot (the AI notice) below the last stage.
+- **Overview:** a one-line-per-topic index, then the to-dos and open questions once, under 11.5px / 500 `ink-3` labels.
+- **Stage:** a hairline, then a 15px / 600 title with its range after it, and per topic one bold name, a mono 11px time and the paragraph.
+- **Emphasis:** only the topic is bold; only a figure the transcript does not contain takes the amber wash and `warn` ink.
+- **Theme:** the theme's variables for text, headings, links, highlight and checkboxes are pinned inside the panel, so no theme changes its look.
+
 ## Do's and Don'ts
 
 ### Do:

@@ -80,14 +80,15 @@ export function summaryRegion(id: string, body: string): string {
 /**
  * A to-do compared across rewrites: its text alone. Left out of the comparison are the ==highlight== around an unverified figure
  * (where it falls depends on which figures the plugin recognizes), the block id and the time link after the text (the id and the
- * line a time lands on depend on where the to-do sits). So a to-do ticked under a stage in an older layout is still ticked
- * where the overview now lists it.
+ * line a time lands on depend on where the to-do sits), and what the earliest layout added: bold figures and a leading 【待办】.
+ * So a to-do ticked under a stage in an older layout is still ticked where the overview now lists it.
  */
 const tickKey = (text: string) =>
   text
     .replace(/\s*\^[\w-]+\s*$/, "")
     .replace(/\s*(?:\[\[[^\]]*\]\]|\d{1,2}:\d{2}(?::\d{2})?)\s*$/, "")
-    .replace(/==/g, "")
+    .replace(/^【[^】]*】\s*/, "")
+    .replace(/==|\*\*/g, "")
     .trim()
 
 /** To-dos ticked in the note stay ticked when the region is rewritten, in whatever language either version was written. */

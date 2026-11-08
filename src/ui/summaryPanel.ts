@@ -5,9 +5,12 @@ import { summaryRegions, type RegionSpan } from "../meeting/noteSummary.ts"
 // look with classes only (the "Summary panel" section of styles.css): a section or line inside a region gets `ml-sum`,
 // plus a word for where it sits. Nothing is wrapped around the Markdown, so block ids keep resolving to their own line.
 
-/** Classes of the line `n` (0-based) of a region: the markers fold away, the first and last text line close the panel's top and bottom. */
+/**
+ * Classes of the line `n` (0-based) of a region: the markers, and the blank lines next to them, fold away; the first and last
+ * text line close the panel's top and bottom.
+ */
 export function panelClasses(span: RegionSpan, n: number, blank: boolean): string[] {
-  if (n === span.start || n === span.end) return ["ml-sum-marker"]
+  if (n === span.start || n === span.end || (blank && (n < span.first || n > span.last))) return ["ml-sum-marker"]
   const classes = ["ml-sum"]
   if (n === span.first) classes.push("ml-sum-first")
   if (n === span.last) classes.push("ml-sum-last")
