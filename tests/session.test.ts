@@ -188,7 +188,7 @@ test("when the recorder fails and no new file can be opened, the card is told in
   await settle()
   assert.match(session.error ?? "", /磁盘已满/)
   assert.equal(created, 2)
-  await session.pause()
+  assert.equal(session.status, "paused", "frames are no longer saved, so the status says so")
 })
 
 test("a capture that will not close does not keep the recording file open or recognition running, and the card says why", async (t) => {

@@ -2,7 +2,7 @@
 //   https://developers.deepgram.com/reference/speech-to-text/listen-streaming  (Results, Metadata, Error)
 //   https://developers.deepgram.com/docs/understand-endpointing-interim-results  (interim and final results)
 //   https://developers.deepgram.com/docs/audio-keep-alive  (word times follow the audio, not the wall clock)
-//   https://developers.deepgram.com/docs/diarization  (a `speaker` integer on each word, for `diarize_model` and the deprecated `diarize` alike)
+//   https://developers.deepgram.com/docs/diarization  (a `speaker` integer on each word, `results…alternatives[].words[].speaker`, the same for streaming and for `diarize_model` and `diarize`)
 import type { AsrUpdate, AsrUtterance } from "../../contract.ts"
 
 /**

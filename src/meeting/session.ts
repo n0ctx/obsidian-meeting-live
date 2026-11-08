@@ -306,8 +306,13 @@ export class MeetingSession extends Events {
     void (async () => {
       await broken?.close().catch(() => undefined)
       if (this.liveSegment) this.liveSegment = undefined
-      // No new file to continue in (disk full, folder gone): say so, since the audio is no longer being saved.
-      if (this.meta.status === "recording") await this.openSegment(capture, "wav").catch((e: Error) => (this.error = t("recorder.write", e.message)))
+      try {
+        if (this.meta.status === "recording") await this.openSegment(capture, "wav")
+      } catch (e) {
+        // No new file to continue in (disk full, folder gone): frames are dropped from here on, so the status must not keep saying Recording.
+        await this.pause()
+        this.error = t("recorder.write", (e as Error).message)
+      }
       this.emitChange()
     })()
   }

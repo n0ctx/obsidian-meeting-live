@@ -31,7 +31,7 @@ You choose a service for each role in **Settings → Meeting Live**. Credentials
 | Service | What to fill in | Notes |
 | :-- | :-- | :-- |
 | Volcengine | The same credentials as above; the Resource ID of the file service, such as `volc.seedasr.auc` | Separates speakers. |
-| OpenAI-compatible | The API address up to `/v1`, a model, and an API key | For OpenAI use `https://api.openai.com/v1` with `whisper-1` (deprecated, shutting down 2027-02-26; its replacement `gpt-transcribe` returns no times); for Groq `https://api.groq.com/openai/v1` with `whisper-large-v3`; for a local Whisper server its own address, where the key can stay empty. `gpt-4o-transcribe-diarize` separates speakers; `gpt-*-transcribe` returns text without times. A file size limit can be set for servers that differ from OpenAI's 25 MB. |
+| OpenAI-compatible | The API address up to `/v1`, a model, and an API key | For OpenAI use `https://api.openai.com/v1` with `whisper-1` (deprecated, shutting down 2027-02-26; its replacement `gpt-transcribe` is not documented to return times); for Groq `https://api.groq.com/openai/v1` with `whisper-large-v3`; for a local Whisper server its own address, where the key can stay empty. `gpt-4o-transcribe-diarize` separates speakers; `gpt-*-transcribe` returns text without times. A file size limit can be set for servers that differ from OpenAI's 25 MB. |
 
 Recordings over the size limit are compressed locally first, and if still too large are cut into timed pieces and uploaded in turn.
 

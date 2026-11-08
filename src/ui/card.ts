@@ -257,8 +257,7 @@ export class MeetingCard extends MarkdownRenderChild {
     const session = this.session!
     const actions = createDiv({ cls: "ml-pane-actions" })
     this.iconButton(actions, "copy", t("card.copyAll"), () => {
-      inBackground(navigator.clipboard.writeText(this.transcript?.plainText() ?? ""))
-      new Notice(t("card.copied"))
+      inBackground(navigator.clipboard.writeText(this.transcript?.plainText() ?? "").then(() => new Notice(t("card.copied"))))
     })
     this.iconButton(actions, "file-text", t("card.openRaw"), () => this.host.openPath(session.transcriptPath))
     this.transcript = new TranscriptPane(this.body, session, actions)
