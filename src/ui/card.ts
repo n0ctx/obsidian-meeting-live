@@ -362,7 +362,7 @@ export class MeetingCard extends MarkdownRenderChild {
       const save = session.saveState
       chips.push({ icon: save === "error" ? "triangle-alert" : "check", text: save === "error" ? t("card.chip.saveFailed") : save === "saving" ? t("card.chip.saving") : t("card.chip.saved"), tone: save === "error" ? "error" : "idle" })
       // Least important last: it is the first to drop when the header runs out of room.
-      if (live && session.deviceLabel) chips.push({ icon: "mic", text: session.deviceLabel.replace(/^Default - /, "").replace(/\s*\(.*\)$/, ""), tone: "idle" })
+      if (live && session.deviceLabel) chips.push({ icon: "mic", text: session.deviceLabel.replace(/^(?:Default|Communications) - /, "").replace(/\s*\(.*\)$/, ""), tone: "idle" })
     }
     const key = JSON.stringify(chips.map((c) => [c.icon, c.text, c.tone, c.title]))
     if (this.chips.dataset.key === key) return

@@ -132,5 +132,6 @@ export class AudioCapture {
 
 export async function listInputDevices(): Promise<MediaDeviceInfo[]> {
   const devices = await navigator.mediaDevices.enumerateDevices()
-  return devices.filter((d) => d.kind === "audioinput" && d.deviceId !== "default")
+  // Chromium lists the default device twice, once as "default" and, on Windows, once more as "communications".
+  return devices.filter((d) => d.kind === "audioinput" && d.deviceId !== "default" && d.deviceId !== "communications")
 }
