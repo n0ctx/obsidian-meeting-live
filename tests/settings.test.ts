@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
+import { languageHint } from "../src/asr/language.ts"
 import { DEFAULT_SETTINGS, loadSettings, storedSettings } from "../src/settings.ts"
 
 /** The shape of the author's data.json under 1.0.1, including keys no code reads any more. */
@@ -116,4 +117,17 @@ test("values of the wrong type fall back to their defaults", () => {
   assert.equal(settings.providers.volc.endWindowMs, 800)
   assert.equal(settings.providers.volc.resourceId, DEFAULT_SETTINGS.providers.volc.resourceId)
   assert.equal(settings.summaryIntervalMin, 10)
+})
+
+test("the recognition language defaults to auto, keeps a valid choice, and rejects an unknown one", () => {
+  assert.equal(loadSettings(null).settings.asrLanguage, "auto")
+  assert.equal(loadSettings(authorData()).settings.asrLanguage, "auto")
+  assert.equal(loadSettings({ version: 2, asrLanguage: "zh" }).settings.asrLanguage, "zh")
+  assert.equal(loadSettings({ version: 2, asrLanguage: "klingon" }).settings.asrLanguage, "auto")
+  assert.equal(loadSettings({ version: 2, asrLanguage: 3 }).settings.asrLanguage, "auto")
+})
+
+test("auto leaves the language to the service, anything else is passed on as its ISO code", () => {
+  assert.equal(languageHint("auto"), undefined)
+  assert.equal(languageHint("zh"), "zh")
 })

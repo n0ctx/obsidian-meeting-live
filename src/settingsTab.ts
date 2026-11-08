@@ -1,4 +1,5 @@
 import { Notice, PluginSettingTab, Setting, type App } from "obsidian"
+import { ASR_LANGUAGES, type AsrLanguage } from "./asr/language.ts"
 import { asrProvider, fileProviders, liveProviders } from "./asr/providers/registry.ts"
 import type { AsrProvider } from "./asr/providers/types.ts"
 import { listInputDevices } from "./audio/capture.ts"
@@ -117,6 +118,19 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           t.inputEl.rows = 4
           t.setValue(s.hotwords).onChange((v) => {
             s.hotwords = v
+            this.save()
+          })
+        })
+    }
+    const languageFor = [asrProvider(s.liveProvider)?.live?.capabilities(s).language && "实时识别", asrProvider(s.fileProvider)?.file?.capabilities(s).language && "录音文件识别"].filter(Boolean)
+    if (languageFor.length) {
+      new Setting(containerEl)
+        .setName("识别语言")
+        .setDesc(`对${languageFor.join("和")}生效。自动检测适合多语言混用，已知会议语言时指定语言更准确。`)
+        .addDropdown((d) => {
+          for (const l of ASR_LANGUAGES) d.addOption(l.id, l.name)
+          d.setValue(s.asrLanguage).onChange((v) => {
+            s.asrLanguage = v as AsrLanguage
             this.save()
           })
         })

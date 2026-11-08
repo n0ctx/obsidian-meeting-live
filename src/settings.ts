@@ -3,6 +3,7 @@ import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type { AudioFormat } from "./meeting/types.ts"
 import { seedConsent } from "./consent.ts"
+import { isAsrLanguage, type AsrLanguage } from "./asr/language.ts"
 import { DEFAULT_VOLC, VOLC_FLAT_KEYS, readVolcSettings, type VolcSettings } from "./asr/providers/volc/settings.ts"
 import { readSecret, type SecretReader } from "./secrets.ts"
 
@@ -20,6 +21,8 @@ export interface MeetingLiveSettings {
   fileProvider: string
   /** Configuration of each provider, kept apart so a provider can be added without touching the rest. */
   providers: { volc: VolcSettings }
+  /** Recognition language for providers that take one. */
+  asrLanguage: AsrLanguage
   hotwords: string
   llmBaseUrl: string
   llmModel: string
@@ -44,6 +47,7 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   liveProvider: "volc",
   fileProvider: "volc",
   providers: { volc: DEFAULT_VOLC },
+  asrLanguage: "auto",
   hotwords: "",
   llmBaseUrl: "https://api.deepseek.com",
   llmModel: "deepseek-flash",
@@ -80,6 +84,7 @@ export function loadSettings(raw: unknown): LoadedSettings {
     const value = stored[key]
     if (typeof value === typeof DEFAULT_SETTINGS[key]) (settings[key] as string | number | boolean) = value as string | number | boolean
   }
+  if (!isAsrLanguage(settings.asrLanguage)) settings.asrLanguage = DEFAULT_SETTINGS.asrLanguage
   const current = typeof stored.version === "number" && stored.version >= SETTINGS_VERSION
   settings.providers.volc = readVolcSettings(current ? (stored.providers as { volc?: unknown } | undefined)?.volc : stored, !current)
   if (Array.isArray(stored.consent)) settings.consent = stored.consent.filter((entry): entry is string => typeof entry === "string")
