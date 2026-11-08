@@ -190,12 +190,12 @@ Make sure everyone in a meeting agrees to being recorded and to cloud processing
 npm ci
 npm test        # unit tests
 npm run build   # type check and production build
-node --import ./tests/support/register.mjs dev/mock-server.ts 8790   # local stand-in for the speech and model services
+node --import ./tests/support/register.mjs scripts/mock-server.ts 8790   # local stand-in for the speech and model services
 ```
 
 The mock server speaks the wire formats of Volcengine, Alibaba Cloud Bailian, AssemblyAI, Deepgram, OpenAI-style transcription and an OpenAI-compatible model, including the model lists and key checks the settings page calls (the key `bad` is refused; `key-1.0-only` is refused Volcengine's 2.0 resource), so nothing needs a paid key. The loader stands in for Obsidian's module, which the shared code imports.
 
-Releasing (maintainers): on a clean `main`, run `npm version patch` (or `minor`, or an explicit `x.y.z`). The `version` script in `version-bump.mjs` moves `manifest.json`, `versions.json` and `package.json` together, and `.npmrc` makes the tag `x.y.z` without a `v`, which Obsidian requires. Push the commit and the tag. The [release workflow](.github/workflows/release.yml) builds from the tagged commit, runs the tests, refuses to continue unless the tag equals the `manifest.json` version and `versions.json` lists it, attests build provenance for `main.js`, `manifest.json` and `styles.css`, and publishes the release with those three files. Change the description or anything else before tagging, not after: a moved tag is not rebuilt.
+Releasing (maintainers): on a clean `main`, run `npm version patch` (or `minor`, or an explicit `x.y.z`). The `version` script in `version-bump.mjs` moves `manifest.json`, `versions.json` and `package.json` together, and `.npmrc` makes the tag `x.y.z` without a `v`, which Obsidian requires. Push the commit and the tag. The [release workflow](.github/workflows/release.yml) builds from the tagged commit, runs the tests, refuses to continue unless the tag equals the `manifest.json` version and `versions.json` lists it, attests build provenance for `main.js`, `manifest.json` and `styles.css`, and publishes the release with those three files. Change the description or anything else before tagging: the release carries the files as they were at the tag, so an edit made to `manifest.json` afterwards reaches users only with the next release.
 
 ## License
 

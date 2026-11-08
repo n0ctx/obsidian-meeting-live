@@ -34,7 +34,7 @@ test("a message takes the same arguments in both languages, and English has no C
       const used = (text: string) => [...text.matchAll(/«\d»/g)].map((m) => m[0]).sort()
       if (!COMPUTES.has(key)) assert.deepEqual(used(sample(en as (...a: string[]) => string)), used(sample(zh as (...a: string[]) => string)), `${key} shows different values`)
     }
-    const text = typeof en === "function" ? sample(en as (...a: string[]) => string) : (en as string)
+    const text = typeof en === "function" ? sample(en as (...a: string[]) => string) : en
     if (!ENDONYMS.has(key)) assert.doesNotMatch(text, HAN, `${key} has Chinese in English`)
   }
 })

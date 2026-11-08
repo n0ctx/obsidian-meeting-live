@@ -1,5 +1,5 @@
 // Local stand-in for the speech and language services, for testing without paid APIs or keys.
-// Run: node --import ./tests/support/register.mjs dev/mock-server.ts [port]   (port 0 picks a free one; the URL is printed;
+// Run: node --import ./tests/support/register.mjs scripts/mock-server.ts [port]   (port 0 picks a free one; the URL is printed;
 // the loader stands in for the obsidian module that the shared protocol code reaches through its messages)
 //   Volcengine streaming ASR:     ws://127.0.0.1:<port>/asr
 //   Deepgram live:                ws://127.0.0.1:<port>/v1/listen   (Authorization: Token <key>; the key "bad" gets a 401)
@@ -16,7 +16,6 @@
 //   GET /stats counts what the streaming routes have seen, for tests.
 import { createServer, type IncomingMessage } from "node:http"
 import type { AddressInfo } from "node:net"
-import { setTimeout as delay } from "node:timers/promises"
 import { WebSocketServer, type WebSocket } from "ws"
 import { decodeClientFrame, encodeServerResult } from "../src/asr/providers/volc/protocol.ts"
 import { deepgramPrerecorded } from "./mock/deepgramFile.ts"
@@ -130,10 +129,10 @@ const server = createServer(async (req, res) => {
       } else {
         content = `1.业务情况\n公司今年收入预计三点二亿元，去年为两亿一千万。\n\n待核实事项\n- 毛利率口径（来源 ${lines[1]?.t ?? "00:00:00"}）`
       }
-      void delay(1200).then(() => {
+      setTimeout(() => {
         res.setHeader("Content-Type", "application/json")
         res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }] }))
-      })
+      }, 1200)
     })
     return
   }
@@ -248,4 +247,4 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
   ws.on("error", () => undefined)
 })
 
-server.listen(port, "127.0.0.1", () => process.stdout.write(`mock server on http://127.0.0.1:${(server.address() as AddressInfo).port}\n`))
+server.listen(port, "127.0.0.1", () => console.log(`mock server on http://127.0.0.1:${(server.address() as AddressInfo).port}`))
