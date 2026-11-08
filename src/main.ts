@@ -7,7 +7,8 @@ import { MeetingManager } from "./meeting/manager.ts"
 import type { MeetingSession } from "./meeting/session.ts"
 import { MeetingStore } from "./meeting/store.ts"
 import { formatClock } from "./meeting/types.ts"
-import { DEFAULT_SETTINGS, llmConfig, volcConfig, type MeetingLiveSettings } from "./settings.ts"
+import { volcConfig } from "./asr/providers/volc/settings.ts"
+import { DEFAULT_SETTINGS, llmConfig, loadSettings, storedSettings, type MeetingLiveSettings } from "./settings.ts"
 import { MeetingLiveSettingTab } from "./settingsTab.ts"
 import { JobBar } from "./ui/jobBar.ts"
 import { TranscribeFileModal } from "./ui/transcribeFile.ts"
@@ -21,7 +22,9 @@ import { summaryMarkers } from "./ui/summaryMarkers.ts"
 const LEGACY_SUMMARY_FOCUS = `Focus on the questions discussed, decisions and conclusions, key numbers and dates, disagreements or uncertainties, and useful follow-up questions.`
 
 export default class MeetingLivePlugin extends Plugin implements CardHost {
-  override settings: MeetingLiveSettings = DEFAULT_SETTINGS
+  override settings: MeetingLiveSettings = structuredClone(DEFAULT_SETTINGS)
+  /** Keys of the previous settings shape, written back unchanged so a downgrade still finds its settings. */
+  private legacySettings: Record<string, unknown> = {}
   manager!: MeetingManager
   private jobs!: TranscribeJobs
   private statusEl!: HTMLElement
@@ -37,14 +40,16 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   }
 
   override async onload(): Promise<void> {
-    this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<MeetingLiveSettings> | null) }
+    const loaded = loadSettings(await this.loadData())
+    this.settings = loaded.settings
+    this.legacySettings = loaded.legacy
     // The previous default asked for follow-up questions, which stage summaries no longer include.
     if (this.settings.summaryFocus === LEGACY_SUMMARY_FOCUS) this.settings.summaryFocus = DEFAULT_SUMMARY_FOCUS
     const store = new MeetingStore(this.app, () => this.settings.folder)
     this.manager = new MeetingManager(store, {
       settings: () => this.settings,
       asrConnector: () => {
-        const config = volcConfig(this.app, this.settings)
+        const config = this.volc()
         const problem = volcConfigProblem(config)
         return problem ? { connect: null, problem } : { connect: volcConnector(config) }
       },
@@ -100,18 +105,22 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   }
 
   async saveSettings(): Promise<void> {
-    await this.saveData(this.settings)
+    await this.saveData(storedSettings(this.settings, this.legacySettings))
   }
 
   // ---------------------------------------------------------------- CardHost
 
+  private volc() {
+    return volcConfig(this.app.secretStorage, this.settings.providers.volc, this.settings.hotwords)
+  }
+
   asrProblem(): string | undefined {
-    return volcConfigProblem(volcConfig(this.app, this.settings))
+    return volcConfigProblem(this.volc())
   }
 
   /** The configured model provider; rebuilt per call so setting changes apply immediately. */
   llm(): LlmClient {
-    return compatibleClient(llmConfig(this.app, this.settings), this.post)
+    return compatibleClient(llmConfig(this.app.secretStorage, this.settings), this.post)
   }
 
   async ensureConsent(): Promise<boolean> {
@@ -211,8 +220,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       this.app,
       {
         fileAsr: () => {
-          const config = volcConfig(this.app, this.settings)
-          return volcFileProvider({ apiKey: config.apiKey, appId: config.appId, accessToken: config.accessToken, resourceId: this.settings.fileAsrResourceId.trim() || "volc.seedasr.auc" })
+          const config = this.volc()
+          return volcFileProvider({ apiKey: config.apiKey, appId: config.appId, accessToken: config.accessToken, resourceId: this.settings.providers.volc.fileResourceId.trim() || "volc.seedasr.auc" })
         },
         post: this.filePost,
         llm: () => this.llm(),

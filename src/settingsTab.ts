@@ -4,7 +4,8 @@ import { volcConfigProblem, volcConnector } from "./asr/providers/volc/live.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type MeetingLivePlugin from "./main.ts"
-import { volcConfig, type MeetingLiveSettings } from "./settings.ts"
+import { volcConfig } from "./asr/providers/volc/settings.ts"
+import type { MeetingLiveSettings } from "./settings.ts"
 
 export class MeetingLiveSettingTab extends PluginSettingTab {
   private readonly plugin: MeetingLivePlugin
@@ -22,22 +23,24 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     void this.plugin.saveSettings()
   }
 
-  private text<K extends keyof MeetingLiveSettings>(setting: Setting, key: K, placeholder = "") {
+  private text(setting: Setting, target: object, key: string, placeholder = "") {
+    const values = target as Record<string, string>
     setting.addText((t) =>
       t
         .setPlaceholder(placeholder)
-        .setValue(String(this.s[key]))
+        .setValue(String(values[key]))
         .onChange((v) => {
-          ;(this.s[key] as string) = v.trim()
+          values[key] = v.trim()
           this.save()
         }),
     )
   }
 
-  private secret(setting: Setting, key: "volcApiKeySecret" | "volcAccessTokenSecret" | "llmApiKeySecret") {
+  private secret(setting: Setting, target: object, key: string) {
+    const values = target as Record<string, string>
     setting.addComponent((el) =>
-      new SecretComponent(this.app, el).setValue(this.s[key]).onChange((id) => {
-        this.s[key] = id ?? ""
+      new SecretComponent(this.app, el).setValue(values[key]).onChange((id) => {
+        values[key] = id ?? ""
         this.save()
       }),
     )
@@ -53,7 +56,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     privacy.createSpan({ text: "：原始录音和转写只保存在本库。录音时音频实时上传至火山引擎识别；摘要和纪要会把转写文本发送到下方配置的 LLM 服务。凭证保存在 Obsidian 的密钥存储中，不写入笔记、会议文件或插件配置。" })
 
     new Setting(containerEl).setName("录音").setHeading()
-    this.text(new Setting(containerEl).setName("会议数据目录").setDesc("每场会议一个子文件夹，包含录音、原始转写、AI 摘要与元数据。"), "folder", "Meetings")
+    this.text(new Setting(containerEl).setName("会议数据目录").setDesc("每场会议一个子文件夹，包含录音、原始转写、AI 摘要与元数据。"), this.s, "folder", "Meetings")
     new Setting(containerEl)
       .setName("录音格式")
       .setDesc("Opus：48 kHz 高码率压缩，约 45 MB/小时，适合长会议。WAV：无损 PCM，约 330 MB/小时。")
@@ -94,20 +97,20 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("火山引擎语音识别").setHeading()
     containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: "新版控制台只需 API Key；旧版控制台填写 App ID 与 Access Token。Resource ID 需与控制台开通的服务一致：2.0 小时版 volc.seedasr.sauc.duration，1.0 小时版 volc.bigasr.sauc.duration。" })
-    this.secret(new Setting(containerEl).setName("API Key（新版控制台）"), "volcApiKeySecret")
-    this.text(new Setting(containerEl).setName("App ID（旧版控制台）"), "volcAppId")
-    this.secret(new Setting(containerEl).setName("Access Token（旧版控制台）"), "volcAccessTokenSecret")
-    this.text(new Setting(containerEl).setName("Resource ID"), "volcResourceId", "volc.seedasr.sauc.duration")
-    this.text(new Setting(containerEl).setName("WebSocket 地址").setDesc("默认使用双向流式优化版（bigmodel_async），结果有变化时才返回，并启用二遍识别提升准确率。"), "volcEndpoint")
+    this.secret(new Setting(containerEl).setName("API Key（新版控制台）"), this.s.providers.volc, "apiKeySecret")
+    this.text(new Setting(containerEl).setName("App ID（旧版控制台）"), this.s.providers.volc, "appId")
+    this.secret(new Setting(containerEl).setName("Access Token（旧版控制台）"), this.s.providers.volc, "accessTokenSecret")
+    this.text(new Setting(containerEl).setName("Resource ID"), this.s.providers.volc, "resourceId", "volc.seedasr.sauc.duration")
+    this.text(new Setting(containerEl).setName("WebSocket 地址").setDesc("默认使用双向流式优化版（bigmodel_async），结果有变化时才返回，并启用二遍识别提升准确率。"), this.s.providers.volc, "endpoint")
     new Setting(containerEl)
       .setName("断句静音时长")
       .setDesc("说话停顿超过该时长即确认一句，单位毫秒，最小 200。")
       .addSlider((s) =>
         s
           .setLimits(200, 2000, 100)
-          .setValue(this.s.volcEndWindowMs)
+          .setValue(this.s.providers.volc.endWindowMs)
           .onChange((v) => {
-            this.s.volcEndWindowMs = v
+            this.s.providers.volc.endWindowMs = v
             this.save()
           }),
       )
@@ -123,7 +126,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
       })
     this.text(
       new Setting(containerEl).setName("录音文件识别 Resource ID").setDesc("命令「转写录音文件到当前笔记」使用，凭证与上方相同。2.0：volc.seedasr.auc；1.0：volc.bigasr.auc；极速版：volc.bigasr.auc_turbo。"),
-      "fileAsrResourceId",
+      this.s.providers.volc,
+      "fileResourceId",
       "volc.seedasr.auc",
     )
     new Setting(containerEl)
@@ -162,9 +166,9 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
 
   private compatibleSettings(containerEl: HTMLElement): void {
     containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: "任意 OpenAI 兼容的 Chat Completions 接口，例如 DeepSeek、火山方舟、通义千问、OpenRouter 或本地模型服务。" })
-    this.text(new Setting(containerEl).setName("API 地址").setDesc("填到 /v1 或完整的 /chat/completions 地址。"), "llmBaseUrl", "https://api.deepseek.com/v1")
-    this.text(new Setting(containerEl).setName("模型"), "llmModel", "deepseek-flash")
-    this.secret(new Setting(containerEl).setName("API Key"), "llmApiKeySecret")
+    this.text(new Setting(containerEl).setName("API 地址").setDesc("填到 /v1 或完整的 /chat/completions 地址。"), this.s, "llmBaseUrl", "https://api.deepseek.com/v1")
+    this.text(new Setting(containerEl).setName("模型"), this.s, "llmModel", "deepseek-flash")
+    this.secret(new Setting(containerEl).setName("API Key"), this.s, "llmApiKeySecret")
     new Setting(containerEl)
       .setName("推理强度")
       .setDesc("发送 reasoning_effort；DeepSeek 同时开启思考模式。模型不支持推理时选关闭。")
@@ -219,7 +223,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
   }
 
   private async testAsr(button: HTMLButtonElement): Promise<void> {
-    const config = volcConfig(this.app, this.s)
+    const config = volcConfig(this.app.secretStorage, this.s.providers.volc, this.s.hotwords)
     const problem = volcConfigProblem(config)
     if (problem) return void new Notice(problem)
     button.disabled = true
