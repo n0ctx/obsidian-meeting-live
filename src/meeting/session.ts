@@ -45,6 +45,8 @@ export class MeetingSession extends Events {
   interims: Utterance[] = []
   asrState: AsrState = "idle"
   asrDetail: string | undefined
+  /** Why the current run has no recognizer, if it has none. */
+  private asrProblem: string | undefined
   saveState: SaveState = "saved"
   savedAt = Date.now()
   minutes: MinutesState = { status: "idle" }
@@ -195,11 +197,13 @@ export class MeetingSession extends Events {
     void this.writeIo(() => this.env.store.appendTranscript(this.transcriptPath, audioLine(path)))
   }
 
+  /** Resolves the recognizer afresh for every run, so settings changed between runs apply to the next one. */
   private startAsr(): void {
     const { connect, problem } = this.env.asrConnector()
+    this.asrProblem = problem
     this.asrDetail = problem
     if (!this.asr) {
-      this.asr = new AsrStreamer(connect, {
+      this.asr = new AsrStreamer({
         onFinal: (u) => this.onFinal(u),
         onInterim: (list) => {
           this.interims = list
@@ -208,7 +212,7 @@ export class MeetingSession extends Events {
         onGap: (gap) => this.onGap(gap),
         onState: (state, detail) => {
           this.asrState = state
-          this.asrDetail = detail ?? (state === "disabled" ? problem : undefined)
+          this.asrDetail = detail ?? (state === "disabled" ? this.asrProblem : undefined)
           this.emitChange()
         },
         onLogId: (id) => {
@@ -217,9 +221,9 @@ export class MeetingSession extends Events {
       })
       this.asr.restore(this.utterances)
     }
-    this.asrState = this.asr.currentState
     this.runGapStart = this.meta.gaps.length
-    this.asr.begin(this.durationMs)
+    this.asr.begin(this.durationMs, connect)
+    this.asrState = this.asr.currentState
   }
 
   /** Stops capture and closes the run; status becomes paused, or stopping for a full stop. */

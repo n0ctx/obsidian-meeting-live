@@ -62,16 +62,16 @@ export class AsrStreamer {
   private ending = false
   private generation = 0
 
-  private readonly connect: AsrConnect | null
+  /** The connector of the current run; a new run may bring a different one. */
+  private connect: AsrConnect | null = null
   private readonly events: AsrEvents
 
-  constructor(connect: AsrConnect | null, events: AsrEvents, options: Partial<AsrOptions> = {}) {
-    this.connect = connect
+  constructor(events: AsrEvents, options: Partial<AsrOptions> = {}) {
     this.events = events
     this.options = { ...DEFAULTS, ...options }
     this.ring = new PcmRing(this.options.ringSeconds * ASR_RATE)
     this.chunk = (this.options.chunkMs / 1000) * ASR_RATE
-    this.state = connect ? "idle" : "disabled"
+    this.state = "idle"
   }
 
   get currentState(): AsrState {
@@ -95,8 +95,12 @@ export class AsrStreamer {
     }
   }
 
-  /** Starts a recording run at the given timeline position. */
-  begin(positionMs: number): void {
+  /**
+   * Starts a recording run at the given timeline position, recognizing through `connect` (null: no recognizer
+   * is available, so the run is recorded as a gap). The buffer and the finals already seen carry over between runs.
+   */
+  begin(positionMs: number, connect: AsrConnect | null): void {
+    this.connect = connect
     const position = msToSamples(positionMs)
     if (this.ring.end !== position) this.ring.seek(position)
     this.running = true
@@ -104,7 +108,8 @@ export class AsrStreamer {
     this.cursor = position
     this.retryIndex = 0
     if (!this.options.manualTicks) this.tickTimer = window.setInterval(() => this.tick(), this.options.tickMs)
-    if (this.connect) void this.open("connecting")
+    if (connect) void this.open("connecting")
+    else this.setState("disabled")
   }
 
   push(samples: Int16Array): void {
@@ -133,9 +138,10 @@ export class AsrStreamer {
     if (this.connecting) await this.connecting
     if (this.state === "live" && this.connection) {
       while (this.ring.end - this.cursor > 0) this.send(Math.min(this.chunk, this.ring.end - this.cursor), false)
+      let timeout: number | undefined
       const done = new Promise<void>((resolve) => {
         this.finalWaiter = resolve
-        window.setTimeout(resolve, this.options.finalTimeoutMs)
+        timeout = window.setTimeout(resolve, this.options.finalTimeoutMs)
       })
       try {
         this.connection.sendAudio(new Int16Array(0), true)
@@ -143,6 +149,7 @@ export class AsrStreamer {
       } catch {
         // The socket closed while finishing; remaining interims are committed below.
       }
+      window.clearTimeout(timeout)
       this.finalWaiter = undefined
       this.dropConnection()
     }
