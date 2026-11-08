@@ -12,7 +12,7 @@ The primary user is the author: someone who runs investment interviews and inter
 
 ## Product Purpose
 
-Meeting Live is an Obsidian community plugin that turns a Markdown note into a live meeting workspace: local recording, real-time streaming transcription (Volcengine or Deepgram), AI stage summaries written into the note, formal notes from a prompt the user controls, and notes generated from an existing recording (Volcengine or any OpenAI-compatible transcription service). The user brings their own speech and language-model accounts. Success means the user can run a meeting without leaving the note and trust that nothing (audio, transcript, summary) is lost.
+Meeting Live is an Obsidian community plugin that turns a Markdown note into a live meeting workspace: local recording, real-time streaming transcription (Volcengine, Alibaba Cloud Bailian, AssemblyAI or Deepgram), AI stage summaries written into the note, formal notes from a prompt the user controls, and notes generated from an existing recording (Volcengine, Alibaba Cloud Bailian, AssemblyAI, Deepgram or any OpenAI-compatible transcription service). The user brings their own speech and language-model accounts. Success means the user can run a meeting without leaving the note and trust that nothing (audio, transcript, summary) is lost.
 
 ## Positioning
 

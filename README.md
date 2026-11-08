@@ -24,6 +24,8 @@ You choose a service for each role in **Settings → Meeting Live**. Credentials
 | Service | What to fill in | Notes |
 | :-- | :-- | :-- |
 | Volcengine | An API key (new console), or an App ID and Access Token (old console); the Resource ID of the streaming service you enabled, such as `volc.seedasr.sauc.duration` | The WebSocket address is prefilled. Supports hotwords and a sentence-pause setting. The language is detected by the service. |
+| Alibaba Cloud Bailian | An API key, and the region it belongs to (Mainland China or International); keys are created in the [Model Studio console](https://www.alibabacloud.com/help/en/model-studio/get-api-key) | The model is prefilled with `qwen-audio-3.1-asr-flash-streaming`, the one the documentation recommends for meetings; it takes the hotwords list. The language follows the **Recognition language** setting; auto-detect lets the service decide. No speaker labels while streaming. |
+| AssemblyAI | An API key from the [dashboard](https://www.assemblyai.com/dashboard/home) | The model is prefilled with `universal-3-5-pro`, which lists Mandarin and Japanese among its languages and handles several languages in one meeting without a setting. Takes the hotwords list. An option labels speakers while streaming. A region choice (default or EU) keeps data in the EU. Billing follows how long the connection stays open. |
 | Deepgram | An API key; the model (prefilled with `nova-3`) | The language follows the **Recognition language** setting; auto-detect uses Deepgram's multilingual mode. An option labels speakers, but for now they are only kept in the recognition result, not shown on the card. Change the WebSocket address only for a self-hosted server. |
 
 ### Recorded files (Generate notes from a recording)
@@ -31,6 +33,9 @@ You choose a service for each role in **Settings → Meeting Live**. Credentials
 | Service | What to fill in | Notes |
 | :-- | :-- | :-- |
 | Volcengine | The same credentials as above; the Resource ID of the file service, such as `volc.seedasr.auc` | Separates speakers. |
+| Alibaba Cloud Bailian | The same key and region as above | Uses `fun-asr`, which separates speakers (mono recordings, best within 2 hours). The file goes to Alibaba Cloud's temporary storage first (kept 48 hours, up to 1 GB; the documentation calls it suitable for development and testing), then a task is submitted and the transcript downloaded. |
+| AssemblyAI | The same key and region as above | Uploads the file, then waits for the transcript, with speaker labels on request. Takes files up to 2.2 GB. |
+| Deepgram | The same key, model and address as live transcription | Timed sentences, with speaker numbers when you ask for speakers. The language follows **Recognition language**; auto-detect picks the dominant language. Files up to 2 GB; processing over 10 minutes times out, so very long recordings should be cut shorter. |
 | OpenAI-compatible | The API address up to `/v1`, a model, and an API key | For OpenAI use `https://api.openai.com/v1` with `whisper-1`; for Groq `https://api.groq.com/openai/v1` with `whisper-large-v3`; for a local Whisper server its own address, where the key can stay empty. `gpt-4o-transcribe-diarize` separates speakers; `gpt-*-transcribe` returns text without times. A file size limit can be set for servers that differ from OpenAI's 25 MB. |
 
 Recordings over the size limit are compressed locally first, and if still too large are cut into timed pieces and uploaded in turn.
@@ -67,8 +72,8 @@ Network use. The plugin contacts only the services you configure, and each only 
 
 | Role | What is sent | Where |
 | :-- | :-- | :-- |
-| Live transcription | Your audio, streamed while recording | The host of the live service (Volcengine: `openspeech.bytedance.com`; Deepgram: `api.deepgram.com`), or the address you set |
-| Recorded files | The audio file you pick, uploaded once | Volcengine `openspeech.bytedance.com`, or the host of your OpenAI-compatible API address |
+| Live transcription | Your audio, streamed while recording | The host of the live service (Volcengine: `openspeech.bytedance.com`; Alibaba Cloud Bailian: `dashscope.aliyuncs.com` or `dashscope-intl.aliyuncs.com`; AssemblyAI: `streaming.assemblyai.com` or `streaming.eu.assemblyai.com`; Deepgram: `api.deepgram.com`), or the address you set |
+| Recorded files | The audio file you pick, uploaded once | Volcengine `openspeech.bytedance.com`; Alibaba Cloud Bailian `dashscope.aliyuncs.com` or `dashscope-intl.aliyuncs.com` (the file also passes through Alibaba Cloud's temporary storage, and the transcript comes back from a signed address on Alibaba Cloud storage); AssemblyAI `api.assemblyai.com` or `api.eu.assemblyai.com`; Deepgram `api.deepgram.com`; or the host of your OpenAI-compatible API address |
 | Summaries and minutes | Transcript text, stage summaries and, for minutes, the notes you choose | The host of your LLM API address |
 
 - **Consent per destination.** Before anything is sent, a dialog lists the destinations and what each receives. Agreement is recorded per role and host, so changing a service or an address to a host you have not agreed to asks again. This also applies to minutes and summaries of a meeting that has finished: if the model's host changed since the recording, nothing is sent until you confirm.
@@ -99,7 +104,7 @@ npm run build   # type check and production build
 node --import ./tests/support/register.mjs dev/mock-server.ts 8790   # local stand-in for the speech and model services
 ```
 
-The mock server speaks the wire formats of Volcengine, Deepgram, OpenAI-style transcription and an OpenAI-compatible model, so nothing needs a paid key. The loader stands in for Obsidian's module, which the shared code imports.
+The mock server speaks the wire formats of Volcengine, Alibaba Cloud Bailian, AssemblyAI, Deepgram, OpenAI-style transcription and an OpenAI-compatible model, so nothing needs a paid key. The loader stands in for Obsidian's module, which the shared code imports.
 
 ## License
 
