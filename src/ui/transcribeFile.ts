@@ -1,4 +1,5 @@
 import { FuzzySuggestModal, Modal, Notice, TFile, setIcon, type App } from "obsidian"
+import { inBackground } from "../background.ts"
 import { DECODABLE_EXTENSIONS } from "../audio/transcode.ts"
 import { t } from "../i18n/index.ts"
 import { TranscribeJob, type AudioSource, type TranscribeDeps, type TranscribeJobs } from "./transcribeJob.ts"
@@ -118,10 +119,15 @@ export class TranscribeFileModal extends Modal {
       if (llmProblem) return void new Notice(t("transcribe.llmProblem", llmProblem))
       const job = new TranscribeJob(this.app, this.deps, this.target, source, current, { speakers: speakers.checked, writeUp: writeUp.checked })
       start.disabled = true
-      if (await job.launch(this.jobs)) this.close()
-      else start.disabled = false
+      try {
+        if (await job.launch(this.jobs)) return this.close()
+      } catch (error) {
+        start.disabled = false
+        throw error
+      }
+      start.disabled = false
     }
-    start.addEventListener("click", () => void begin())
+    start.addEventListener("click", () => inBackground(begin()))
   }
 
   override onClose(): void {

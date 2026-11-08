@@ -259,8 +259,9 @@ export class MeetingSession extends Events {
     const recorder = this.recorder
     this.capture = undefined
     this.recorder = undefined
-    await capture?.close()
-    await recorder?.close()
+    // A device that will not release must not keep the file from being closed or recognition from ending: the card says what failed.
+    await capture?.close().catch((error: Error) => (this.error = error.message))
+    await recorder?.close().catch((error: Error) => (this.error = t("recorder.write", error.message)))
     this.liveSegment = undefined
     await this.asr?.end()
     this.levels.fill(0)
@@ -305,7 +306,8 @@ export class MeetingSession extends Events {
     void (async () => {
       await broken?.close().catch(() => undefined)
       if (this.liveSegment) this.liveSegment = undefined
-      if (this.meta.status === "recording") await this.openSegment(capture, "wav")
+      // No new file to continue in (disk full, folder gone): say so, since the audio is no longer being saved.
+      if (this.meta.status === "recording") await this.openSegment(capture, "wav").catch((e: Error) => (this.error = t("recorder.write", e.message)))
       this.emitChange()
     })()
   }
@@ -403,6 +405,9 @@ export class MeetingSession extends Events {
         await this.runSummary(record)
         await this.updateOverview()
       }
+    } catch (error) {
+      // Callers start the queue and do not wait for it; what a record's own handling missed is logged, not an unhandled rejection.
+      console.error("[meeting-live]", error)
     } finally {
       this.queueRunning = false
     }
@@ -681,8 +686,8 @@ export class MeetingSession extends Events {
   /** Called on plugin unload. Closes files promptly; anything unfinished is repaired on next launch. */
   shutdown(): void {
     if (this.ticker) window.clearInterval(this.ticker)
-    void this.capture?.close()
-    void this.recorder?.close()
+    this.capture?.close().catch(() => undefined)
+    this.recorder?.close().catch(() => undefined)
     this.asr?.dispose()
     if (this.saveTimer) window.clearTimeout(this.saveTimer)
   }

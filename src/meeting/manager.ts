@@ -25,15 +25,19 @@ export class MeetingManager extends Events {
 
   /** Indexes meeting folders and repairs meetings interrupted by a crash or quit. */
   load(): Promise<void> {
-    this.ready ??= (async () => {
+    const ready = (this.ready ??= (async () => {
       for (const { folder, meta } of await this.store.scan()) {
         // Loaded sessions own their files; never "recover" a meeting that is live in memory.
         if (this.sessions.has(meta.id)) continue
         if (await MeetingSession.recover(this.store, meta)) await this.store.saveMeta(folder, meta)
         this.folders.set(meta.id, { folder, notePath: meta.notePath })
       }
-    })()
-    return this.ready
+    })())
+    // A scan that failed must not be remembered as the answer: the next call scans again.
+    ready.catch(() => {
+      if (this.ready === ready) this.ready = undefined
+    })
+    return ready
   }
 
   reindex(): Promise<void> {

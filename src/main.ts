@@ -1,4 +1,5 @@
 import { MarkdownView, Notice, Plugin, TFile, normalizePath, requestUrl, type Editor } from "obsidian"
+import { inBackground } from "./background.ts"
 import { ensureConsentFor, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
 import { t } from "./i18n/index.ts"
 import { resolveFile, resolveLive } from "./asr/providers/registry.ts"
@@ -69,7 +70,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       ctx.addChild(
         new JobBar(el, this.jobs, block, () => {
           const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath)
-          if (file instanceof TFile && block.id) void this.app.vault.process(file, (content) => removeJobBlock(content, block.id!))
+          if (file instanceof TFile && block.id) inBackground(this.app.vault.process(file, (content) => removeJobBlock(content, block.id!)))
         }, () => this.transcriptFolder().split("/").pop() ?? ""),
       )
     })
@@ -86,7 +87,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     this.registerInterval(window.setInterval(() => this.updateStatusBar(), 1000))
     this.updateStatusBar()
 
-    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => void this.manager.handleRename(oldPath, file.path)))
+    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => inBackground(this.manager.handleRename(oldPath, file.path))))
     this.registerEvent(this.app.vault.on("modify", (file) => void this.endDetachedMeeting(file.path)))
     this.registerEvent(this.app.vault.on("delete", (file) => void this.endDetachedMeeting(file.path)))
     this.registerEvent(
@@ -95,11 +96,11 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
           item
             .setTitle(t("cmd.insert"))
             .setIcon("audio-lines")
-            .onClick(() => view instanceof MarkdownView && void this.insertMeeting(editor, view)),
+            .onClick(() => view instanceof MarkdownView && inBackground(this.insertMeeting(editor, view))),
         )
       }),
     )
-    this.app.workspace.onLayoutReady(() => void this.manager.load())
+    this.app.workspace.onLayoutReady(() => inBackground(this.manager.load()))
   }
 
   override onunload(): void {
@@ -145,7 +146,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       target: this.llm().target,
       onSavePrompt: (prompt) => {
         this.settings.minutesPrompt = prompt
-        void this.saveSettings()
+        inBackground(this.saveSettings())
       },
       onDone: (path) => this.openPath(path),
     }).open()
@@ -189,11 +190,11 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       id: "insert-meeting",
       name: t("cmd.insert"),
       icon: "audio-lines",
-      editorCallback: (editor, view) => view instanceof MarkdownView && void this.insertMeeting(editor, view),
+      editorCallback: (editor, view) => view instanceof MarkdownView && inBackground(this.insertMeeting(editor, view)),
     })
     this.addRibbonIcon("audio-lines", t("cmd.ribbonInsert"), () => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView)
-      if (view) void this.insertMeeting(view.editor, view, true)
+      if (view) inBackground(this.insertMeeting(view.editor, view, true))
       else new Notice(t("notice.openNoteToInsert"))
     })
     this.addRibbonIcon("file-audio", t("cmd.ribbonTranscribe"), () => {

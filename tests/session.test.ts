@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { test } from "node:test"
+import { mock, test, type TestContext } from "node:test"
 import { AsrError, type AsrConnect, type AsrUtterance } from "../src/asr/contract.ts"
 import type { ResolvedLive } from "../src/asr/providers/registry.ts"
 import { AudioCapture } from "../src/audio/capture.ts"
@@ -27,7 +27,7 @@ function connector() {
   return { connect, sent, emit: (utterances: AsrUtterance[]) => emit(utterances) }
 }
 
-function setup(resolve: () => ResolvedLive) {
+function setup(resolve: () => ResolvedLive, override: Partial<SessionEnv> = {}) {
   const env = {
     store: {
       path: (folder: string, name: string) => `${folder}/${name}`,
@@ -42,6 +42,7 @@ function setup(resolve: () => ResolvedLive) {
     llm: () => ({ problem: "未配置", model: "", target: "", complete: async () => "" }),
     claim: () => undefined,
     release: () => undefined,
+    ...override,
   } as unknown as SessionEnv
   const meta = { id: "m-1", title: "访谈", notePath: "访谈.md", createdAt: "2026-10-27T14:30:00+08:00", summaries: [], gaps: [], segments: [], lastCutoffMs: 0 } as unknown as MeetingMeta
   return new MeetingSession(env, "m", meta, "")
@@ -113,7 +114,15 @@ test("retry now in the failed state resolves the recognizer afresh and loses nei
   const fixed: ResolvedLive = {
     id: "other",
     name: "其他服务",
-    connect: async () => ({ connection: { sendAudio: (pcm) => void sent.push(pcm.length), close: () => undefined } }),
+    connect: async (handlers) => ({
+      connection: {
+        sendAudio: (pcm, last) => {
+          sent.push(pcm.length)
+          if (last) handlers.onResult({ utterances: [] }, true)
+        },
+        close: () => undefined,
+      },
+    }),
   }
   const plan = [rejected, fixed]
   let calls = 0
@@ -159,4 +168,56 @@ test("retry now with settings that no longer resolve to a recognizer shows why a
   assert.equal(session.asrDetail, "未配置凭证")
   await session.pause()
   await session.stop()
+})
+
+const mockDevice = (t: TestContext, closeCapture: () => Promise<void> = async () => undefined) => {
+  t.mock.method(AudioCapture, "open", async () => ({ sampleRate: 16000, channels: 1, deviceLabel: "测试麦克风", close: closeCapture }) as unknown as AudioCapture)
+}
+const idle: ResolvedLive = { id: "volc", name: "火山引擎", connect: null, problem: "未配置凭证" }
+
+test("when the recorder fails and no new file can be opened, the card is told instead of a rejection going unseen", async (t) => {
+  mockDevice(t)
+  let created = 0
+  t.mock.method(SegmentRecorder, "create", async () => {
+    if (created++ > 0) throw new Error("磁盘已满")
+    return { write: () => undefined, close: async () => undefined }
+  })
+  const session = setup(() => idle)
+  await session.start()
+  ;(session as unknown as { onRecorderError(e: Error): void }).onRecorderError(new Error("编码失败"))
+  await settle()
+  assert.match(session.error ?? "", /磁盘已满/)
+  assert.equal(created, 2)
+  await session.pause()
+})
+
+test("a capture that will not close does not keep the recording file open or recognition running, and the card says why", async (t) => {
+  mockDevice(t, async () => {
+    throw new Error("设备忙")
+  })
+  let recorderClosed = false
+  t.mock.method(SegmentRecorder, "create", async () => ({ write: () => undefined, close: async () => void (recorderClosed = true) }))
+  const session = setup(() => idle)
+  await session.start()
+  await (session as unknown as { onDeviceLost(): Promise<void> }).onDeviceLost()
+  assert.equal(session.status, "paused")
+  assert.equal(recorderClosed, true)
+  assert.match(session.error ?? "", /设备忙/)
+  assert.equal(session.asrState, "disabled")
+})
+
+test("the summary queue, which callers start and do not wait for, never rejects", async () => {
+  const session = setup(() => idle, {
+    llm: () => {
+      throw new Error("设置读取失败")
+    },
+  })
+  session.meta.summaries.push({ index: 1, startMs: 0, endMs: 1000, trigger: "manual", status: "pending", attempts: 0, utterances: [] })
+  const logged = mock.method(console, "error", () => undefined)
+  try {
+    await session.runQueue()
+    assert.equal(logged.mock.calls.filter((c) => c.arguments[0] === "[meeting-live]").length, 1)
+  } finally {
+    logged.mock.restore()
+  }
 })

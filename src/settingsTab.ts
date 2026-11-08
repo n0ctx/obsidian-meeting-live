@@ -1,4 +1,5 @@
 import { Notice, PluginSettingTab, Setting, type App } from "obsidian"
+import { inBackground } from "./background.ts"
 import { ASR_LANGUAGES, asrLanguageName, type AsrLanguage } from "./asr/language.ts"
 import { asrProvider, fileProviders, liveProviders } from "./asr/providers/registry.ts"
 import type { AsrProvider } from "./asr/providers/types.ts"
@@ -28,7 +29,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
   }
 
   private save(): void {
-    void this.plugin.saveSettings()
+    inBackground(this.plugin.saveSettings())
   }
 
   override display(): void {

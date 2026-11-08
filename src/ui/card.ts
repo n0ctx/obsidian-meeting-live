@@ -1,4 +1,5 @@
 import { MarkdownRenderChild, Menu, Notice, TFile, setIcon, type App, type EventRef, type Events, type MarkdownPostProcessorContext } from "obsidian"
+import { inBackground } from "../background.ts"
 import { withLlmConsent, type Destination } from "../consent.ts"
 import { t, type Key } from "../i18n/index.ts"
 import type { LlmClient } from "../llm/client.ts"
@@ -92,7 +93,7 @@ export class MeetingCard extends MarkdownRenderChild {
   }
 
   override onload(): void {
-    void this.mount()
+    inBackground(this.mount())
   }
 
   private async mount(): Promise<void> {
@@ -101,7 +102,8 @@ export class MeetingCard extends MarkdownRenderChild {
     for (const type of ISOLATED_EVENTS) el.addEventListener(type, (e) => e.stopPropagation())
     const placeholder = el.createDiv({ cls: "ml-card is-loading" })
     placeholder.createDiv({ cls: "ml-loading-bar" })
-    const session = this.id ? await this.host.manager.get(this.id) : undefined
+    // A meeting that cannot be read (a damaged meeting.json) shows as missing, with the way to look again, instead of a card stuck loading.
+    const session = this.id ? await this.host.manager.get(this.id).catch((error: Error) => (console.error("[meeting-live]", error), undefined)) : undefined
     placeholder.remove()
     if (!session) {
       this.renderMissing()
@@ -152,12 +154,12 @@ export class MeetingCard extends MarkdownRenderChild {
       text.createDiv({ cls: "ml-missing-title", text: t("card.missing.title") })
       text.createDiv({ cls: "ml-missing-sub", text: t("card.missing.sub", this.id, this.host.settings.folder) })
       const retry = box.createEl("button", { cls: "ml-btn", text: t("card.missing.rescan") })
-      retry.addEventListener("click", () => void this.rescan())
+      retry.addEventListener("click", () => inBackground(this.rescan()))
     } else {
       text.createDiv({ cls: "ml-missing-title", text: t("card.unlinked.title") })
       text.createDiv({ cls: "ml-missing-sub", text: t("card.unlinked.sub") })
       const create = box.createEl("button", { cls: "ml-btn is-primary", text: t("card.unlinked.create") })
-      create.addEventListener("click", () => void this.createAndLink())
+      create.addEventListener("click", () => inBackground(this.createAndLink()))
     }
   }
 
@@ -255,7 +257,7 @@ export class MeetingCard extends MarkdownRenderChild {
     const session = this.session!
     const actions = createDiv({ cls: "ml-pane-actions" })
     this.iconButton(actions, "copy", t("card.copyAll"), () => {
-      void navigator.clipboard.writeText(this.transcript?.plainText() ?? "")
+      inBackground(navigator.clipboard.writeText(this.transcript?.plainText() ?? ""))
       new Notice(t("card.copied"))
     })
     this.iconButton(actions, "file-text", t("card.openRaw"), () => this.host.openPath(session.transcriptPath))
@@ -441,17 +443,17 @@ export class MeetingCard extends MarkdownRenderChild {
   }
 
   private summarizeNow(): void {
-    void this.host.summarize(this.session!)
+    inBackground(this.host.summarize(this.session!))
   }
 
   /** Runs an action that sends text to the model service once the user has agreed to where that is. */
   private withLlm(action: () => unknown): void {
-    void withLlmConsent((kinds) => this.host.ensureConsent(kinds), action)
+    inBackground(withLlmConsent((kinds) => this.host.ensureConsent(kinds), action))
   }
 
   /** Retries the recognizer, which may now be another service than the one the run began with: its host needs the user's agreement first. */
   private retryAsr(): void {
-    void this.host.ensureConsent(["live"]).then((agreed) => agreed && this.session?.retryAsr())
+    inBackground(this.host.ensureConsent(["live"]).then((agreed) => agreed && this.session?.retryAsr()))
   }
 
   private openMenu(event: MouseEvent): void {
@@ -461,7 +463,7 @@ export class MeetingCard extends MarkdownRenderChild {
     if (session.isLive && (session.asrState === "failed" || session.asrState === "reconnecting")) {
       menu.addItem((i) => i.setTitle(t("card.menu.reconnect")).setIcon("refresh-cw").onClick(() => this.retryAsr()))
     }
-    menu.addItem((i) => i.setTitle(t("card.menu.minutes")).setIcon("file-pen-line").onClick(() => void this.host.openMinutes(session)))
+    menu.addItem((i) => i.setTitle(t("card.menu.minutes")).setIcon("file-pen-line").onClick(() => inBackground(this.host.openMinutes(session))))
     menu.addSeparator()
     menu.addItem((i) => i.setTitle(t("card.menu.openRaw")).setIcon("captions").onClick(() => this.host.openPath(session.transcriptPath)))
     menu.addItem((i) => i.setTitle(platformText("reveal")).setIcon("folder-open").onClick(() => this.host.revealFolder(session)))
@@ -469,7 +471,7 @@ export class MeetingCard extends MarkdownRenderChild {
       i
         .setTitle(t("card.menu.copyId"))
         .setIcon("copy")
-        .onClick(() => void navigator.clipboard.writeText(session.id)),
+        .onClick(() => inBackground(navigator.clipboard.writeText(session.id))),
     )
     menu.addSeparator()
     menu.addItem((i) => i.setTitle(t("card.menu.settings")).setIcon("settings").onClick(() => this.host.openSettings()))
@@ -500,7 +502,7 @@ export class MeetingCard extends MarkdownRenderChild {
     } else if (!session.llmProblem && !session.llmConsented && (session.meta.summaries.some((s) => s.status === "pending") || (session.isLive && this.host.settings.autoSummary))) {
       tone = "warn"
       text = t("card.alert.consent", this.host.llm().target)
-      actions.push([t("card.alert.confirm"), () => void this.host.confirmLlm(session)])
+      actions.push([t("card.alert.confirm"), () => inBackground(this.host.confirmLlm(session))])
     } else if (!session.llmProblem) {
       const failed = session.meta.summaries.filter((s) => s.status === "failed")
       const overview = session.meta.overview
@@ -574,6 +576,6 @@ export class MeetingCard extends MarkdownRenderChild {
     minutes.createSpan({ text: running ? t("card.foot.generating") : t("card.foot.generate") })
     minutes.toggleClass("is-spinning", running)
     minutes.disabled = running || session.utterances.length === 0
-    minutes.addEventListener("click", () => void this.host.openMinutes(session))
+    minutes.addEventListener("click", () => inBackground(this.host.openMinutes(session)))
   }
 }

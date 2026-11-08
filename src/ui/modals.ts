@@ -1,4 +1,5 @@
 import { FuzzySuggestModal, Modal, Notice, TFile, setIcon, type App } from "obsidian"
+import { inBackground } from "../background.ts"
 import { t } from "../i18n/index.ts"
 import { DEFAULT_MINUTES_PROMPT, stripMeetingBlocks } from "../llm/minutes.ts"
 import type { Destination } from "../consent.ts"
@@ -153,31 +154,30 @@ export class MinutesModal extends Modal {
     buttons.createEl("button", { text: t("common.cancel") }).addEventListener("click", () => this.close())
     const go = buttons.createEl("button", { cls: "mod-cta", text: t("minutes.generate") })
     go.disabled = session.utterances.length === 0
-    go.addEventListener("click", () => void generate())
+    go.addEventListener("click", () => inBackground(generate()))
     const generate = async () => {
       if (save.checked) this.onSavePrompt(prompt.value)
       go.disabled = true
       go.setText(t("minutes.generating"))
       status.setText(t("minutes.waiting"))
-      const notes: { path: string; content: string }[] = []
-      for (const path of this.notes) {
-        const file = this.app.vault.getAbstractFileByPath(path)
-        if (file instanceof TFile) notes.push({ path, content: stripMeetingBlocks(await this.app.vault.cachedRead(file)) })
+      try {
+        const notes: { path: string; content: string }[] = []
+        for (const path of this.notes) {
+          const file = this.app.vault.getAbstractFileByPath(path)
+          if (file instanceof TFile) notes.push({ path, content: stripMeetingBlocks(await this.app.vault.cachedRead(file)) })
+        }
+        const path = await session.generateMinutes(prompt.value, notes, (text) => status.setText(text))
+        new Notice(t("minutes.done"))
+        this.onDone(path)
+        this.close()
+      } catch (error) {
+        const message = (error as Error).message
+        new Notice(t("minutes.failed", message))
+        status.setText(message)
+        status.addClass("is-error")
+        go.disabled = false
+        go.setText(t("common.retry"))
       }
-      session
-        .generateMinutes(prompt.value, notes, (text) => status.setText(text))
-        .then((path) => {
-          new Notice(t("minutes.done"))
-          this.onDone(path)
-          this.close()
-        })
-        .catch((error: Error) => {
-          new Notice(t("minutes.failed", error.message))
-          status.setText(error.message)
-          status.addClass("is-error")
-          go.disabled = false
-          go.setText(t("common.retry"))
-        })
     }
   }
 

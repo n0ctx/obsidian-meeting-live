@@ -1,4 +1,5 @@
 import { MarkdownRenderChild, setIcon, type EventRef } from "obsidian"
+import { inBackground } from "../background.ts"
 import { t, type Key } from "../i18n/index.ts"
 import { formatClock } from "../meeting/types.ts"
 import { type JobStage, type TranscribeJob, type TranscribeJobs } from "./transcribeJob.ts"
@@ -85,8 +86,8 @@ export class JobBar extends MarkdownRenderChild {
     if (job.stage === "failed") {
       setIcon(icon, "triangle-alert")
       main.createDiv({ cls: "ml-jobbar-detail", text: t("job.failedDetail", job.error ?? t("common.unknownError"), !!job.rawPath) })
-      this.action(bar, job.recognized ? t("job.retryWriteUp") : t("common.retry"), () => void job.launch(this.jobs), true)
-      this.action(bar, t("common.remove"), () => void this.jobs.dismiss(job))
+      this.action(bar, job.recognized ? t("job.retryWriteUp") : t("common.retry"), () => inBackground(job.launch(this.jobs)), true)
+      this.action(bar, t("common.remove"), () => inBackground(this.jobs.dismiss(job)))
       return
     }
     setIcon(icon, "loader")
