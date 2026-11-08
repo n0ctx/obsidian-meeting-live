@@ -186,7 +186,7 @@ export const zh = {
   "volc.settings.endWindow.name": "断句静音时长",
   "volc.settings.endWindow.desc": "说话停顿超过该时长即确认一句，单位毫秒，最小 200。",
   "volc.settings.fileResource.name": "录音文件识别 Resource ID",
-  "volc.settings.fileResource.desc": "命令「转写录音文件到当前笔记」使用，凭证与上方相同。2.0：volc.seedasr.auc；1.0：volc.bigasr.auc；极速版：volc.bigasr.auc_turbo。",
+  "volc.settings.fileResource.desc": "命令「录音生成访谈记录（写入当前笔记）」使用，凭证与上方相同。2.0：volc.seedasr.auc；1.0：volc.bigasr.auc；极速版：volc.bigasr.auc_turbo。",
   "settings.liveTest.name": "测试识别连接",
   "settings.liveTest.desc": "建立一次连接并发送 1 秒静音，会产生极少量计费时长。",
   "deepgram.settings.heading": (name: string) => `${name}实时识别`,
