@@ -3,6 +3,7 @@
 //   https://developers.deepgram.com/docs/understand-endpointing-interim-results  (interim and final results)
 //   https://developers.deepgram.com/docs/audio-keep-alive  (word times follow the audio, not the wall clock)
 //   https://developers.deepgram.com/docs/diarization  (a `speaker` integer on each word; `diarize=true` still works on streaming though deprecated for `diarize_model`)
+import { CJK } from "../../cjk.ts"
 import type { AsrUpdate, AsrUtterance } from "../../contract.ts"
 
 /**
@@ -21,8 +22,6 @@ interface RawWord {
   end?: unknown
   speaker?: unknown
 }
-
-const CJK = /[⺀-鿿豈-﫿＀-￯]/
 
 /** Words are separated by spaces except between CJK characters, which Deepgram returns one by one. */
 function joinWords(words: string[]): string {
