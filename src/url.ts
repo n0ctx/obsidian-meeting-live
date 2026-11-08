@@ -7,6 +7,12 @@ export function hostOf(url: string): string {
   }
 }
 
+/** Whether a host (with or without port) is this very machine: nothing sent to it leaves the computer. */
+export function isLoopbackHost(host: string): boolean {
+  const name = host.replace(/:\d+$/, "").toLowerCase()
+  return name === "localhost" || name === "[::1]" || /^127(\.\d{1,3}){1,3}$/.test(name)
+}
+
 /** Whether a host (with or without port) is this machine or a private network address, where a key is not needed. */
 export function isLocalHost(host: string): boolean {
   const name = host.replace(/:\d+$/, "").toLowerCase()

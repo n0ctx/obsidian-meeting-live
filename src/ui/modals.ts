@@ -33,9 +33,9 @@ export class ConsentModal extends Modal {
     }
     item("hard-drive", t("consent.local.title"), t("consent.local.text"))
     for (const d of this.destinations) {
-      if (d.kind === "live") item("captions", t("consent.live.title", d.name), t("consent.live.text", d.name, d.host))
-      else if (d.kind === "file") item("file-audio", t("consent.file.title", d.name), t("consent.file.text", d.name, d.host))
-      else item("send", t("consent.llm.title"), t("consent.llm.text", d.host, d.detail ?? ""))
+      if (d.kind === "live") d.local ? item("captions", t("consent.live.localTitle", d.name), t("consent.live.localText", d.name, d.host)) : item("captions", t("consent.live.title", d.name), t("consent.live.text", d.name, d.host))
+      else if (d.kind === "file") d.local ? item("file-audio", t("consent.file.localTitle", d.name), t("consent.file.localText", d.name, d.host)) : item("file-audio", t("consent.file.title", d.name), t("consent.file.text", d.name, d.host))
+      else d.local ? item("send", t("consent.llm.localTitle"), t("consent.llm.localText", d.host, d.detail ?? "")) : item("send", t("consent.llm.title"), t("consent.llm.text", d.host, d.detail ?? ""))
     }
     list.createDiv({ cls: "ml-consent-note", text: t("consent.note") })
     const buttons = this.contentEl.createDiv({ cls: "modal-button-container" })

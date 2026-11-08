@@ -1,5 +1,5 @@
 import { MarkdownRenderChild, Menu, Notice, TFile, setIcon, type App, type EventRef, type Events, type MarkdownPostProcessorContext } from "obsidian"
-import { withLlmConsent, type Destination } from "../consent.ts"
+import { liveIsLocal, withLlmConsent, type Destination } from "../consent.ts"
 import { t, type Key } from "../i18n/index.ts"
 import type { LlmClient } from "../llm/client.ts"
 import type { MeetingManager } from "../meeting/manager.ts"
@@ -288,7 +288,7 @@ export class MeetingCard extends MarkdownRenderChild {
     check(true, "mic", t("card.check.recording"), t("card.check.recordingDetail", settings.audioFormat === "ogg" ? t("card.check.opus") : t("card.check.wav"), settings.folder))
     check(!asr.problem, "captions", t("card.check.live"), asr.problem ? t("card.check.liveProblem", asr.problem) : t("card.check.liveOk", asr.name))
     check(!llmProblem, "list", t("card.check.summary"), llmProblem ? t("card.check.summaryProblem", llmProblem) : t("card.check.summaryOk", settings.summaryIntervalMin, this.host.llm().model))
-    hero.createDiv({ cls: "ml-privacy", text: t("card.privacy", asr.name) })
+    hero.createDiv({ cls: "ml-privacy", text: t(liveIsLocal(settings) ? "card.privacyLocal" : "card.privacy", asr.name) })
   }
 
   private iconButton(parent: HTMLElement, icon: string, label: string, action: () => void): HTMLButtonElement {

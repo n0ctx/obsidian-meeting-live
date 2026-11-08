@@ -1,5 +1,6 @@
 import { Notice, PluginSettingTab, Setting, type App } from "obsidian"
 import { ASR_LANGUAGES, asrLanguageName, type AsrLanguage } from "./asr/language.ts"
+import { liveIsLocal } from "./consent.ts"
 import { asrProvider, fileProviders, liveProviders } from "./asr/providers/registry.ts"
 import type { AsrProvider } from "./asr/providers/types.ts"
 import { listInputDevices } from "./audio/capture.ts"
@@ -38,7 +39,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
 
     const privacy = containerEl.createDiv({ cls: "ml-settings-privacy" })
     privacy.createEl("strong", { text: t("settings.privacy.title") })
-    privacy.createSpan({ text: t("settings.privacy.body", asrProvider(this.s.liveProvider)?.name ?? this.s.liveProvider) })
+    privacy.createSpan({ text: t(liveIsLocal(this.s) ? "settings.privacy.bodyLocal" : "settings.privacy.body", asrProvider(this.s.liveProvider)?.name ?? this.s.liveProvider) })
 
     new Setting(containerEl).setName(t("settings.recording")).setHeading()
     textField(new Setting(containerEl).setName(t("settings.folder.name")).setDesc(t("settings.folder.desc")), this.s, "folder", () => this.save(), "Meetings")

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { destinations, ensureConsentFor, needsConsent, type Destination } from "../src/consent.ts"
+import { destinations, ensureConsentFor, liveIsLocal, needsConsent, type Destination } from "../src/consent.ts"
+import { tr } from "../src/i18n/index.ts"
+import { isLoopbackHost } from "../src/url.ts"
 import { loadSettings, storedSettings } from "../src/settings.ts"
 
 /** The author's 1.0.1 data.json, as far as consent and destinations are concerned. */
@@ -126,4 +128,36 @@ test("a flow that sends data to some destinations asks about those and records o
 test("the author, who agreed under 1.0.1, is not asked before recording to notes", async () => {
   const { settings } = loadSettings(authorData())
   assert.equal(await ensureConsentFor(settings, never, noSave, ["file", "llm"]), true)
+})
+
+test("a recognizer on this machine is still listed and agreed to, but marked as not leaving it; a LAN address is not", async () => {
+  const { settings } = loadSettings({ liveProvider: "sherpa-onnx" })
+  assert.deepEqual(destinations(settings).find((d) => d.kind === "live"), { kind: "live", name: "本地识别（sherpa-onnx）", host: "127.0.0.1:6006", local: true })
+  assert.equal(liveIsLocal(settings), true)
+  assert.equal(needsConsent(settings, ["live"]), true, "agreement is still asked for")
+  const yes = asker()
+  assert.equal(await ensureConsentFor(settings, yes.ask, noSave, ["live"]), true)
+  assert.deepEqual(settings.consent, ["live:127.0.0.1:6006"])
+  assert.equal(await ensureConsentFor(settings, never, noSave, ["live"]), true)
+
+  // Moving the recognizer to another machine is a new destination that leaves this computer, so it asks again.
+  settings.providers.sherpa.endpoint = "ws://192.168.1.20:6006"
+  assert.equal(liveIsLocal(settings), false)
+  assert.equal(destinations(settings).find((d) => d.kind === "live")?.local, undefined)
+  assert.equal(needsConsent(settings, ["live"]), true)
+  for (const endpoint of ["ws://localhost:6006", "ws://[::1]:6006", "ws://127.0.0.5:6006"]) {
+    settings.providers.sherpa.endpoint = endpoint
+    assert.equal(liveIsLocal(settings), true, endpoint)
+  }
+  for (const host of ["127.0.0.1:6006", "localhost", "[::1]:6006", "127.1.2.3"]) assert.equal(isLoopbackHost(host), true, host)
+  for (const host of ["192.168.1.20", "10.0.0.5:6006", "mac.local", "api.deepgram.com", "127.example.com"]) assert.equal(isLoopbackHost(host), false, host)
+})
+
+test("the privacy texts say audio stays on this machine for a local recognizer and keep saying it is streamed otherwise", () => {
+  for (const lang of ["zh", "en"] as const) {
+    assert.match(tr(lang, "card.privacyLocal", "X"), lang === "zh" ? /不会离开这台电脑/ : /does not leave this computer/)
+    assert.doesNotMatch(tr(lang, "card.privacy", "X"), lang === "zh" ? /不会离开/ : /not leave/)
+    assert.match(tr(lang, "settings.privacy.bodyLocal", "X"), lang === "zh" ? /不会离开这台电脑/ : /does not leave this computer/)
+    assert.match(tr(lang, "consent.live.localText", "X", "127.0.0.1:6006"), /127\.0\.0\.1:6006/)
+  }
 })
