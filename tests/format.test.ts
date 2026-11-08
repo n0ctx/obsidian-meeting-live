@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { decodeClientFrame, decodeServerFrame, encodeAudio, encodeFullRequest, encodeServerError, encodeServerResult } from "../src/asr/volcProtocol.ts"
+import { decodeClientFrame, decodeServerFrame, encodeAudio, encodeFullRequest, encodeServerError, encodeServerResult } from "../src/asr/providers/volc/protocol.ts"
 import { audioLine, gapLine, linkTranscript, parseTranscript, transcriptHeader, utteranceLine } from "../src/meeting/transcriptFormat.ts"
 import { formatClock, parseClock } from "../src/meeting/types.ts"
 

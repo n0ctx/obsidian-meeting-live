@@ -4,7 +4,7 @@
 //   POST /drop closes every ASR socket to simulate a network failure.
 import { createServer } from "node:http"
 import { WebSocketServer, type WebSocket } from "ws"
-import { decodeClientFrame, encodeServerResult } from "../src/asr/volcProtocol.ts"
+import { decodeClientFrame, encodeServerResult } from "../src/asr/providers/volc/protocol.ts"
 
 const port = Number(process.argv[2] ?? 8790)
 const SENTENCES = [

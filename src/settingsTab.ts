@@ -1,6 +1,6 @@
 import { Notice, PluginSettingTab, SecretComponent, Setting, type App } from "obsidian"
 import { listInputDevices } from "./audio/capture.ts"
-import { volcConfigProblem, volcConnector } from "./asr/volcConnection.ts"
+import { volcConfigProblem, volcConnector } from "./asr/providers/volc/live.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type MeetingLivePlugin from "./main.ts"

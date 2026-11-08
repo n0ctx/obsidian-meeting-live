@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import WebSocket, { type RawData } from "ws"
-import { AsrError, type AsrConnect, type AsrConnection } from "./streamer.ts"
-import { decodeServerFrame, encodeAudio, encodeFullRequest } from "./volcProtocol.ts"
+import { AsrError, type AsrConnect, type AsrConnection } from "../../streamer.ts"
+import { decodeServerFrame, encodeAudio, encodeFullRequest } from "./protocol.ts"
 
 export interface VolcConfig {
   endpoint: string

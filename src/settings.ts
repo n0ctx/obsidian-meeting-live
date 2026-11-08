@@ -1,5 +1,5 @@
 import type { App } from "obsidian"
-import type { VolcConfig } from "./asr/volcConnection.ts"
+import type { VolcConfig } from "./asr/providers/volc/live.ts"
 import type { CompatibleEffort, LlmConfig } from "./llm/client.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"

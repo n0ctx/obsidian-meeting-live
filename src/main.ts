@@ -1,5 +1,5 @@
 import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
-import { volcConfigProblem, volcConnector } from "./asr/volcConnection.ts"
+import { volcConfigProblem, volcConnector } from "./asr/providers/volc/live.ts"
 import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import { MeetingManager } from "./meeting/manager.ts"
