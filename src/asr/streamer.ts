@@ -37,7 +37,8 @@ export interface AsrOptions {
 export const DEFAULT_FLUSH_MS = 60_000
 
 const DEFAULTS: AsrOptions = {
-  ringSeconds: 180,
+  // Five minutes of 16 kHz audio (about 10 MB): at the slowest declared pace (1.25x) a 60 s backlog takes 4 minutes to drain, and a second outage during that must still fit.
+  ringSeconds: 300,
   chunkMs: 200,
   // What the streamer sent before providers declared a pace: three chunks per tick, which is 6x real time.
   pacing: { maxRate: 6 },

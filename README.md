@@ -102,7 +102,7 @@ The server is ready when it prints `Started!`. In the plugin the address is `ws:
 
 - The server listens on every network interface of the computer, not only on this one. Keep your firewall from admitting connections to port 6006 unless you mean to share it.
 - The language is whatever the model knows (Chinese and English together); there is no language setting and no speaker labels. Text is cut into lines at pauses of a second or more, so a line can hold more than one sentence.
-- If the server stops during a meeting, the plugin keeps recording, keeps the audio for up to three minutes and sends it when the server is back; longer outages are marked as gaps like any other provider's.
+- If the server stops during a meeting, the plugin keeps recording, keeps the audio for up to five minutes and sends it when the server is back; longer outages are marked as gaps like any other provider's.
 
 ### Recorded files: whisper.cpp
 

@@ -270,7 +270,7 @@ test("the default bound covers a minute of backlog at the slowest declared rate,
   const slowest = Math.min(...declared.map((d) => d.pacing.maxRate))
   // A backlog is flushed at the rate, so the audio the bound covers is bound × rate.
   assert.ok((DEFAULT_FLUSH_MS / 1000) * slowest >= 60, "a minute of backlog fits")
-  assert.ok((DEFAULT_FLUSH_MS / 1000) * slowest < 180, "a full ring does not")
+  assert.ok((DEFAULT_FLUSH_MS / 1000) * slowest < 300, "a full ring does not")
 })
 
 test("a resumed recording cuts the flush short: the unsent part is a gap and end() returns at once", { timeout: 20_000 }, async (t) => {
