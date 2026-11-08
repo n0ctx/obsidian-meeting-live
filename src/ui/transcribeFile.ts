@@ -53,7 +53,7 @@ export class TranscribeFileModal extends Modal {
     const extensions = [...Object.keys(asr.directFormats), ...DECODABLE_EXTENSIONS]
     contentEl.createDiv({
       cls: "ml-consent-text",
-      text: `先用${asr.name}把录音转成带说话人的文字，再由大模型整理成完整的访谈记录，写入「${this.target.basename}」末尾，不会覆盖已有内容。笔记中已有的速记会作为核对参考。开始后在后台进行，笔记中会显示进度横条，期间可以继续写作或切换笔记。`,
+      text: `先用${asr.name}把录音转成${asr.capabilities.diarization ? "带说话人的" : ""}文字，再由大模型整理成完整的访谈记录，写入「${this.target.basename}」末尾，不会覆盖已有内容。笔记中已有的速记会作为核对参考。开始后在后台进行，笔记中会显示进度横条，期间可以继续写作或切换笔记。`,
     })
 
     const pick = contentEl.createDiv({ cls: "ml-file-pick" })
@@ -79,7 +79,7 @@ export class TranscribeFileModal extends Modal {
     const llm = this.deps.llm()
     contentEl.createDiv({
       cls: "ml-privacy",
-      text: `录音会上传至${asr.name}录音文件识别服务（${asr.host}）；整理时转写文本和本笔记内容会发送到 ${llm.target}，使用设置中的「纪要 Prompt」。原始转写另存在「${this.deps.transcriptFolder()}」，不受 AI 改写。超过 ${Math.round(asr.capabilities.fileSizeLimit / 1024 / 1024)} MB 或格式不受支持的录音会先在本地压缩再上传。处理期间请勿退出 Obsidian。`,
+      text: `录音会上传至${asr.name}录音文件识别服务（${asr.host}）；整理时转写文本和本笔记内容会发送到 ${llm.target}，使用设置中的「纪要 Prompt」。原始转写另存在「${this.deps.transcriptFolder()}」，不受 AI 改写。超过 ${Math.round(asr.capabilities.fileSizeLimit / 1024 / 1024)} MB 或格式不受支持的录音会先在本地压缩再上传，压缩后仍超过的会按时间切成几段依次上传。处理期间请勿退出 Obsidian。`,
     })
     const footer = contentEl.createDiv({ cls: "modal-button-container" })
     footer.createEl("button", { text: "取消" }).addEventListener("click", () => this.close())
