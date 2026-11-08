@@ -1,6 +1,7 @@
 import { readSecret, type SecretReader } from "../../../secrets.ts"
 import { languageHint, type AsrLanguage } from "../../language.ts"
 import { readSection } from "../readSection.ts"
+import type { DeepgramFileConfig } from "./file.ts"
 import type { DeepgramConfig } from "./live.ts"
 
 export interface DeepgramSettings {
@@ -32,4 +33,11 @@ export function deepgramLanguage(language: AsrLanguage): string {
 
 export function deepgramConfig(secrets: SecretReader, settings: DeepgramSettings, language: AsrLanguage): DeepgramConfig {
   return { endpoint: settings.endpoint.trim(), apiKey: readSecret(secrets, settings.apiKeySecret), model: settings.model.trim(), language: deepgramLanguage(language), diarize: settings.diarize }
+}
+
+/** Where files go: the live endpoint's own host over HTTP(S), so a self-hosted server serves both. */
+export const deepgramFileUrlOf = (settings: DeepgramSettings): string => settings.endpoint.trim().replace(/^ws/, "http")
+
+export function deepgramFileConfig(secrets: SecretReader, settings: DeepgramSettings, language: AsrLanguage): DeepgramFileConfig {
+  return { url: deepgramFileUrlOf(settings), apiKey: readSecret(secrets, settings.apiKeySecret), model: settings.model.trim(), language: languageHint(language) }
 }

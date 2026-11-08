@@ -6,6 +6,7 @@ import { after, before, test } from "node:test"
 import { transcribeChunks } from "../src/asr/chunked.ts"
 import type { AsrConnect, AsrError } from "../src/asr/contract.ts"
 import type { FileAsrPost } from "../src/asr/fileAsr.ts"
+import { deepgramFileProvider } from "../src/asr/providers/deepgram/file.ts"
 import { assemblyAiFileProvider } from "../src/asr/providers/assemblyai/file.ts"
 import { assemblyAiConnector } from "../src/asr/providers/assemblyai/live.ts"
 import { dashScopeConnector } from "../src/asr/providers/dashscope/live.ts"
@@ -267,6 +268,19 @@ test("the AssemblyAI file flow against the mock: upload, submit, poll, with and 
   await assert.rejects(file("bad").transcribe(upload(5), { speakers: false, post, get }), /鉴权失败.*Authentication error/)
   const empty = { ...upload(1), data: new Uint8Array(0), bytes: 0 }
   await assert.rejects(file().transcribe(empty, { speakers: false, post, get, sleep: async () => undefined }), /识别失败.*Transcoding failed/)
+})
+
+test("the Deepgram file adapter against the mock: timed utterances, speakers on request, automatic language, and a refused key", async () => {
+  const file = (apiKey = "k", language: string | undefined = "zh") => deepgramFileProvider({ url: `${base}/v1/listen`, apiKey, model: "nova-3", language })
+  const plain = await file().transcribe(upload(30), { speakers: false, post })
+  assert.equal(plain.durationMs, 30_000)
+  assert.ok(plain.utterances.length >= 7)
+  assert.equal(plain.utterances[1].startMs, 4200)
+  assert.equal(plain.utterances.every((u) => u.speaker === undefined), true)
+  const labelled = await file("k", undefined).transcribe(upload(30), { speakers: true, post })
+  assert.deepEqual(labelled.utterances.slice(0, 3).map((u) => u.speaker), ["1", "2", "1"])
+  await assert.rejects(file("bad").transcribe(upload(5), { speakers: false, post }), /鉴权失败.*Invalid credentials/)
+  await assert.rejects(file().transcribe({ ...upload(1), data: new Uint8Array(0), bytes: 0 }, { speakers: false, post }), /HTTP 400.*audio is empty/)
 })
 
 test("the Volcengine and LLM routes still answer", async () => {

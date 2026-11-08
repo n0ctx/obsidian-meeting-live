@@ -6,6 +6,7 @@
 //   DashScope realtime ASR:       ws://127.0.0.1:<port>/api-ws/v1/inference   (Authorization: Bearer <key>; the key "bad" gets a 401)
 //   AssemblyAI streaming:         ws://127.0.0.1:<port>/v3/ws   (Authorization: <key>; the key "bad" is closed with 1008)
 //   AssemblyAI pre-recorded:      http://127.0.0.1:<port>/v2   (POST /upload, POST /transcript, GET /transcript/<id>; the key "bad" gets a 401)
+//   Deepgram pre-recorded:        http://127.0.0.1:<port>/v1/listen   (POST raw audio, Authorization: Token <key>; the key "bad" gets a 401)
 //   OpenAI-style transcription:   http://127.0.0.1:<port>/v1   (POST /audio/transcriptions; the key "bad" gets a 401)
 //   OpenAI-compatible LLM:        http://127.0.0.1:<port>/v1   (POST /chat/completions)
 //   POST /drop closes every ASR socket to simulate a network failure.
@@ -14,6 +15,7 @@ import { createServer, type IncomingMessage } from "node:http"
 import type { AddressInfo } from "node:net"
 import { WebSocketServer, type WebSocket } from "ws"
 import { decodeClientFrame, encodeServerResult } from "../src/asr/providers/volc/protocol.ts"
+import { deepgramPrerecorded } from "./mock/deepgramFile.ts"
 import { DASHSCOPE_PATH, dashscopeSession } from "./mock/dashscope.ts"
 import { ASSEMBLYAI_WS_PATH, assemblyaiRest, assemblyaiSession } from "./mock/assemblyai.ts"
 import { SENTENCES, SENTENCE_MS, readBody, stats } from "./mock/shared.ts"
@@ -69,6 +71,7 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(stats))
     return
   }
+  if (await deepgramPrerecorded(req, res)) return
   if (await assemblyaiRest(req, res, `http://127.0.0.1:${(server.address() as AddressInfo).port}`)) return
   if (req.method === "POST" && req.url?.endsWith("/audio/transcriptions")) {
     const body = await readBody(req)
