@@ -1,9 +1,9 @@
 {
   "id": "meeting-live",
   "name": "Meeting Live",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "minAppVersion": "1.11.4",
-  "description": "Embed a live meeting workspace in your notes: local recording, real-time Volcengine speech recognition, AI stage summaries, and meeting notes from recordings.",
+  "description": "Record meetings in a note with live transcription, AI stage summaries and meeting minutes. Bring your own speech recognition (Volcengine, Deepgram, OpenAI-compatible) and LLM service.",
   "author": "n0ctx",
   "authorUrl": "https://github.com/n0ctx",
   "isDesktopOnly": true
