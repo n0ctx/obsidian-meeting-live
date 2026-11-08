@@ -63,14 +63,13 @@ test("each finished stage is merged into the overview, which the next stage sees
   assert.match(prompts[3][1].content, /Current overview:\n经营: 第 1 版概览[^]*New stage summaries:\nStage 2 /)
   assert.deepEqual(session.meta.overview?.stages, [1, 2])
   assert.equal(session.meta.overview?.content?.paragraphs[0].text, "第 2 版概览")
-  assert.equal(session.overviewThroughMs, 600_000)
   await new Promise((r) => setTimeout(r, 0))
   const note = files["访谈.md"]
-  assert.match(note, /^```\n\n%% meeting-live-summary m-1 [^\n]*%%\n## AI 阶段摘要\n/m)
-  assert.ok(note.indexOf("### 会议概览 · 截至 10:00") < note.indexOf("### 阶段\n"))
-  assert.ok(note.lastIndexOf("### 阶段\n") < note.indexOf("%% /meeting-live-summary m-1 %%"))
+  assert.match(note, /^```\n\n%% meeting-live-summary m-1 %%\n\nAI 阶段摘要 · 截至 10:00 · /m)
+  assert.ok(note.indexOf("- **经营**：第 2 版概览") < note.indexOf("### 阶段 · "))
+  assert.ok(note.lastIndexOf("### 阶段 · ") < note.indexOf("%% /meeting-live-summary m-1 %%"))
   assert.match(note, /%% \/meeting-live-summary m-1 %%\n\n我的速记\n$/)
-  assert.equal(note.match(/## AI 阶段摘要/g)?.length, 1)
+  assert.equal(note.match(/AI 阶段摘要/g)?.length, 1)
   // The first line of each stage carries its anchor; the transcript times point at the stage or point citing them.
   assert.match(note, /^\*\*收入\*\* \[\[[^\]]*\]\]\n收入 3\.2 亿元 \^m-1-s1$/m)
   assert.match(files["m/原始转写.md"], /^\[\[访谈#\^m-1-s1\|00:00:01\]\] 今年收入/m)

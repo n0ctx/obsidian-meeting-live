@@ -490,14 +490,12 @@ export const zh = {
   "job.noteGone": (note: string) => `目标笔记「${note}」已被移动或删除`,
 
   // ---- text written into notes and files (worded in the note language)
-  "note.summaryHeading": "AI 阶段摘要",
-  "note.summaryCaution": (unverified: boolean) => `> [!caution] AI 生成，可能有遗漏或误读，以原始转写和录音为准。${unverified ? "==高亮==的数字在转写里没有找到，请核对。" : ""}`,
-  "note.regionMarker": "由 Meeting Live 自动更新，此区域内的修改会被覆盖",
+  "note.summaryHead": (clock: string) => `AI 阶段摘要 · 截至 ${clock} · 由 Meeting Live 自动更新，区域内的修改会被覆盖`,
+  "note.summaryFoot": (unverified: boolean) => `AI 生成，可能有遗漏或误读，以原始转写和录音为准。${unverified ? "==高亮==的数字在转写里没有找到，请核对。" : ""}`,
   "note.todo": "待办",
   "note.open": "未决",
   "note.stage": (n: number) => `阶段 ${n}`,
   "note.emptyStage": "本阶段没有可提炼的实质内容。",
-  "note.overview": (clock: string) => `会议概览 · 截至 ${clock}`,
   "note.topicSep": "：",
   "note.transcriptHeader": (provider: string) => `> [!info] 由${provider}实时语音识别生成的原始转写，按录音时间轴记录。时间点链接回会议笔记中对应的 AI 摘要；转写文字不会被改写。`,
   "note.gapLine": (from: string, to: string, reason: string) => `> [!warning] 转写缺口 ${from} – ${to}：${reason}。录音已保存，可回放该时段。`,
@@ -523,7 +521,6 @@ export const zh = {
   "note.writeUpInfo": (model: string, source: string, duration: string, time: string) => `> [!info] 访谈记录由 ${model} 根据录音「${source}」的转写整理（${duration ? `时长 ${duration}，` : ""}${time}）。发布前请对照原始转写核实关键事实与数字。`,
   "note.rawLink": (link: string) => `> 原始转写：${link}`,
   "format.shortDateTime": (month: number, day: number, time: string) => `${month}月${day}日 ${time}`,
-  "summaryMarker.hint": "AI 阶段摘要由 Meeting Live 自动更新，此区域内的修改会被覆盖",
   "store.desktopOnly": "Meeting Live 需要桌面版 Obsidian",
 
   // ---- the setting for the language of that text

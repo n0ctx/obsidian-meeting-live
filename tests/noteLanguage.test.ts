@@ -47,12 +47,12 @@ test("the summary in English has English labels and keeps what the model wrote",
   setLanguage("zh-CN")
   const { session } = fakeSession({ settings: { noteLanguage: "en" } })
   const md = session.noteSummary().markdown
-  for (const label of ["## AI stage summary", "> [!caution] AI-generated", "### Meeting overview · up to 00:30", "**To-do**", "**Open questions**", "### Stage 1", "### Stage 2", "### Stage 3", "This stage had nothing substantial to summarize."]) {
+  for (const label of ["AI stage summary · up to 00:30 · maintained by Meeting Live", "AI-generated: it may miss", "#### To-do", "### Stage 1 · 00:00–00:30", "### Stage 2 · 00:00–00:30", "### Stage 3 · 00:00–00:30", "This stage had nothing substantial to summarize."]) {
     assert.ok(md.includes(label), `missing ${label}`)
   }
   assert.match(md, /==Highlighted== figures were not found/)
   assert.match(md, /\*\*预算\*\*: 收入 3 亿/, "the topic separator follows the language")
-  assert.match(md, /### 渠道\n/, "a title the model gave stays as it is")
+  assert.match(md, /### 渠道 · 00:00–00:30\n/, "a title the model gave stays as it is")
   // None of the plugin's Chinese labels is left; what Chinese remains is the model's own text.
   for (const label of ["待办", "未决", "阶段", "会议概览", "截至", "AI 生成", "高亮", "没有可提炼"]) assert.ok(!md.includes(label), `${label} is still there`)
 })
@@ -136,16 +136,16 @@ test("a note holding a 1.0.1 summary region gets one region back in English, wit
   const legacyRegion = `${LEGACY_START}\n## AI 阶段摘要\n\n### 阶段 1\n\n**待办**\n- [x] 交方案 ¥==500万== [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]] ^${ID}-t9100\n- [ ] 补数据 [[Meetings/周会/周会 原始转写#^t9100-9900|00:09]]\n\n%% /meeting-live-summary ${ID} %%`
   const note = `# 周会\n\n\`\`\`meeting-live\nid: ${ID}\n\`\`\`\n\n${legacyRegion}\n\n我的速记\n`
   const { session } = fakeSession({ settings: { noteLanguage: "en" } })
-  const edit = placeSummary(note, ID, session.noteSummary().markdown, "en")!
+  const edit = placeSummary(note, ID, session.noteSummary().markdown)!
   const next = applyEdit(note, edit)
   assert.equal(count(next, `%% meeting-live-summary ${ID}`), 1, "one start marker")
   assert.equal(count(next, `%% /meeting-live-summary ${ID} %%`), 1, "one end marker")
-  assert.ok(next.includes(`%% meeting-live-summary ${ID} · Maintained by Meeting Live; edits inside this region are overwritten %%`))
-  assert.ok(!next.includes("由 Meeting Live 自动更新"))
+  assert.ok(next.includes(`%% meeting-live-summary ${ID} %%\n\nAI stage summary · up to 00:30 · maintained by Meeting Live`))
+  assert.ok(!next.includes("自动更新"))
   assert.match(next, /- \[x\] 交方案 .*00:09\]\]/, "the ticked to-do stays ticked")
   assert.match(next, /- \[ \] 补数据/)
   assert.ok(next.endsWith("\n\n我的速记\n"), "text around the region is untouched")
-  assert.ok(next.includes("**To-do**") && !next.includes("**待办**"))
+  assert.ok(next.includes("#### To-do") && !next.includes("待办"))
 })
 
 test("switching the note language back and forth never duplicates the region or loses a tick", async () => {
@@ -153,15 +153,15 @@ test("switching the note language back and forth never duplicates the region or 
   await session.publishSummary()
   const first = note.text
   assert.equal(count(first, "%% meeting-live-summary "), 1)
-  assert.ok(first.includes("**待办**") && first.includes("## AI 阶段摘要"))
+  assert.ok(first.includes("#### 待办") && first.includes("AI 阶段摘要 · 截至 00:30"))
   // The user ticks a to-do in the note.
   note.text = note.text.replace("- [ ] 交方案", "- [x] 交方案")
   settings.noteLanguage = "en"
   await session.publishSummary()
   assert.equal(count(note.text, "%% meeting-live-summary "), 1)
   assert.equal(count(note.text, "%% /meeting-live-summary "), 1)
-  assert.match(note.text, /\*\*To-do\*\*\n- \[x\] 交方案/)
-  assert.ok(!note.text.includes("**待办**"))
+  assert.match(note.text, /#### To-do\n- \[x\] 交方案/)
+  assert.ok(!note.text.includes("待办"))
   settings.noteLanguage = "zh"
   await session.publishSummary()
   assert.equal(note.text, first.replace("- [ ] 交方案", "- [x] 交方案"), "back in Chinese it reads exactly as the first time, with the tick")
@@ -176,7 +176,7 @@ test("a to-do ticked while the highlight sat beside the currency symbol stays ti
   const written = `${LEGACY_START}\n## AI 阶段摘要\n\n**待办**\n- [x] 交方案 ¥==500万== ${link} ^${ID}-t9100\n- [ ] 补数据 ${link}\n\n%% /meeting-live-summary ${ID} %%`
   const note = `\`\`\`meeting-live\nid: ${ID}\n\`\`\`\n\n${written}\n`
   const body = `## AI 阶段摘要\n\n**待办**\n- [ ] 交方案 ==¥500万== ${link} ^${ID}-t9100\n- [ ] 补数据 ${link}`
-  const next = applyEdit(note, placeSummary(note, ID, body, "zh")!)
+  const next = applyEdit(note, placeSummary(note, ID, body)!)
   assert.match(next, /- \[x\] 交方案 ==¥500万== /)
   assert.match(next, /- \[ \] 补数据/)
   assert.equal(count(next, "%% meeting-live-summary "), 1)
@@ -192,10 +192,9 @@ test("Live Preview recognizes the region markers of every version and language, 
   assert.equal(SUMMARY_MARKER_LINE.exec(LEGACY_START)?.[1], "")
   for (const other of ["%% a comment %%", `%% meeting-live-summary x-1 · text %%`, `text %% meeting-live-summary ${ID} %%`]) assert.ok(!SUMMARY_MARKER_LINE.test(other), other)
   // The markers the plugin writes now, in either language, are what the pattern was made for.
-  for (const lang of ["zh", "en"] as const) {
-    const region = summaryRegion(ID, "body", lang).split("\n")
-    assert.ok(SUMMARY_MARKER_LINE.test(region[0]) && SUMMARY_MARKER_LINE.test(region.at(-1)!))
-  }
+  const region = summaryRegion(ID, "body").split("\n")
+  assert.ok(SUMMARY_MARKER_LINE.test(region[0]) && SUMMARY_MARKER_LINE.test(region.at(-1)!))
+  assert.equal(region[0], `%% meeting-live-summary ${ID} %%`)
 })
 
 test("a folder setting with a trailing slash finds the existing transcript folder", () => {

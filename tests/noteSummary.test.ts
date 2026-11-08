@@ -28,7 +28,7 @@ test("nothing is written without a summary, without the block, or for another me
   assert.equal(placeSummary("# 周会\n\n正文\n", "m-1", "要点"), undefined)
   assert.equal(placeSummary(note("\n"), "m-2", "要点"), undefined)
   const both = `${note("\n")}\n\`\`\`meeting-live\nid: m-2\n\`\`\`\n`
-  assert.match(place(both, "二号要点", "m-2")!, /id: m-2\n```\n\n%% meeting-live-summary m-2 [^\n]*%%\n二号要点\n\n%% \/meeting-live-summary m-2 %%\n$/)
+  assert.match(place(both, "二号要点", "m-2")!, /id: m-2\n```\n\n%% meeting-live-summary m-2 %%\n\n二号要点\n\n%% \/meeting-live-summary m-2 %%\n$/)
 })
 
 test("to-dos ticked in the note stay ticked after a rewrite", () => {

@@ -36,7 +36,7 @@ export function meetingMeta(): MeetingMeta {
     ],
     overview: {
       stages: [1, 2, 3, 4],
-      content: { title: "", paragraphs: [{ topic: "预算", text: "收入 3 亿，毛利 40%。", t: 3200, unverified: ["40"] }], todos: [{ text: "交方案 ¥500万", t: 9100, unverified: ["500"] }], open: [] },
+      content: { title: "", paragraphs: [{ topic: "预算", text: "收入 3 亿，毛利 40%。", t: 3200, unverified: ["40"] }], todos: [{ text: "交方案 ¥500万", t: 9100, unverified: ["500"] }, { text: "补数据", t: 9100, unverified: [] }], open: [{ text: "是否扩招", t: 3200, unverified: [] }] },
     },
     lastCutoffMs: 30_000,
     asrLogIds: [],
