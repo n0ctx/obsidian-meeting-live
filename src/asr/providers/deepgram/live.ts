@@ -3,7 +3,9 @@
 //   https://developers.deepgram.com/guides/fundamentals/authenticating  (Authorization: Token <key>)
 //   https://developers.deepgram.com/docs/audio-keep-alive  (KeepAlive as a text frame every 3-5 s; 10 s without audio or KeepAlive closes the socket)
 //   https://developers.deepgram.com/docs/close-stream  (CloseStream: remaining finals, a Metadata message, then the server closes)
-//   https://developers.deepgram.com/docs/stt-troubleshooting-websocket-data-and-net-errors  (close codes; never send an empty frame)
+//   https://developers.deepgram.com/docs/stt-troubleshooting-websocket-data-and-net-errors  (close codes; never send an empty frame;
+//     KeepAlive alone does not prevent NET-0001, at least one audio message is needed; the `dg-request-id` response header is always present)
+//   https://developers.deepgram.com/docs/diarization  (`diarize` is deprecated for `diarize_model`, which streaming accepts as `v1` or `latest`)
 import WebSocket, { type RawData } from "ws"
 import { t } from "../../../i18n/index.ts"
 import { AsrError, type AsrConnect, type AsrConnection } from "../../contract.ts"
@@ -53,7 +55,9 @@ export function deepgramUrl(config: DeepgramConfig): string {
     endpointing: String(ENDPOINTING_MS),
     smart_format: "true",
   }
-  if (config.diarize) params.diarize = "true"
+  // `latest` is what the documentation recommends for new integrations; on streaming it is the v1 diarizer. `v2` is refused on streaming,
+  // and `diarize` must not be sent with it.
+  if (config.diarize) params.diarize_model = "latest"
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
   return url.toString()
 }
@@ -102,6 +106,9 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
       let endRequested = false
       let endAnnounced = false
       let lastSentAt = Date.now()
+      // A KeepAlive does not keep a socket that has never carried audio: Deepgram closes it with NET-0001 ten seconds after opening
+      // all the same, so none is sent before the first audio frame.
+      let audioSent = false
       let keepAlive: number | undefined
 
       const stopKeepAlive = () => {
@@ -126,7 +133,7 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
       const timer = window.setTimeout(() => fail(new AsrError(t("deepgram.timeout"), false)), HANDSHAKE_TIMEOUT_MS + 5000)
 
       socket.on("upgrade", (response) => {
-        // The request id header name is from memory of Deepgram's responses, not from the documentation; without it the log id is simply absent.
+        // Documented as present on every upgrade response; support asks for it. Absent behind a proxy that drops it, then the log id is simply missing.
         const value = response.headers["dg-request-id"]
         logId = Array.isArray(value) ? value[0] : value
       })
@@ -138,9 +145,9 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
       socket.on("open", () => {
         ready = true
         window.clearTimeout(timer)
-        // No audio flows while a run is paused or the backlog is being built up; the server hangs up after 10 s of nothing.
+        // Audio stops flowing while the backlog is built up or a run waits; the server hangs up after 10 s of nothing.
         keepAlive = window.setInterval(() => {
-          if (socket.readyState !== WebSocket.OPEN || Date.now() - lastSentAt < keepAliveMs) return
+          if (!audioSent || socket.readyState !== WebSocket.OPEN || Date.now() - lastSentAt < keepAliveMs) return
           socket.send(JSON.stringify({ type: "KeepAlive" }))
           lastSentAt = Date.now()
         }, Math.max(10, Math.floor(keepAliveMs / 3)))
@@ -151,6 +158,7 @@ export function deepgramConnector(config: DeepgramConfig, tuning: DeepgramTuning
             if (pcm.length > 0) {
               socket.send(Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength))
               lastSentAt = Date.now()
+              audioSent = true
             }
             if (last) {
               endRequested = true

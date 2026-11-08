@@ -16,10 +16,11 @@ after(() => sockets.forEach((close) => close()))
 interface Seen { frames: { binary: boolean; text: string; bytes: number }[]; url: string; headers: IncomingMessage["headers"]; socket?: WebSocket }
 
 /** A stand-in for Deepgram's /v1/listen that records what it receives and lets each test script the replies. */
-async function fakeDeepgram(behave: (ws: WebSocket, seen: Seen) => void = () => undefined, reject?: { status: number; body?: string }) {
+async function fakeDeepgram(behave: (ws: WebSocket, seen: Seen) => void = () => undefined, reject?: { status: number; body?: string }, responseHeaders: string[] = []) {
   const seen: Seen = { frames: [], url: "", headers: {} }
   const server = createServer()
   const wss = new WebSocketServer({ noServer: true })
+  wss.on("headers", (headers) => headers.push(...responseHeaders))
   server.on("upgrade", (req, socket, head) => {
     seen.url = req.url ?? ""
     seen.headers = req.headers
@@ -75,7 +76,10 @@ test("the stream asks for raw 16 kHz mono PCM with interim results and endpointi
   assert.equal(server.seen.headers.authorization, "Token test-key")
   connection.close()
 
-  assert.equal(new URL(deepgramUrl(config(server.endpoint, { diarize: true }))).searchParams.get("diarize"), "true")
+  const diarized = new URL(deepgramUrl(config(server.endpoint, { diarize: true }))).searchParams
+  assert.equal(diarized.get("diarize_model"), "latest", "the documented parameter, which streaming accepts as v1 or latest")
+  assert.equal(diarized.has("diarize"), false, "the deprecated boolean is not sent, and never together with diarize_model")
+  assert.equal(new URL(deepgramUrl(config(server.endpoint))).searchParams.has("diarize_model"), false)
   assert.equal(new URL(deepgramUrl(config(server.endpoint, { language: "multi" }))).searchParams.get("language"), "multi")
   // A key is not sent when there is none (a local test server), and it is only demanded for remote hosts.
   const open = await fakeDeepgram()
@@ -127,11 +131,18 @@ test("after connecting, an undecodable-audio close (1008) and an Error message a
   }
 })
 
-test("a KeepAlive text frame is sent while no audio flows, none while audio does, and none after the connection is closed", async () => {
+test("no KeepAlive goes out before the first audio frame, then one while no audio flows, none while audio does, and none after the connection is closed", async () => {
   const server = await fakeDeepgram()
   const { connection } = await deepgramConnector(config(server.endpoint), { keepAliveMs: 60 })(handlers().h)
   await waitFor(() => !!server.seen.socket)
+  // Deepgram closes a socket that has never carried audio after 10 s whatever else it receives, so the timer holds its KeepAlive back.
+  await new Promise((r) => setTimeout(r, 250))
+  assert.equal(server.seen.frames.length, 0, "nothing is sent before audio")
+
+  connection.sendAudio(pcm(100), false)
   await waitFor(() => server.seen.frames.filter((f) => f.text === '{"type":"KeepAlive"}').length >= 3)
+  assert.equal(server.seen.frames[0].binary, true, "the audio frame is the first thing the server sees")
+  assert.equal(server.seen.frames[0].bytes, 3200)
   const keepAlives = server.seen.frames.filter((f) => !f.binary)
   assert.ok(keepAlives.every((f) => f.text === '{"type":"KeepAlive"}'), "KeepAlive is JSON text, never a binary frame")
 
@@ -231,4 +242,16 @@ test("old settings gain Deepgram's defaults, its stored values are read back, an
     assert.equal(config.language, code)
     assert.equal(new URL(deepgramUrl(config)).searchParams.get("language"), code)
   }
+})
+
+test("the log id is the dg-request-id response header, and absent when the response has none", async () => {
+  const withHeader = await fakeDeepgram(undefined, undefined, ["dg-request-id: 3f1c9a52-0000-4000-8000-000000000001"])
+  const first = await deepgramConnector(config(withHeader.endpoint))(handlers().h)
+  assert.equal(first.logId, "3f1c9a52-0000-4000-8000-000000000001")
+  first.connection.close()
+
+  const without = await fakeDeepgram()
+  const second = await deepgramConnector(config(without.endpoint))(handlers().h)
+  assert.equal(second.logId, undefined)
+  second.connection.close()
 })

@@ -2,7 +2,7 @@
 //   https://developers.deepgram.com/reference/speech-to-text/listen-streaming  (Results, Metadata, Error)
 //   https://developers.deepgram.com/docs/understand-endpointing-interim-results  (interim and final results)
 //   https://developers.deepgram.com/docs/audio-keep-alive  (word times follow the audio, not the wall clock)
-//   https://developers.deepgram.com/docs/diarization  (a `speaker` integer on each word; `diarize=true` still works on streaming though deprecated for `diarize_model`)
+//   https://developers.deepgram.com/docs/diarization  (a `speaker` integer on each word, for `diarize_model` and the deprecated `diarize` alike)
 import type { AsrUpdate, AsrUtterance } from "../../contract.ts"
 
 /**
@@ -34,7 +34,7 @@ const scalar = (value: unknown): string => (typeof value === "string" || typeof 
 
 const ms = (seconds: unknown): number => Math.round(Number(seconds) * 1000)
 
-/** Splits one result into runs of a single speaker, using the speaker number on each word (diarize=true). */
+/** Splits one result into runs of a single speaker, using the speaker number on each word (diarization on). */
 function speakerRuns(words: RawWord[], final: boolean): AsrUtterance[] {
   const runs: { speaker: number; words: string[]; start: number; end: number }[] = []
   for (const w of words) {
