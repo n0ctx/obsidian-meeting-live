@@ -15,6 +15,8 @@ export interface OpenAiFileConfig {
   /** ISO 639-1 code, or undefined to let the service detect it. */
   language: string | undefined
   fileSizeLimit: number
+  /** Text that steers the first window of recognition (the API's `prompt`); only local Whisper servers set it. */
+  prompt?: string
 }
 
 /**
@@ -117,6 +119,7 @@ export function parseTranscription(raw: string, speakers: boolean): FileAsrResul
 /** Speakers, timestamps and chunking are asked of the service only for the formats that give them. */
 function fields(config: OpenAiFileConfig, format: ResponseFormat): [string, string][] {
   const list: [string, string][] = [["model", config.model], ["response_format", format]]
+  if (config.prompt) list.push(["prompt", config.prompt])
   if (format === "verbose_json") list.push(["timestamp_granularities[]", "segment"])
   if (format === "diarized_json") list.push(["chunking_strategy", "auto"])
   // The diarizing model takes no language hint in the guide's description, and gpt-transcribe takes a `languages` array instead of

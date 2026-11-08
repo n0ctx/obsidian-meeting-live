@@ -23,7 +23,7 @@ test("it requests <address>/audio/transcriptions with the language, no Authoriza
   const { settings } = loadSettings({ fileProvider: "whisper-local", asrLanguage: "zh" })
   const requests: { url: string; headers: Record<string, string>; body: string }[] = []
   const post: FileAsrPost = async (url, headers, body) => {
-    requests.push({ url, headers, body: Buffer.from(body as ArrayBuffer).toString("latin1") })
+    requests.push({ url, headers, body: Buffer.from(body as ArrayBuffer).toString("utf8") })
     return { status: 200, headers: {}, text: JSON.stringify({ duration: 3.2, text: "你好世界", segments: [{ start: 0, end: 3.2, text: "你好世界" }] }) }
   }
   const file = resolveFile({ secrets: noSecrets, settings })
@@ -31,8 +31,19 @@ test("it requests <address>/audio/transcriptions with the language, no Authoriza
   assert.equal(requests[0].url, "http://127.0.0.1:8080/v1/audio/transcriptions")
   assert.equal(requests[0].headers.Authorization, undefined)
   assert.match(requests[0].body, /name="language"\r\n\r\nzh\r\n/)
+  assert.match(requests[0].body, /name="prompt"\r\n\r\n以下是普通话的句子。\r\n/)
   assert.match(requests[0].body, /name="response_format"\r\n\r\nverbose_json\r\n/)
   assert.deepEqual(result.utterances, [{ text: "你好世界", startMs: 0, endMs: 3200, speaker: undefined }])
+})
+
+test("Chinese is steered towards simplified characters; other languages and auto-detect send no prompt", async () => {
+  for (const [language, prompt] of [["zh", true], ["en", false], ["auto", false]] as const) {
+    const { settings } = loadSettings({ fileProvider: "whisper-local", asrLanguage: language })
+    let body = ""
+    const post: FileAsrPost = async (_url, _headers, data) => ((body = Buffer.from(data as ArrayBuffer).toString("utf8")), { status: 200, headers: {}, text: JSON.stringify({ text: "x", segments: [{ start: 0, end: 1, text: "x" }] }) })
+    await resolveFile({ secrets: noSecrets, settings }).transcribe(audio, { speakers: false, post })
+    assert.equal(/name="prompt"/.test(body), prompt, language)
+  }
 })
 
 test("a server address and model that the user changed are kept, and a bad address is reported", () => {
