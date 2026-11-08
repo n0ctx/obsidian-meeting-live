@@ -9,10 +9,11 @@ export const HANDSHAKE_TIMEOUT_MS = 10_000
 export const frameText = (data: RawData): string => (Buffer.isBuffer(data) ? data : Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data)).toString("utf8")
 
 /**
- * Opens a socket and resolves once it is open. A server that answers the upgrade with an HTTP error rejects with
- * what `refused` makes of the status and body; a network failure rejects with a retryable error.
+ * Opens a socket and runs `wire` the moment it is open, in the same tick, so no frame the server sends right after the handshake
+ * (a Begin or task-started message) reaches a socket nobody listens to yet. A server that answers the upgrade with an HTTP error rejects
+ * with what `refused` makes of the status and body; a network failure rejects with a retryable error.
  */
-export function openSocket(url: string, headers: Record<string, string>, refused: (status: number, body: string) => AsrError, timedOut: () => AsrError): Promise<WebSocket> {
+export function openSocket(url: string, headers: Record<string, string>, refused: (status: number, body: string) => AsrError, timedOut: () => AsrError, wire: (socket: WebSocket) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url, { headers, handshakeTimeout: HANDSHAKE_TIMEOUT_MS })
     const timer = window.setTimeout(() => {
@@ -29,7 +30,12 @@ export function openSocket(url: string, headers: Record<string, string>, refused
       response.on("end", () => settle(() => reject(refused(response.statusCode ?? 0, body.trim()))))
     })
     socket.on("error", (error) => settle(() => reject(new AsrError(t("asr.network", error.message), false))))
-    socket.on("open", () => settle(() => resolve(socket)))
+    socket.on("open", () =>
+      settle(() => {
+        wire(socket)
+        resolve()
+      }),
+    )
   })
 }
 

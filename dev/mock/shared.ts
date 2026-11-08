@@ -1,3 +1,5 @@
+import type { IncomingMessage, ServerResponse } from "node:http"
+
 // What the mock routes have in common: the sentences they speak, and the counters tests read from GET /stats.
 export const SENTENCES = [
   "我们今年的收入预计在三点二亿元左右，去年是两亿一千万。",
@@ -12,4 +14,18 @@ export const SENTENCES = [
 export const SENTENCE_MS = 4200
 
 /** What each route has seen, so a test can tell a reconnect from a first connection. */
-export const stats = { deepgramConnections: 0, keepAlives: 0, binaryFrames: 0, emptyFrames: 0, closeStreams: 0, dashscopeConnections: 0, dashscopeFinishTasks: 0 }
+export const stats = { deepgramConnections: 0, keepAlives: 0, binaryFrames: 0, emptyFrames: 0, closeStreams: 0, dashscopeConnections: 0, dashscopeFinishTasks: 0, assemblyaiConnections: 0, assemblyaiTerminates: 0, assemblyaiConfigUpdates: 0, assemblyaiUploads: 0 }
+
+export function readBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = []
+    req.on("data", (c: Buffer) => chunks.push(c))
+    req.on("end", () => resolve(Buffer.concat(chunks)))
+  })
+}
+
+export function reply(res: ServerResponse, status: number, payload: unknown): void {
+  res.statusCode = status
+  res.setHeader("Content-Type", "application/json")
+  res.end(JSON.stringify(payload))
+}

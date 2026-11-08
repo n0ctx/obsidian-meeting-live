@@ -32,11 +32,15 @@ export interface FileAsrResult {
   chunks?: number
 }
 
+/** A GET, for services that are asked for a transcript once it is ready; absent where the caller has not provided one. */
+export type FileAsrGet = (url: string, headers: Record<string, string>) => Promise<FileAsrResponse>
+
 export type FileAsrStage = { stage: "uploading" } | { stage: "recognizing"; waitedMs: number }
 
 export interface FileAsrCall {
   speakers: boolean
   post: FileAsrPost
+  get?: FileAsrGet
   onStage?: (stage: FileAsrStage) => void
   sleep?: (ms: number) => Promise<void>
   signal?: AbortSignal

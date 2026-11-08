@@ -4,6 +4,7 @@
 //   https://developers.deepgram.com/docs/audio-keep-alive  (word times follow the audio, not the wall clock)
 //   https://developers.deepgram.com/docs/diarization  (a `speaker` integer on each word; `diarize=true` still works on streaming though deprecated for `diarize_model`)
 import type { AsrUpdate, AsrUtterance } from "../../contract.ts"
+import { joinWords } from "../words.ts"
 
 /**
  * What one Deepgram message means to the connector.
@@ -20,13 +21,6 @@ interface RawWord {
   start?: unknown
   end?: unknown
   speaker?: unknown
-}
-
-const CJK = /[⺀-鿿豈-﫿＀-￯]/
-
-/** Words are separated by spaces except between CJK characters, which Deepgram returns one by one. */
-function joinWords(words: string[]): string {
-  return words.reduce((text, word) => (text && !(CJK.test(text.slice(-1)) && CJK.test(word[0])) ? `${text} ${word}` : text + word), "")
 }
 
 /** A string or number as text; anything else (missing, an object) as empty. */

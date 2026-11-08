@@ -7,6 +7,7 @@
 // Flow: connect with `Authorization: Bearer <key>`, send run-task, wait for task-started, stream binary audio, send finish-task,
 // read results until task-finished.
 import { randomUUID } from "node:crypto"
+import type WebSocket from "ws"
 import { t } from "../../../i18n/index.ts"
 import { hostOf } from "../../../url.ts"
 import { AsrError, SentAudioClock, type AsrConnect, type AsrConnection } from "../../contract.ts"
@@ -22,6 +23,9 @@ export interface DashScopeConfig {
   language: string | undefined
   hotwords: string[]
 }
+
+/** Longest to wait for task-started after run-task. */
+const START_TIMEOUT_MS = 15_000
 
 /** Weight of an inline hotword: the documentation allows 1-5 (50 for a "super" word). */
 const HOTWORD_WEIGHT = 4
@@ -77,75 +81,77 @@ export function taskFailedError(code: string, message: string): AsrError {
 }
 
 export function dashScopeConnector(config: DashScopeConfig): AsrConnect {
-  return async (handlers) => {
-    const socket = await openSocket(config.endpoint.trim(), { Authorization: `Bearer ${config.apiKey}` }, upgradeError, () => new AsrError(t("dashscope.timeout"), false))
-    const taskId = randomUUID()
-    const clock = new SentAudioClock()
-    return new Promise((resolve, reject) => {
+  return (handlers) =>
+    new Promise((resolve, reject) => {
+      const taskId = randomUUID()
+      const clock = new SentAudioClock()
       let ready = false
       let endRequested = false
       let endAnnounced = false
-      const startTimer = window.setTimeout(() => life.fail(new AsrError(t("dashscope.timeout"), false)), 15_000)
-      const life = new SocketLifecycle(
-        socket,
-        (error) => (ready ? handlers.onClose(error) : reject(error)),
-        () => window.clearTimeout(startTimer),
-      )
+      let life: SocketLifecycle
+      let startTimer: number | undefined
       /** Tells the streamer every result has arrived, once, whichever of task-finished and the close comes first. */
       const announceEnd = () => {
         if (endAnnounced) return
         endAnnounced = true
         handlers.onResult({ utterances: [], keepInterims: true }, true)
       }
-      const connection: AsrConnection = {
-        sendAudio(pcm, last) {
-          if (socket.readyState !== socket.OPEN) throw new AsrError(t("dashscope.socketClosed"), false)
-          if (pcm.length > 0) {
-            socket.send(Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength))
-            clock.advance(pcm.length)
+      const wire = (socket: WebSocket) => {
+        life = new SocketLifecycle(
+          socket,
+          (error) => (ready ? handlers.onClose(error) : reject(error)),
+          () => window.clearTimeout(startTimer),
+        )
+        startTimer = window.setTimeout(() => life.fail(new AsrError(t("dashscope.timeout"), false)), START_TIMEOUT_MS)
+        const connection: AsrConnection = {
+          sendAudio(pcm, last) {
+            if (socket.readyState !== socket.OPEN) throw new AsrError(t("dashscope.socketClosed"), false)
+            if (pcm.length > 0) {
+              socket.send(Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength))
+              clock.advance(pcm.length)
+            }
+            if (last) {
+              endRequested = true
+              socket.send(JSON.stringify(finishTaskMessage(taskId)))
+            }
+          },
+          close: () => life.closeLocally(),
+        }
+        socket.on("message", (data, isBinary) => {
+          if (isBinary || life.finished) return
+          const event = parseDashScopeMessage(frameText(data), clock.ms)
+          switch (event.kind) {
+            case "started":
+              if (ready) return
+              ready = true
+              window.clearTimeout(startTimer)
+              resolve({ connection })
+              break
+            case "result":
+              if (ready) handlers.onResult(event.update, false)
+              break
+            case "finished":
+              announceEnd()
+              life.complete()
+              break
+            case "failed":
+              life.fail(taskFailedError(event.code, event.message))
+              break
           }
-          if (last) {
-            endRequested = true
-            socket.send(JSON.stringify(finishTaskMessage(taskId)))
-          }
-        },
-        close: () => life.closeLocally(),
-      }
-
-      socket.on("message", (data, isBinary) => {
-        if (isBinary || life.finished) return
-        const event = parseDashScopeMessage(frameText(data), clock.ms)
-        switch (event.kind) {
-          case "started":
-            if (ready) return
-            ready = true
-            window.clearTimeout(startTimer)
-            resolve({ connection })
-            break
-          case "result":
-            if (ready) handlers.onResult(event.update, false)
-            break
-          case "finished":
+        })
+        socket.on("error", (error) => life.fail(new AsrError(t("asr.network", error.message), false)))
+        socket.on("close", (code) => {
+          if (life.finished) return
+          if (endRequested) {
+            // A close after finish-task, before task-finished: the results sent so far are all there will be.
             announceEnd()
             life.complete()
-            break
-          case "failed":
-            life.fail(taskFailedError(event.code, event.message))
-            break
-        }
-      })
-      socket.on("error", (error) => life.fail(new AsrError(t("asr.network", error.message), false)))
-      socket.on("close", (code) => {
-        if (life.finished) return
-        if (endRequested) {
-          // A close after finish-task, before task-finished: the results sent so far are all there will be.
-          announceEnd()
-          life.complete()
-          return
-        }
-        life.fail(new AsrError(t("dashscope.closed", code), false))
-      })
-      socket.send(JSON.stringify(runTaskMessage(config, taskId)))
+            return
+          }
+          life.fail(new AsrError(t("dashscope.closed", code), false))
+        })
+        socket.send(JSON.stringify(runTaskMessage(config, taskId)))
+      }
+      openSocket(config.endpoint.trim(), { Authorization: `Bearer ${config.apiKey}` }, upgradeError, () => new AsrError(t("dashscope.timeout"), false), wire).catch(reject)
     })
-  }
 }

@@ -4,6 +4,8 @@
 //   Volcengine streaming ASR:     ws://127.0.0.1:<port>/asr
 //   Deepgram live:                ws://127.0.0.1:<port>/v1/listen   (Authorization: Token <key>; the key "bad" gets a 401)
 //   DashScope realtime ASR:       ws://127.0.0.1:<port>/api-ws/v1/inference   (Authorization: Bearer <key>; the key "bad" gets a 401)
+//   AssemblyAI streaming:         ws://127.0.0.1:<port>/v3/ws   (Authorization: <key>; the key "bad" is closed with 1008)
+//   AssemblyAI pre-recorded:      http://127.0.0.1:<port>/v2   (POST /upload, POST /transcript, GET /transcript/<id>; the key "bad" gets a 401)
 //   OpenAI-style transcription:   http://127.0.0.1:<port>/v1   (POST /audio/transcriptions; the key "bad" gets a 401)
 //   OpenAI-compatible LLM:        http://127.0.0.1:<port>/v1   (POST /chat/completions)
 //   POST /drop closes every ASR socket to simulate a network failure.
@@ -13,7 +15,8 @@ import type { AddressInfo } from "node:net"
 import { WebSocketServer, type WebSocket } from "ws"
 import { decodeClientFrame, encodeServerResult } from "../src/asr/providers/volc/protocol.ts"
 import { DASHSCOPE_PATH, dashscopeSession } from "./mock/dashscope.ts"
-import { SENTENCES, SENTENCE_MS, stats } from "./mock/shared.ts"
+import { ASSEMBLYAI_WS_PATH, assemblyaiRest, assemblyaiSession } from "./mock/assemblyai.ts"
+import { SENTENCES, SENTENCE_MS, readBody, stats } from "./mock/shared.ts"
 
 const port = Number(process.argv[2] ?? 8790)
 /** OpenAI documents 25 MB per upload; the mock refuses more with the same status. */
@@ -41,14 +44,6 @@ function parseMultipart(body: Buffer, contentType: string): { fields: Record<str
   return { fields, fileBytes }
 }
 
-function readBody(req: IncomingMessage): Promise<Buffer> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = []
-    req.on("data", (c: Buffer) => chunks.push(c))
-    req.on("end", () => resolve(Buffer.concat(chunks)))
-  })
-}
-
 /** What an OpenAI-style /audio/transcriptions answers: segments of the mock sentences, spread over a duration guessed from the file size (about 32 kbit/s). */
 function transcription(fields: Record<string, string>, fileBytes: number): { status: number; body: unknown } {
   const model = fields.model ?? ""
@@ -74,6 +69,7 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(stats))
     return
   }
+  if (await assemblyaiRest(req, res, `http://127.0.0.1:${(server.address() as AddressInfo).port}`)) return
   if (req.method === "POST" && req.url?.endsWith("/audio/transcriptions")) {
     const body = await readBody(req)
     const reply = (status: number, payload: unknown) => {
@@ -132,7 +128,8 @@ const wss = new WebSocketServer({ noServer: true })
 server.on("upgrade", (req, socket, head) => {
   const deepgram = req.url?.startsWith("/v1/listen")
   const bearer = req.url?.startsWith(DASHSCOPE_PATH)
-  const key = deepgram ? req.headers.authorization?.replace(/^Token /, "") : bearer ? req.headers.authorization?.replace(/^Bearer /, "") : (req.headers["x-api-key"] ?? req.headers["x-api-access-key"])
+  const raw = req.url?.startsWith(ASSEMBLYAI_WS_PATH)
+  const key = deepgram ? req.headers.authorization?.replace(/^Token /, "") : bearer ? req.headers.authorization?.replace(/^Bearer /, "") : raw ? undefined : (req.headers["x-api-key"] ?? req.headers["x-api-access-key"])
   if (key === "bad") {
     socket.end("HTTP/1.1 401 Unauthorized\r\nContent-Length: 12\r\n\r\ninvalid key\n")
     return
@@ -187,6 +184,7 @@ function deepgramSession(ws: WebSocket): void {
 wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
   if (req.url?.startsWith("/v1/listen")) return deepgramSession(ws)
   if (req.url?.startsWith(DASHSCOPE_PATH)) return dashscopeSession(ws)
+  if (req.url?.startsWith(ASSEMBLYAI_WS_PATH)) return assemblyaiSession(ws, req)
   let sequence = 1
   let receivedMs = 0
   let index = Math.floor(Math.random() * SENTENCES.length)

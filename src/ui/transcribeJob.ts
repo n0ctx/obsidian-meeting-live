@@ -1,7 +1,7 @@
 import { Events, Notice, TFile, type App } from "obsidian"
 import { t, tr, type Key, type Lang } from "../i18n/index.ts"
 import { transcribeChunks, type ChunkResults } from "../asr/chunked.ts"
-import { renderInterviewRecord, speakerUtterances, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
+import { renderInterviewRecord, speakerUtterances, type FileAsrGet, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
 import { appendJobBlock, hasJobBlock, newJobId, placeJobResult, removeJobBlock } from "../asr/jobBlock.ts"
 import { providerNameIn } from "../asr/providers/registry.ts"
 import type { Destination } from "../consent.ts"
@@ -27,6 +27,7 @@ export interface TranscribeDeps {
   /** The recorded-file recognizer, resolved from the current settings. */
   fileAsr: () => FileAsrProvider
   post: FileAsrPost
+  get?: FileAsrGet
   llm: () => LlmClient
   prompt: () => string
   /** The summary focus the condensing step of a long transcript uses. */
@@ -121,6 +122,7 @@ export class TranscribeJob {
           {
             speakers: this.speakers,
             post: this.deps.post,
+            get: this.deps.get,
             onStage: (s) => this.setStage(s.stage === "uploading" ? "uploading" : "recognizing"),
             onPart: (index, total) => {
               this.part = { index, total }

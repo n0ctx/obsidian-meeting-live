@@ -16,7 +16,7 @@ import { JobBar } from "./ui/jobBar.ts"
 import { TranscribeFileModal } from "./ui/transcribeFile.ts"
 import { TranscribeJobs } from "./ui/transcribeJob.ts"
 import { JOB_LANGUAGE, parseJobBlock, removeJobBlock } from "./asr/jobBlock.ts"
-import type { FileAsrPost } from "./asr/fileAsr.ts"
+import type { FileAsrGet, FileAsrPost } from "./asr/fileAsr.ts"
 import { MeetingCard, parseBlockId, type CardHost } from "./ui/card.ts"
 import { ConsentModal, MinutesModal } from "./ui/modals.ts"
 import { summaryMarkers } from "./ui/summaryMarkers.ts"
@@ -40,6 +40,11 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     // Multipart bodies need their boundary in the content type, so it goes in the field Obsidian names for it.
     const { "Content-Type": contentType, ...rest } = headers
     const response = await requestUrl({ url, method: "POST", headers: rest, contentType, body, throw: false })
+    return { status: response.status, headers: response.headers, text: response.text }
+  }
+
+  readonly fileGet: FileAsrGet = async (url, headers) => {
+    const response = await requestUrl({ url, method: "GET", headers, throw: false })
     return { status: response.status, headers: response.headers, text: response.text }
   }
 
@@ -242,6 +247,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       {
         fileAsr: () => resolveFile(this.providerEnv()),
         post: this.filePost,
+        get: this.fileGet,
         ensureConsent: (kinds) => this.ensureConsent(kinds),
         llm: () => this.llm(),
         prompt: () => this.settings.minutesPrompt,
