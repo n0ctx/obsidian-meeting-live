@@ -119,8 +119,9 @@ function fields(config: OpenAiFileConfig, format: ResponseFormat): [string, stri
   const list: [string, string][] = [["model", config.model], ["response_format", format]]
   if (format === "verbose_json") list.push(["timestamp_granularities[]", "segment"])
   if (format === "diarized_json") list.push(["chunking_strategy", "auto"])
-  // The diarizing model takes no language hint in the guide's description; the others take an ISO 639-1 code.
-  if (config.language && format !== "diarized_json") list.push(["language", config.language])
+  // The diarizing model takes no language hint in the guide's description, and gpt-transcribe takes a `languages` array instead of
+  // `language` (never both); how that array is encoded in a form is not documented, so those two get no hint. Others take an ISO 639-1 code.
+  if (config.language && format !== "diarized_json" && !/^gpt-transcribe/i.test(config.model.trim())) list.push(["language", config.language])
   return list
 }
 

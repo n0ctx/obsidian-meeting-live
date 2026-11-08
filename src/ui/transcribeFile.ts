@@ -1,6 +1,6 @@
 import { FuzzySuggestModal, Modal, Notice, TFile, setIcon, type App } from "obsidian"
 import { DECODABLE_EXTENSIONS } from "../audio/transcode.ts"
-import { TranscribeJob, launchJob, type AudioSource, type TranscribeDeps, type TranscribeJobs } from "./transcribeJob.ts"
+import { TranscribeJob, type AudioSource, type TranscribeDeps, type TranscribeJobs } from "./transcribeJob.ts"
 
 class AudioPicker extends FuzzySuggestModal<TFile> {
   private readonly extensions: string[]
@@ -117,7 +117,7 @@ export class TranscribeFileModal extends Modal {
       if (llmProblem) return void new Notice(`${llmProblem}。可在设置中配置模型，或取消「用大模型整理」只写入原始转写`)
       const job = new TranscribeJob(this.app, this.deps, this.target, source, current, { speakers: speakers.checked, writeUp: writeUp.checked })
       start.disabled = true
-      if (await launchJob(this.jobs, this.deps, job)) this.close()
+      if (await job.launch(this.jobs)) this.close()
       else start.disabled = false
     })
   }

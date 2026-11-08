@@ -35,7 +35,9 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   }
 
   readonly filePost: FileAsrPost = async (url, headers, body) => {
-    const response = await requestUrl({ url, method: "POST", headers, body, throw: false })
+    // Multipart bodies need their boundary in the content type, so it goes in the field Obsidian names for it.
+    const { "Content-Type": contentType, ...rest } = headers
+    const response = await requestUrl({ url, method: "POST", headers: rest, contentType, body, throw: false })
     return { status: response.status, headers: response.headers, text: response.text }
   }
 

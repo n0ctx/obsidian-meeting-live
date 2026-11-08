@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { TFile } from "obsidian"
 import { volcFileProvider } from "../src/asr/providers/volc/file.ts"
-import { TranscribeJob, TranscribeJobs, launchJob, type TranscribeDeps } from "../src/ui/transcribeJob.ts"
+import { TranscribeJob, TranscribeJobs, type TranscribeDeps } from "../src/ui/transcribeJob.ts"
 
 // The stub's TFile takes a path; the real typings expose no public constructor.
 const file = (path: string) => new (TFile as unknown as new (path: string) => TFile)(path)
@@ -114,7 +114,7 @@ test("recording to notes asks for consent before anything is uploaded, and only 
 
   const declined = make(false)
   const refused = new TranscribeJob(app, declined, file("访谈.md"), source, asr, { speakers: true, writeUp: true })
-  assert.equal(await launchJob(jobs, declined, refused), false)
+  assert.equal(await refused.launch(jobs), false)
   assert.deepEqual(asked, [["file", "llm"]])
   assert.equal(posts, 0, "nothing is uploaded after a refusal")
   assert.equal(jobs.running, 0)
@@ -122,13 +122,54 @@ test("recording to notes asks for consent before anything is uploaded, and only 
 
   // Without the write-up the model never sees the text, so its host is not part of the question.
   const rawOnly = new TranscribeJob(app, declined, file("访谈.md"), source, asr, { speakers: true, writeUp: false })
-  await launchJob(jobs, declined, rawOnly)
+  await rawOnly.launch(jobs)
   assert.deepEqual(asked[1], ["file"])
 
   const accepted = make(true)
   const started = new TranscribeJob(app, accepted, file("访谈.md"), source, asr, { speakers: true, writeUp: true })
-  assert.equal(await launchJob(jobs, accepted, started), true)
+  assert.equal(await started.launch(jobs), true)
   assert.equal(jobs.running, 1)
   assert.match(files["访谈.md"], /meeting-live-job/)
   await new Promise((resolve) => setTimeout(resolve, 20))
+})
+
+test("retrying a failed write-up asks again about the model's host, which may have changed since, and not about the recognizer", async () => {
+  const files: Record<string, string> = { "访谈.md": "" }
+  const { app } = fakeVault(files)
+  const asr = volcFileProvider({ apiKey: "k", appId: "", accessToken: "", resourceId: "volc.seedasr.auc" })
+  const asked: string[][] = []
+  let answer = true
+  let completions = 0
+  const deps: TranscribeDeps = {
+    ensureConsent: async (kinds) => (asked.push(kinds), answer),
+    fileAsr: () => asr,
+    post: async (url) => ({ status: 200, headers: { "x-api-status-code": "20000000" }, text: url.endsWith("/submit") ? "" : JSON.stringify(asrPayload) }),
+    llm: () => ({ problem: undefined, model: "m", target: "t", inputLimit: 1_000_000, complete: async () => (completions++ === 0 ? Promise.reject(new Error("HTTP 500")) : "### 纪要") }),
+    prompt: () => "",
+    summaryFocus: () => "",
+    transcriptFolder: () => "Meetings/录音转写",
+  }
+  const source = { name: "访谈.mp3", extension: "mp3", size: 3, modified: 0, read: async () => new Uint8Array([1, 2, 3]) }
+  const job = new TranscribeJob(app, deps, file("访谈.md"), source, asr, { speakers: true, writeUp: true })
+  const jobs = new TranscribeJobs(app, { addClass() {}, addEventListener() {}, toggleClass() {}, empty() {}, setText() {}, setAttr() {} } as never)
+  const settled = () => new Promise<void>((resolve) => { const ref = jobs.on("change", (j: unknown) => { if ((j as TranscribeJob).finished && jobs.running === 0) { jobs.offref(ref as never); resolve() } }) })
+
+  let done = settled()
+  assert.equal(await job.launch(jobs), true)
+  await done
+  assert.equal(job.stage, "failed")
+  assert.ok(job.recognized)
+
+  // The user moves to another endpoint and presses retry, and declines the new host: nothing is sent.
+  answer = false
+  assert.equal(await job.launch(jobs), false)
+  assert.equal(completions, 1, "the model was not called again")
+  assert.equal(job.stage, "failed")
+
+  answer = true
+  done = settled()
+  assert.equal(await job.launch(jobs), true)
+  await done
+  assert.equal(job.stage, "done")
+  assert.deepEqual(asked, [["file", "llm"], ["llm"], ["llm"]])
 })

@@ -81,7 +81,7 @@ export class JobBar extends MarkdownRenderChild {
     if (job.stage === "failed") {
       setIcon(icon, "triangle-alert")
       main.createDiv({ cls: "ml-jobbar-detail", text: `${job.error ?? "未知错误"}${job.rawPath ? "。原始转写已保存，重试只会重新整理，不会重新识别" : ""}` })
-      this.action(bar, job.recognized ? "重试整理" : "重试", () => void this.jobs.start(job), true)
+      this.action(bar, job.recognized ? "重试整理" : "重试", () => void job.launch(this.jobs), true)
       this.action(bar, "移除", () => void this.jobs.dismiss(job))
       return
     }

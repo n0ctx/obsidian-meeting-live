@@ -44,13 +44,6 @@ export const STAGE_LABEL: Record<JobStage, string> = {
   failed: "失败",
 }
 
-/** Starts a job once the user has agreed to where it sends data: the recognizer, and the model when it writes up. */
-export async function launchJob(jobs: TranscribeJobs, deps: TranscribeDeps, job: TranscribeJob): Promise<boolean> {
-  if (!(await deps.ensureConsent(job.writeUp ? ["file", "llm"] : ["file"]))) return false
-  await jobs.start(job)
-  return true
-}
-
 const normalizeFolder = (path: string) => path.trim().replace(/^\/+|\/+$/g, "") || "Meetings/录音转写"
 
 /** One recording → raw transcript → interview record, running independently of any modal. */
@@ -82,6 +75,17 @@ export class TranscribeJob {
     this.file = file
     this.speakers = options.speakers
     this.writeUp = options.writeUp
+  }
+
+  /**
+   * Starts the job, or restarts it after a failure, once the user has agreed to where it sends data: the recognizer unless
+   * its result is already in hand, and the model when it writes up. A refusal sends nothing and leaves the job as it was.
+   */
+  async launch(jobs: TranscribeJobs): Promise<boolean> {
+    const kinds: Destination["kind"][] = [...(this.recognized ? [] : (["file"] as const)), ...(this.writeUp ? (["llm"] as const) : [])]
+    if (!(await this.deps.ensureConsent(kinds))) return false
+    await jobs.start(this)
+    return true
   }
 
   get finished(): boolean {

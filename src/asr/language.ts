@@ -3,12 +3,12 @@
 export const ASR_LANGUAGES = [
   { id: "auto", name: "自动检测" },
   { id: "zh", name: "中文" },
-  { id: "en", name: "English" },
-  { id: "ja", name: "日本語" },
-  { id: "ko", name: "한국어" },
-  { id: "es", name: "Español" },
-  { id: "fr", name: "Français" },
-  { id: "de", name: "Deutsch" },
+  { id: "en", name: "英语" },
+  { id: "ja", name: "日语" },
+  { id: "ko", name: "韩语" },
+  { id: "es", name: "西班牙语" },
+  { id: "fr", name: "法语" },
+  { id: "de", name: "德语" },
 ] as const
 
 export type AsrLanguage = (typeof ASR_LANGUAGES)[number]["id"]

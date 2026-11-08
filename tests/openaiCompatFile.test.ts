@@ -107,6 +107,16 @@ test("the diarizing model asks for speaker segments and the labels reach the res
   assert.equal(openAiFileProvider(config()).capabilities.diarization, false)
 })
 
+test("gpt-transcribe gets no language hint, since it takes a languages array instead and the two must not be mixed", async () => {
+  for (const [model, expected] of [["gpt-transcribe", false], ["GPT-Transcribe", false], ["gpt-4o-transcribe", true], ["whisper-1", true]] as const) {
+    const sent = service({ body: { text: "文字" } })
+    await openAiFileProvider(config({ model, language: "zh" })).transcribe(audio, { speakers: false, post: sent.post })
+    const fields = readForm(sent.requests[0]).fields
+    assert.equal("language" in fields, expected, model)
+    assert.equal("languages" in fields, false, model)
+  }
+})
+
 test("a server that refuses verbose_json is asked again for plain JSON, and other errors are not retried", async () => {
   const retry = service({ status: 400, body: { error: { message: "response_format verbose_json is not compatible with model" } } }, { body: { text: "文字" } })
   const result = await openAiFileProvider(config()).transcribe(audio, { speakers: false, post: retry.post })
