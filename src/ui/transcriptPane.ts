@@ -1,4 +1,6 @@
 import { setIcon } from "obsidian"
+import { t } from "../i18n/index.ts"
+import { gapReason } from "../meeting/gap.ts"
 import type { MeetingSession } from "../meeting/session.ts"
 import { formatClock, type TranscriptGap, type Utterance } from "../meeting/types.ts"
 
@@ -24,7 +26,7 @@ export class TranscriptPane {
     this.el = parent.createDiv({ cls: "ml-pane ml-pane-transcript" })
     const head = this.el.createDiv({ cls: "ml-pane-head" })
     const title = head.createDiv({ cls: "ml-pane-title" })
-    title.createSpan({ text: "实时转写" })
+    title.createSpan({ text: t("transcript.title") })
     this.countEl = title.createSpan({ cls: "ml-count" })
     head.appendChild(actions)
 
@@ -32,7 +34,7 @@ export class TranscriptPane {
     this.emptyEl = this.scroller.createDiv({ cls: "ml-empty" })
     this.list = this.scroller.createDiv({ cls: "ml-lines" })
     this.interimEl = this.scroller.createDiv({ cls: "ml-line is-interim" })
-    this.latestButton = this.el.createEl("button", { cls: "ml-latest", text: "回到最新" })
+    this.latestButton = this.el.createEl("button", { cls: "ml-latest", text: t("transcript.latest") })
     setIcon(this.latestButton.createSpan({ cls: "ml-latest-icon" }), "arrow-down")
 
     this.scroller.addEventListener("scroll", () => {
@@ -66,7 +68,7 @@ export class TranscriptPane {
 
   private row(u: Utterance): HTMLElement {
     const row = createDiv({ cls: "ml-line" })
-    const ts = row.createEl("button", { cls: "ml-ts", text: formatClock(u.startMs), attr: { "aria-label": `从 ${formatClock(u.startMs)} 播放` } })
+    const ts = row.createEl("button", { cls: "ml-ts", text: formatClock(u.startMs), attr: { "aria-label": t("transcript.playFrom", formatClock(u.startMs)) } })
     ts.dataset.ms = String(u.startMs)
     row.createDiv({ cls: "ml-text", text: u.text })
     row.dataset.ms = String(u.startMs)
@@ -78,7 +80,7 @@ export class TranscriptPane {
     const el = this.list.createDiv({ cls: "ml-gap" })
     setIcon(el.createSpan({ cls: "ml-gap-icon" }), "wifi-off")
     el.createSpan({ cls: "ml-gap-range", text: `${formatClock(gap.startMs)} – ${formatClock(gap.endMs)}` })
-    el.createSpan({ cls: "ml-gap-text", text: `${gap.reason} · 录音完整，可回放` })
+    el.createSpan({ cls: "ml-gap-text", text: t("transcript.gap", gapReason(gap)) })
     el.addEventListener("click", () => this.onSeek?.(gap.startMs))
   }
 
@@ -115,7 +117,7 @@ export class TranscriptPane {
   updateMeta(): void {
     const count = this.session.utterances.length
     const chars = this.session.utterances.reduce((n, u) => n + u.text.length, 0)
-    this.countEl.setText(count ? `${count} 段 · ${chars.toLocaleString()} 字` : "")
+    this.countEl.setText(count ? t("transcript.count", count, chars.toLocaleString()) : "")
     this.emptyEl.empty()
     const hasContent = count > 0 || this.session.interims.length > 0 || this.session.meta.gaps.length > 0
     this.emptyEl.toggleClass("is-visible", !hasContent)
@@ -126,13 +128,13 @@ export class TranscriptPane {
     const message =
       status === "recording"
         ? asr === "live"
-          ? "正在聆听，开口后文字会实时出现在这里"
+          ? t("transcript.empty.listening")
           : asr === "disabled"
-            ? "仅录音中：未配置语音识别，录音仍完整保存"
-            : "正在连接语音识别…录音已开始"
+            ? t("transcript.empty.noAsr")
+            : t("transcript.empty.connecting")
         : status === "paused"
-          ? "已暂停"
-          : "开始录音后，实时转写会按时间轴出现在这里"
+          ? t("transcript.empty.paused")
+          : t("transcript.empty.idle")
     this.emptyEl.createDiv({ cls: "ml-empty-text", text: message })
   }
 

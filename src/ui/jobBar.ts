@@ -1,9 +1,10 @@
 import { MarkdownRenderChild, setIcon, type EventRef } from "obsidian"
+import { t, type Key } from "../i18n/index.ts"
 import { formatClock } from "../meeting/types.ts"
 import { type JobStage, type TranscribeJob, type TranscribeJobs } from "./transcribeJob.ts"
 
 const STEPS: JobStage[] = ["reading", "uploading", "recognizing", "writing"]
-const STEP_NAME: Partial<Record<JobStage, string>> = { reading: "读取", uploading: "上传", recognizing: "识别", writing: "整理" }
+const STEP_NAME = { reading: "job.step.reading", uploading: "job.step.uploading", recognizing: "job.step.recognizing", writing: "job.step.writing" } as const satisfies Partial<Record<JobStage, Key>>
 const ISOLATED_EVENTS = ["mousedown", "pointerdown", "keydown"]
 
 /** Temporary status bar rendered from a `meeting-live-job` block; the job replaces the block when done. */
@@ -12,16 +13,19 @@ export class JobBar extends MarkdownRenderChild {
   private readonly id: string | undefined
   private readonly fileName: string
   private readonly removeBlock: () => void
+  /** Name of the folder raw transcripts go to, for the message about an interrupted job. */
+  private readonly folderName: () => string
   private ref: EventRef | undefined
   private bar!: HTMLElement
   private clock!: HTMLElement
 
-  constructor(containerEl: HTMLElement, jobs: TranscribeJobs, block: { id?: string; file?: string }, removeBlock: () => void) {
+  constructor(containerEl: HTMLElement, jobs: TranscribeJobs, block: { id?: string; file?: string }, removeBlock: () => void, folderName: () => string) {
     super(containerEl)
     this.jobs = jobs
     this.id = block.id
     this.fileName = block.file ?? ""
     this.removeBlock = removeBlock
+    this.folderName = folderName
   }
 
   override onload(): void {
@@ -55,14 +59,14 @@ export class JobBar extends MarkdownRenderChild {
     const icon = bar.createSpan({ cls: "ml-jobbar-icon" })
     const main = bar.createDiv({ cls: "ml-jobbar-main" })
     const title = main.createDiv({ cls: "ml-jobbar-title" })
-    title.createSpan({ cls: "ml-jobbar-name", text: job?.writeUp === false ? "录音转写" : "录音生成访谈记录" })
+    title.createSpan({ cls: "ml-jobbar-name", text: job?.writeUp === false ? t("job.name.raw") : t("job.name.full") })
     title.createSpan({ cls: "ml-jobbar-file", text: job?.source.name ?? this.fileName })
 
     if (!job) {
       bar.dataset.state = "lost"
       setIcon(icon, "circle-alert")
-      main.createDiv({ cls: "ml-jobbar-detail", text: "任务已中断（Obsidian 重启或插件重新加载）。如已生成原始转写，可在会议数据目录的「录音转写」中找到；需要时请重新运行命令。" })
-      this.action(bar, "移除", this.removeBlock)
+      main.createDiv({ cls: "ml-jobbar-detail", text: t("job.lost", this.folderName()) })
+      this.action(bar, t("common.remove"), this.removeBlock)
       return
     }
 
@@ -72,7 +76,7 @@ export class JobBar extends MarkdownRenderChild {
     const reached = STEPS.indexOf(current ?? "reading")
     for (const [i, step] of STEPS.entries()) {
       if (step === "writing" && !job.writeUp) continue
-      const el = steps.createSpan({ cls: "ml-jobbar-step", text: STEP_NAME[step] })
+      const el = steps.createSpan({ cls: "ml-jobbar-step", text: t(STEP_NAME[step as keyof typeof STEP_NAME]) })
       el.toggleClass("is-done", i < reached)
       el.toggleClass("is-current", i === reached)
       el.toggleClass("is-failed", i === reached && job.stage === "failed")
@@ -80,9 +84,9 @@ export class JobBar extends MarkdownRenderChild {
 
     if (job.stage === "failed") {
       setIcon(icon, "triangle-alert")
-      main.createDiv({ cls: "ml-jobbar-detail", text: `${job.error ?? "未知错误"}${job.rawPath ? "。原始转写已保存，重试只会重新整理，不会重新识别" : ""}` })
-      this.action(bar, job.recognized ? "重试整理" : "重试", () => void job.launch(this.jobs), true)
-      this.action(bar, "移除", () => void this.jobs.dismiss(job))
+      main.createDiv({ cls: "ml-jobbar-detail", text: t("job.failedDetail", job.error ?? t("common.unknownError"), !!job.rawPath) })
+      this.action(bar, job.recognized ? t("job.retryWriteUp") : t("common.retry"), () => void job.launch(this.jobs), true)
+      this.action(bar, t("common.remove"), () => void this.jobs.dismiss(job))
       return
     }
     setIcon(icon, "loader")

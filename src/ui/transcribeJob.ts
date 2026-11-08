@@ -1,4 +1,5 @@
 import { Events, Notice, TFile, type App } from "obsidian"
+import { t, type Key } from "../i18n/index.ts"
 import { transcribeChunks, type ChunkResults } from "../asr/chunked.ts"
 import { renderInterviewRecord, speakerUtterances, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
 import { appendJobBlock, hasJobBlock, newJobId, placeJobResult, removeJobBlock } from "../asr/jobBlock.ts"
@@ -35,14 +36,7 @@ export interface TranscribeDeps {
 
 export type JobStage = "reading" | "uploading" | "recognizing" | "writing" | "done" | "failed"
 
-export const STAGE_LABEL: Record<JobStage, string> = {
-  reading: "读取录音",
-  uploading: "上传中",
-  recognizing: "识别中",
-  writing: "整理中",
-  done: "已完成",
-  failed: "失败",
-}
+const STAGE_LABEL = { reading: "job.reading", uploading: "job.uploading", recognizing: "job.recognizing", writing: "job.writing", done: "job.done", failed: "job.failed" } as const satisfies Record<JobStage, Key>
 
 const normalizeFolder = (path: string) => path.trim().replace(/^\/+|\/+$/g, "") || "Meetings/录音转写"
 
@@ -96,7 +90,7 @@ export class TranscribeJob {
   get label(): string {
     const elapsed = this.stage === "recognizing" || this.stage === "writing" ? ` ${formatClock(Date.now() - this.stageStartedAt)}` : ""
     const part = this.part && this.part.total > 1 && (this.stage === "uploading" || this.stage === "recognizing") ? ` ${this.part.index + 1}/${this.part.total}` : ""
-    return `${STAGE_LABEL[this.stage]}${part}${elapsed}`
+    return `${t(STAGE_LABEL[this.stage])}${part}${elapsed}`
   }
 
   get recognized(): boolean {
@@ -187,7 +181,7 @@ export class TranscribeJob {
 
   /** Writes the result where the status bar sits, so text typed meanwhile stays where it is. */
   private async place(result: string): Promise<void> {
-    if (!this.app.vault.getAbstractFileByPath(this.target.path)) throw new Error(`目标笔记「${this.target.basename}」已被移动或删除`)
+    if (!this.app.vault.getAbstractFileByPath(this.target.path)) throw new Error(t("job.noteGone", this.target.basename))
     await this.app.vault.process(this.target, (content) => placeJobResult(content, this.id, result, `# ${this.target.basename}`))
   }
 
@@ -245,7 +239,7 @@ export class TranscribeJobs extends Events {
       await job.showBar()
     } catch (error) {
       this.jobs.delete(job)
-      new Notice(`无法写入笔记：${(error as Error).message}`)
+      new Notice(t("job.cannotWrite", (error as Error).message))
       return
     }
     this.render()
@@ -264,14 +258,14 @@ export class TranscribeJobs extends Events {
     this.trigger("change", job)
     const fragment = createFragment()
     if (job.stage === "done") {
-      fragment.createDiv({ text: `「${job.source.name}」已写入「${job.target.basename}」` })
-      this.noticeButton(fragment, "打开笔记", () => void this.app.workspace.openLinkText(job.target.path, "", false))
+      fragment.createDiv({ text: t("job.written", job.source.name, job.target.basename) })
+      this.noticeButton(fragment, t("common.openNote"), () => void this.app.workspace.openLinkText(job.target.path, "", false))
       new Notice(fragment, 8000)
       return
     }
-    fragment.createDiv({ text: `「${job.source.name}」处理失败：${job.error}` })
-    fragment.createDiv({ text: "可以在笔记中的状态横条上重试。" })
-    this.noticeButton(fragment, "打开笔记", () => void this.app.workspace.openLinkText(job.target.path, "", false))
+    fragment.createDiv({ text: t("job.processFailed", job.source.name, job.error ?? "") })
+    fragment.createDiv({ text: t("job.retryInNote") })
+    this.noticeButton(fragment, t("common.openNote"), () => void this.app.workspace.openLinkText(job.target.path, "", false))
     new Notice(fragment, 15000)
   }
 
@@ -292,8 +286,8 @@ export class TranscribeJobs extends Events {
       return
     }
     const first = jobs[0]
-    const more = jobs.length > 1 ? `（另有 ${jobs.length - 1} 个）` : ""
-    this.statusEl.setText(`访谈记录 · ${first.target.basename} · ${first.label}${more}`)
-    this.statusEl.setAttr("aria-label", "录音转写在后台进行，点击打开目标笔记")
+    const more = jobs.length > 1 ? t("job.more", jobs.length - 1) : ""
+    this.statusEl.setText(t("job.statusBar", first.target.basename, first.label, more))
+    this.statusEl.setAttr("aria-label", t("job.statusBarAria"))
   }
 }

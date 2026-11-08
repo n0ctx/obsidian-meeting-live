@@ -19,8 +19,8 @@ export function renderDeepgramSettings({ app, containerEl, settings, save }: Pro
   new Setting(containerEl)
     .setName(t("deepgram.settings.diarize.name"))
     .setDesc(t("deepgram.settings.diarize.desc"))
-    .addToggle((t) =>
-      t.setValue(deepgram.diarize).onChange((v) => {
+    .addToggle((field) =>
+      field.setValue(deepgram.diarize).onChange((v) => {
         deepgram.diarize = v
         save()
       }),

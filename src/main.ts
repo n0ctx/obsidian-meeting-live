@@ -1,5 +1,6 @@
 import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
 import { ensureConsentFor, type Destination } from "./consent.ts"
+import { t } from "./i18n/index.ts"
 import { resolveFile, resolveLive } from "./asr/providers/registry.ts"
 import type { ProviderEnv } from "./asr/providers/types.ts"
 import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
@@ -67,7 +68,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
         new JobBar(el, this.jobs, block, () => {
           const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath)
           if (file instanceof TFile && block.id) void this.app.vault.process(file, (content) => removeJobBlock(content, block.id!))
-        }),
+        }, () => "录音转写"),
       )
     })
     this.addSettingTab(new MeetingLiveSettingTab(this.app, this))
@@ -90,7 +91,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       this.app.workspace.on("editor-menu", (menu, editor, view) => {
         menu.addItem((item) =>
           item
-            .setTitle("插入会议组件")
+            .setTitle(t("cmd.insert"))
             .setIcon("audio-lines")
             .onClick(() => view instanceof MarkdownView && void this.insertMeeting(editor, view)),
         )
@@ -129,7 +130,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
 
   openMinutes(session: MeetingSession): void {
     if (session.llmProblem) {
-      new Notice(`${session.llmProblem}，请先在设置中配置`)
+      new Notice(t("notice.configureFirst", session.llmProblem))
       return
     }
     new MinutesModal(this.app, session, {
@@ -152,7 +153,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   openPath(path: string): void {
     const file = this.app.vault.getAbstractFileByPath(path)
     if (file instanceof TFile) void this.app.workspace.getLeaf("tab").openFile(file)
-    else new Notice(`文件尚未生成：${path}`)
+    else new Notice(t("notice.fileMissing", path))
   }
 
   revealFolder(session: MeetingSession): void {
@@ -165,23 +166,23 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   private registerCommands(): void {
     this.addCommand({
       id: "insert-meeting",
-      name: "插入会议组件",
+      name: t("cmd.insert"),
       icon: "audio-lines",
       editorCallback: (editor, view) => view instanceof MarkdownView && void this.insertMeeting(editor, view),
     })
-    this.addRibbonIcon("audio-lines", "Meeting Live：插入会议组件并开始录音", () => {
+    this.addRibbonIcon("audio-lines", t("cmd.ribbonInsert"), () => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView)
       if (view) void this.insertMeeting(view.editor, view, true)
-      else new Notice("请先打开一篇笔记，再插入会议组件")
+      else new Notice(t("notice.openNoteToInsert"))
     })
-    this.addRibbonIcon("file-audio", "Meeting Live：录音生成访谈记录", () => {
+    this.addRibbonIcon("file-audio", t("cmd.ribbonTranscribe"), () => {
       const file = this.app.workspace.getActiveViewOfType(MarkdownView)?.file
       if (file) this.openTranscribe(file)
-      else new Notice("请先打开一篇笔记，访谈记录会写入这篇笔记")
+      else new Notice(t("notice.openNoteToTranscribe"))
     })
     this.addCommand({
       id: "transcribe-audio-file",
-      name: "录音生成访谈记录（写入当前笔记）",
+      name: t("cmd.transcribe"),
       icon: "file-audio",
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveViewOfType(MarkdownView)?.file
@@ -202,11 +203,11 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
           return true
         },
       })
-    withSession("start", "开始或继续录音", "mic", async (s) => (await this.ensureConsent()) && s.start(), (s) => s.status !== "recording" && s.status !== "stopping")
-    withSession("pause", "暂停录音", "pause", (s) => s.pause(), (s) => s.status === "recording")
-    withSession("stop", "结束会议", "square", (s) => s.stop(), (s) => ["recording", "paused", "interrupted"].includes(s.status))
-    withSession("summarize", "立即生成阶段摘要", "list", (s) => !s.summarizeNow() && new Notice("没有新的转写内容需要总结"), () => true)
-    withSession("minutes", "生成正式纪要", "file-pen-line", (s) => this.openMinutes(s), (s) => s.utterances.length > 0)
+    withSession("start", t("cmd.start"), "mic", async (s) => (await this.ensureConsent()) && s.start(), (s) => s.status !== "recording" && s.status !== "stopping")
+    withSession("pause", t("cmd.pause"), "pause", (s) => s.pause(), (s) => s.status === "recording")
+    withSession("stop", t("cmd.stop"), "square", (s) => s.stop(), (s) => ["recording", "paused", "interrupted"].includes(s.status))
+    withSession("summarize", t("cmd.summarize"), "list", (s) => !s.summarizeNow() && new Notice(t("notice.nothingToSummarize")), () => true)
+    withSession("minutes", t("cmd.minutes"), "file-pen-line", (s) => this.openMinutes(s), (s) => s.utterances.length > 0)
   }
 
   private openTranscribe(file: TFile): void {
@@ -247,7 +248,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       const after = at.line + (prefix ? 2 : 0) + 3
       editor.setCursor({ line: Math.min(after, editor.lastLine()), ch: 0 })
     } catch (error) {
-      new Notice(`创建会议失败：${(error as Error).message}`)
+      new Notice(t("notice.createFailed", (error as Error).message))
       return
     }
     if (!record || !(await this.ensureConsent())) return
@@ -257,9 +258,9 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   private async endDetachedMeeting(path: string): Promise<void> {
     try {
       const ended = await this.manager.endIfDetached(path)
-      if (ended) new Notice(`会议组件已从笔记中删除，「${ended.meta.title}」已结束录音，录音与转写均已保存`)
+      if (ended) new Notice(t("notice.detached", ended.meta.title))
     } catch (error) {
-      new Notice(`结束会议失败：${(error as Error).message}`)
+      new Notice(t("notice.endFailed", (error as Error).message))
     }
   }
 
@@ -271,8 +272,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       return
     }
     this.statusEl.dataset.status = active.status
-    const label = active.status === "recording" ? "录音中" : active.status === "paused" ? "已暂停" : "收尾中"
+    const label = active.status === "recording" ? t("status.recording") : active.status === "paused" ? t("status.paused") : t("status.stopping")
     this.statusEl.setText(`${label} ${formatClock(active.durationMs)} · ${active.meta.title}`)
-    this.statusEl.setAttr("aria-label", "点击打开会议所在笔记")
+    this.statusEl.setAttr("aria-label", t("status.openNote"))
   }
 }

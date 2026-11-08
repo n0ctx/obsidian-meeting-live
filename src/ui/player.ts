@@ -1,4 +1,5 @@
 import { setIcon } from "obsidian"
+import { t } from "../i18n/index.ts"
 import type { MeetingSession } from "../meeting/session.ts"
 import { formatClock, type AudioSegment } from "../meeting/types.ts"
 
@@ -25,15 +26,15 @@ export class TimelinePlayer {
   constructor(parent: HTMLElement, session: MeetingSession) {
     this.session = session
     const root = parent.createDiv({ cls: "ml-player" })
-    this.playButton = root.createEl("button", { cls: "ml-play", attr: { "aria-label": "播放录音" } })
+    this.playButton = root.createEl("button", { cls: "ml-play", attr: { "aria-label": t("player.play") } })
     setIcon(this.playButton, "play")
     this.timeEl = root.createSpan({ cls: "ml-player-time", text: "00:00" })
-    this.track = root.createDiv({ cls: "ml-track", attr: { role: "slider", "aria-label": "录音进度", tabindex: "0" } })
+    this.track = root.createDiv({ cls: "ml-track", attr: { role: "slider", "aria-label": t("player.progress"), tabindex: "0" } })
     this.marks = this.track.createDiv({ cls: "ml-track-marks" })
     this.fill = this.track.createDiv({ cls: "ml-track-fill" })
     this.hover = this.track.createDiv({ cls: "ml-track-hover" })
     this.totalEl = root.createSpan({ cls: "ml-player-time is-total", text: "00:00" })
-    this.rateButton = root.createEl("button", { cls: "ml-rate", text: "1×", attr: { "aria-label": "播放速度" } })
+    this.rateButton = root.createEl("button", { cls: "ml-rate", text: "1×", attr: { "aria-label": t("player.speed") } })
     this.audio = root.createEl("audio", { attr: { preload: "metadata" } })
 
     this.playButton.addEventListener("click", () => (this.audio.paused ? void this.play() : this.audio.pause()))
@@ -58,7 +59,7 @@ export class TimelinePlayer {
     })
     this.audio.addEventListener("error", () => {
       this.playButton.addClass("is-error")
-      this.playButton.setAttr("aria-label", "录音文件无法播放")
+      this.playButton.setAttr("aria-label", t("player.broken"))
     })
 
     const positionAt = (event: PointerEvent) => {
@@ -111,7 +112,7 @@ export class TimelinePlayer {
     try {
       await this.audio.play()
     } catch (error) {
-      console.error("[meeting-live] 播放失败", error)
+      console.error("[meeting-live] playback failed", error)
     }
   }
 
@@ -142,7 +143,7 @@ export class TimelinePlayer {
 
   private syncButton(): void {
     setIcon(this.playButton, this.audio.paused ? "play" : "pause")
-    this.playButton.setAttr("aria-label", this.audio.paused ? "播放录音" : "暂停播放")
+    this.playButton.setAttr("aria-label", this.audio.paused ? t("player.play") : t("player.pause"))
     this.playButton.toggleClass("is-playing", !this.audio.paused)
   }
 
@@ -162,12 +163,12 @@ export class TimelinePlayer {
     this.marks.empty()
     const pct = (ms: number) => `${(ms / total) * 100}%`
     for (const gap of meta.gaps) {
-      const el = this.marks.createDiv({ cls: "ml-mark-gap", attr: { "aria-label": `转写缺口 ${formatClock(gap.startMs)}–${formatClock(gap.endMs)}` } })
+      const el = this.marks.createDiv({ cls: "ml-mark-gap", attr: { "aria-label": t("player.gap", formatClock(gap.startMs), formatClock(gap.endMs)) } })
       el.style.left = pct(gap.startMs)
       el.style.width = pct(Math.max(gap.endMs - gap.startMs, total / 400))
     }
     for (const segment of meta.segments.slice(1)) this.marks.createDiv({ cls: "ml-mark-seg" }).style.left = pct(segment.startMs)
-    for (const s of meta.summaries) this.marks.createDiv({ cls: "ml-mark-stage", attr: { "aria-label": `阶段 ${s.index}` } }).style.left = pct(s.endMs)
+    for (const s of meta.summaries) this.marks.createDiv({ cls: "ml-mark-stage", attr: { "aria-label": t("player.stage", s.index) } }).style.left = pct(s.endMs)
   }
 
   destroy(): void {

@@ -1,8 +1,10 @@
 import { MarkdownRenderChild, Menu, Notice, TFile, setIcon, type App, type EventRef, type Events, type MarkdownPostProcessorContext } from "obsidian"
+import { t, type Key } from "../i18n/index.ts"
 import type { LlmClient } from "../llm/client.ts"
 import type { MeetingManager } from "../meeting/manager.ts"
 import type { MeetingSession } from "../meeting/session.ts"
 import { formatClock, formatShortDateTime, type MeetingStatus, type Utterance } from "../meeting/types.ts"
+import { platformText } from "../platform.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { TimelinePlayer } from "./player.ts"
 import { TranscriptPane } from "./transcriptPane.ts"
@@ -23,22 +25,22 @@ export interface CardHost {
   saveSettings(): Promise<void>
 }
 
-const STATUS_LABEL: Record<MeetingStatus, string> = {
-  idle: "未开始",
-  recording: "录音中",
-  paused: "已暂停",
-  stopping: "正在收尾",
-  ended: "已结束",
-  interrupted: "录音中断",
-}
+const STATUS_LABEL = {
+  idle: "card.status.idle",
+  recording: "card.status.recording",
+  paused: "card.status.paused",
+  stopping: "card.status.stopping",
+  ended: "card.status.ended",
+  interrupted: "card.status.interrupted",
+} as const satisfies Record<MeetingStatus, Key>
 
-const ASR_LABEL: Record<string, [string, string]> = {
-  live: ["转写中", "ok"],
-  connecting: ["连接识别…", "busy"],
-  reconnecting: ["重连中", "warn"],
-  failed: ["识别失败", "error"],
-  disabled: ["未配置识别", "off"],
-  idle: ["识别就绪", "idle"],
+const ASR_LABEL: Record<string, [Key, string]> = {
+  live: ["card.asr.live", "ok"],
+  connecting: ["card.asr.connecting", "busy"],
+  reconnecting: ["card.asr.reconnecting", "warn"],
+  failed: ["card.asr.failed", "error"],
+  disabled: ["card.asr.disabled", "off"],
+  idle: ["card.asr.idle", "idle"],
 }
 
 /** Events that must not reach the editor, so interacting with the card never moves the cursor into the block. */
@@ -142,14 +144,14 @@ export class MeetingCard extends MarkdownRenderChild {
     setIcon(box.createDiv({ cls: "ml-missing-icon" }), "audio-lines")
     const text = box.createDiv({ cls: "ml-missing-text" })
     if (this.id) {
-      text.createDiv({ cls: "ml-missing-title", text: "找不到这场会议的数据" })
-      text.createDiv({ cls: "ml-missing-sub", text: `会话 ${this.id} 不在「${this.host.settings.folder}」目录中，可能已被移动或删除。` })
-      const retry = box.createEl("button", { cls: "ml-btn", text: "重新扫描" })
+      text.createDiv({ cls: "ml-missing-title", text: t("card.missing.title") })
+      text.createDiv({ cls: "ml-missing-sub", text: t("card.missing.sub", this.id, this.host.settings.folder) })
+      const retry = box.createEl("button", { cls: "ml-btn", text: t("card.missing.rescan") })
       retry.addEventListener("click", () => void this.rescan())
     } else {
-      text.createDiv({ cls: "ml-missing-title", text: "会议组件尚未关联会议" })
-      text.createDiv({ cls: "ml-missing-sub", text: "创建后会在会议目录中建立录音、转写与摘要文件，并把会话 ID 写入此代码块。" })
-      const create = box.createEl("button", { cls: "ml-btn is-primary", text: "创建会议" })
+      text.createDiv({ cls: "ml-missing-title", text: t("card.unlinked.title") })
+      text.createDiv({ cls: "ml-missing-sub", text: t("card.unlinked.sub") })
+      const create = box.createEl("button", { cls: "ml-btn is-primary", text: t("card.unlinked.create") })
       create.addEventListener("click", () => void this.createAndLink())
     }
   }
@@ -157,14 +159,14 @@ export class MeetingCard extends MarkdownRenderChild {
   private async rescan(): Promise<void> {
     await this.host.manager.reindex()
     if (await this.host.manager.get(this.id!)) this.rerender()
-    else new Notice("仍未找到会议数据")
+    else new Notice(t("card.missing.stillNot"))
   }
 
   private async createAndLink(): Promise<void> {
     const file = this.host.app.vault.getAbstractFileByPath(this.ctx.sourcePath)
     const info = this.ctx.getSectionInfo(this.containerEl)
     if (!(file instanceof TFile) || !info) {
-      new Notice("无法定位代码块，请改用命令「插入会议组件」")
+      new Notice(t("card.unlinked.noBlock"))
       return
     }
     const session = await this.host.manager.create(file.basename, file.path)
@@ -194,7 +196,7 @@ export class MeetingCard extends MarkdownRenderChild {
     const main = head.createDiv({ cls: "ml-head-main" })
     // The wrapper mirrors the value in a hidden copy so the input is exactly as wide as its text.
     this.titleWrap = main.createSpan({ cls: "ml-title-wrap" })
-    this.titleInput = this.titleWrap.createEl("input", { cls: "ml-title", attr: { type: "text", size: "1", spellcheck: "false", "aria-label": "会议名称" } })
+    this.titleInput = this.titleWrap.createEl("input", { cls: "ml-title", attr: { type: "text", size: "1", spellcheck: "false", "aria-label": t("card.titleLabel") } })
     this.setTitle(session.meta.title)
     this.titleInput.addEventListener("input", () => (this.titleWrap.dataset.value = this.titleInput.value))
     this.titleInput.addEventListener("change", () => session.rename(this.titleInput.value))
@@ -246,11 +248,11 @@ export class MeetingCard extends MarkdownRenderChild {
     if (mode === "hero") return this.buildHero()
     const session = this.session!
     const actions = createDiv({ cls: "ml-pane-actions" })
-    this.iconButton(actions, "copy", "复制全部转写", () => {
+    this.iconButton(actions, "copy", t("card.copyAll"), () => {
       void navigator.clipboard.writeText(this.transcript?.plainText() ?? "")
-      new Notice("已复制全部转写")
+      new Notice(t("card.copied"))
     })
-    this.iconButton(actions, "file-text", "打开原始转写文件", () => this.host.openPath(session.transcriptPath))
+    this.iconButton(actions, "file-text", t("card.openRaw"), () => this.host.openPath(session.transcriptPath))
     this.transcript = new TranscriptPane(this.body, session, actions)
     this.transcript.onSeek = (ms) => void this.player?.play(ms)
   }
@@ -258,8 +260,8 @@ export class MeetingCard extends MarkdownRenderChild {
   private buildHero(): void {
     const hero = this.body.createDiv({ cls: "ml-hero" })
     const intro = hero.createDiv({ cls: "ml-hero-intro" })
-    intro.createDiv({ cls: "ml-hero-title", text: "准备就绪" })
-    intro.createDiv({ cls: "ml-hero-sub", text: "开始后录音和实时转写同步进行，阶段摘要会写在组件下方。可以在组件上下方继续写速记。" })
+    intro.createDiv({ cls: "ml-hero-title", text: t("card.hero.title") })
+    intro.createDiv({ cls: "ml-hero-sub", text: t("card.hero.sub") })
     const checks = hero.createDiv({ cls: "ml-checks" })
     const settings = this.host.settings
     const asr = this.host.asr()
@@ -267,20 +269,20 @@ export class MeetingCard extends MarkdownRenderChild {
     const check = (ok: boolean, icon: string, title: string, detail: string) => {
       const row = checks.createDiv({ cls: `ml-check ${ok ? "is-ok" : "is-off"}` })
       setIcon(row.createSpan({ cls: "ml-check-icon" }), icon)
-      const t = row.createDiv({ cls: "ml-check-text" })
-      t.createSpan({ cls: "ml-check-title", text: title })
-      t.createSpan({ cls: "ml-check-detail", text: detail })
+      const label = row.createDiv({ cls: "ml-check-text" })
+      label.createSpan({ cls: "ml-check-title", text: title })
+      label.createSpan({ cls: "ml-check-detail", text: detail })
       if (ok) {
-        row.createSpan({ cls: "ml-check-state", text: "就绪" })
+        row.createSpan({ cls: "ml-check-state", text: t("card.check.ready") })
       } else {
-        const fix = row.createEl("button", { cls: "ml-link", text: "去设置" })
+        const fix = row.createEl("button", { cls: "ml-link", text: t("card.check.fix") })
         fix.addEventListener("click", () => this.host.openSettings())
       }
     }
-    check(true, "mic", "本地录音", `${settings.audioFormat === "ogg" ? "Opus 高码率" : "WAV 无损"} · 保存在 ${settings.folder}/`)
-    check(!asr.problem, "captions", "实时转写", asr.problem ? `${asr.problem}；不影响录音` : `${asr.name}流式识别`)
-    check(!llmProblem, "list", "阶段摘要", llmProblem ? `${llmProblem}；可稍后补生成` : `每 ${settings.summaryIntervalMin} 分钟写入笔记 · ${this.host.llm().model}`)
-    hero.createDiv({ cls: "ml-privacy", text: `录音时音频会实时上传至${asr.name}识别，转写文本会发送到你配置的 LLM 服务生成摘要。原始录音与转写只保存在本库。` })
+    check(true, "mic", t("card.check.recording"), t("card.check.recordingDetail", settings.audioFormat === "ogg" ? t("card.check.opus") : t("card.check.wav"), settings.folder))
+    check(!asr.problem, "captions", t("card.check.live"), asr.problem ? t("card.check.liveProblem", asr.problem) : t("card.check.liveOk", asr.name))
+    check(!llmProblem, "list", t("card.check.summary"), llmProblem ? t("card.check.summaryProblem", llmProblem) : t("card.check.summaryOk", settings.summaryIntervalMin, this.host.llm().model))
+    hero.createDiv({ cls: "ml-privacy", text: t("card.privacy", asr.name) })
   }
 
   private iconButton(parent: HTMLElement, icon: string, label: string, action: () => void): HTMLButtonElement {
@@ -298,7 +300,7 @@ export class MeetingCard extends MarkdownRenderChild {
     const status = session.status
     this.root.dataset.status = status
     this.statusEl.dataset.status = status
-    this.statusText.setText(STATUS_LABEL[status])
+    this.statusText.setText(t(STATUS_LABEL[status]))
     if (document.activeElement !== this.titleInput) this.setTitle(session.meta.title)
     this.root.toggleClass("is-capsule", !!session.meta.collapsed)
     const chipsHome = session.meta.collapsed ? this.metaEl : this.statusItems
@@ -327,8 +329,8 @@ export class MeetingCard extends MarkdownRenderChild {
     this.clockEl.setText(formatClock(session.durationMs, true))
     const parts = [formatShortDateTime(new Date(session.meta.createdAt))]
     if (session.status === "ended" || session.status === "interrupted") {
-      parts.push(`${session.utterances.length} 段发言`)
-      if (session.meta.summaries.length) parts.push(`${session.meta.summaries.length} 个阶段`)
+      parts.push(t("card.meta.utterances", session.utterances.length))
+      if (session.meta.summaries.length) parts.push(t("card.meta.stages", session.meta.summaries.length))
     }
     this.metaText.setText(parts.join(" · "))
     this.renderChips()
@@ -342,22 +344,23 @@ export class MeetingCard extends MarkdownRenderChild {
     if (session.status !== "idle" || session.meta.segments.length) {
       const live = session.status === "recording" || session.status === "paused" || session.status === "stopping"
       if (live) {
-        const [label, tone] = ASR_LABEL[session.asrState] ?? ["", "idle"]
+        const [labelKey, tone] = ASR_LABEL[session.asrState] ?? [undefined, "idle"]
+        const label = labelKey ? t(labelKey) : ""
         const backlog = session.asrBacklogMs
-        const text = session.asrState === "reconnecting" && backlog > 1500 ? `${label} · 已缓冲 ${Math.round(backlog / 1000)}s` : label
+        const text = session.asrState === "reconnecting" && backlog > 1500 ? t("card.chip.buffered", label, Math.round(backlog / 1000)) : label
         chips.push({ icon: session.asrState === "live" ? "audio-lines" : session.asrState === "failed" || session.asrState === "reconnecting" ? "wifi-off" : "captions", text, tone, title: session.asrDetail })
       }
       if (!session.llmProblem && session.status === "recording" && this.host.settings.autoSummary) {
         const running = session.meta.summaries.some((s) => s.status === "running")
-        chips.push({ icon: running ? "list" : "timer", text: running ? "摘要生成中" : `下次摘要 ${formatClock(Math.max(0, session.nextSummaryInMs))}`, tone: running ? "busy" : "idle" })
+        chips.push({ icon: running ? "list" : "timer", text: running ? t("card.chip.summarizing") : t("card.chip.nextSummary", formatClock(Math.max(0, session.nextSummaryInMs))), tone: running ? "busy" : "idle" })
       }
       if (!session.llmProblem) {
         const failed = session.meta.summaries.filter((s) => s.status === "failed").length
-        if (failed) chips.push({ icon: "triangle-alert", text: failed > 1 ? `${failed} 个摘要失败` : "摘要失败", tone: "warn" })
-        else if (session.meta.overview?.error && !session.overviewRunning) chips.push({ icon: "triangle-alert", text: "概览更新失败", tone: "warn" })
+        if (failed) chips.push({ icon: "triangle-alert", text: failed > 1 ? t("card.chip.summariesFailed", failed) : t("card.chip.summaryFailed"), tone: "warn" })
+        else if (session.meta.overview?.error && !session.overviewRunning) chips.push({ icon: "triangle-alert", text: t("card.chip.overviewFailed"), tone: "warn" })
       }
       const save = session.saveState
-      chips.push({ icon: save === "error" ? "triangle-alert" : "check", text: save === "error" ? "保存失败" : save === "saving" ? "保存中" : "已保存", tone: save === "error" ? "error" : "idle" })
+      chips.push({ icon: save === "error" ? "triangle-alert" : "check", text: save === "error" ? t("card.chip.saveFailed") : save === "saving" ? t("card.chip.saving") : t("card.chip.saved"), tone: save === "error" ? "error" : "idle" })
       // Least important last: it is the first to drop when the header runs out of room.
       if (live && session.deviceLabel) chips.push({ icon: "mic", text: session.deviceLabel.replace(/^Default - /, "").replace(/\s*\(.*\)$/, ""), tone: "idle" })
     }
@@ -391,23 +394,23 @@ export class MeetingCard extends MarkdownRenderChild {
       return b
     }
     if (status === "stopping") {
-      const b = button("is-wait", "loader", "正在收尾", () => undefined, true)
+      const b = button("is-wait", "loader", t("card.ctl.wrapping"), () => undefined, true)
       b.addClass("is-spinning")
     } else if (status === "recording") {
-      button("is-secondary", "pause", "暂停", () => session.pause())
-      button("is-stop", "square", "结束", () => session.stop())
+      button("is-secondary", "pause", t("card.ctl.pause"), () => session.pause())
+      button("is-stop", "square", t("card.ctl.end"), () => session.stop())
     } else if (status === "paused" || status === "interrupted") {
-      button("is-record", "circle", "继续", () => this.startRecording(), !!blocked)
-      button("is-stop", "square", "结束", () => session.stop())
+      button("is-record", "circle", t("card.ctl.resume"), () => this.startRecording(), !!blocked)
+      button("is-stop", "square", t("card.ctl.end"), () => session.stop())
     } else if (status === "ended") {
-      button("is-secondary", "mic", "继续录音", () => this.startRecording(), !!blocked)
+      button("is-secondary", "mic", t("card.ctl.resumeRecording"), () => this.startRecording(), !!blocked)
     } else {
-      button("is-record is-hero", "circle", "开始录音", () => this.startRecording(), !!blocked)
+      button("is-record is-hero", "circle", t("card.ctl.start"), () => this.startRecording(), !!blocked)
     }
-    const fold = this.controls.createEl("button", { cls: "ml-ctl is-fold", attr: { "aria-label": collapsed ? "展开会议组件" : "收起为胶囊", "aria-expanded": String(!collapsed) } })
+    const fold = this.controls.createEl("button", { cls: "ml-ctl is-fold", attr: { "aria-label": collapsed ? t("card.ctl.expand") : t("card.ctl.collapse"), "aria-expanded": String(!collapsed) } })
     setIcon(fold, collapsed ? "chevrons-up-down" : "chevrons-down-up")
     fold.addEventListener("click", () => session.setCollapsed(!collapsed))
-    const more = this.controls.createEl("button", { cls: "ml-ctl is-more", attr: { "aria-label": "更多操作" } })
+    const more = this.controls.createEl("button", { cls: "ml-ctl is-more", attr: { "aria-label": t("card.ctl.more") } })
     setIcon(more, "ellipsis")
     more.addEventListener("click", (e) => this.openMenu(e))
   }
@@ -437,29 +440,29 @@ export class MeetingCard extends MarkdownRenderChild {
       new Notice(`${session.llmProblem}，请先在设置中配置`)
       return
     }
-    if (!session.summarizeNow()) new Notice("没有新的转写内容需要总结")
-    else new Notice("正在生成阶段摘要，完成后写入组件下方")
+    if (!session.summarizeNow()) new Notice(t("notice.nothingToSummarize"))
+    else new Notice(t("notice.summarizing"))
   }
 
   private openMenu(event: MouseEvent): void {
     const session = this.session!
     const menu = new Menu()
-    menu.addItem((i) => i.setTitle("立即生成阶段摘要").setIcon("list").onClick(() => this.summarizeNow()))
+    menu.addItem((i) => i.setTitle(t("card.menu.summarize")).setIcon("list").onClick(() => this.summarizeNow()))
     if (session.isLive && (session.asrState === "failed" || session.asrState === "reconnecting")) {
-      menu.addItem((i) => i.setTitle("立即重连语音识别").setIcon("refresh-cw").onClick(() => session.retryAsr()))
+      menu.addItem((i) => i.setTitle(t("card.menu.reconnect")).setIcon("refresh-cw").onClick(() => session.retryAsr()))
     }
-    menu.addItem((i) => i.setTitle("生成正式纪要…").setIcon("file-pen-line").onClick(() => this.host.openMinutes(session)))
+    menu.addItem((i) => i.setTitle(t("card.menu.minutes")).setIcon("file-pen-line").onClick(() => this.host.openMinutes(session)))
     menu.addSeparator()
-    menu.addItem((i) => i.setTitle("打开原始转写").setIcon("captions").onClick(() => this.host.openPath(session.transcriptPath)))
-    menu.addItem((i) => i.setTitle("在访达中显示会议文件夹").setIcon("folder-open").onClick(() => this.host.revealFolder(session)))
+    menu.addItem((i) => i.setTitle(t("card.menu.openRaw")).setIcon("captions").onClick(() => this.host.openPath(session.transcriptPath)))
+    menu.addItem((i) => i.setTitle(platformText("reveal")).setIcon("folder-open").onClick(() => this.host.revealFolder(session)))
     menu.addItem((i) =>
       i
-        .setTitle("复制会话 ID")
+        .setTitle(t("card.menu.copyId"))
         .setIcon("copy")
         .onClick(() => void navigator.clipboard.writeText(session.id)),
     )
     menu.addSeparator()
-    menu.addItem((i) => i.setTitle("Meeting Live 设置").setIcon("settings").onClick(() => this.host.openSettings()))
+    menu.addItem((i) => i.setTitle(t("card.menu.settings")).setIcon("settings").onClick(() => this.host.openSettings()))
     menu.showAtMouseEvent(event)
   }
 
@@ -471,19 +474,19 @@ export class MeetingCard extends MarkdownRenderChild {
     const actions: [string, () => void][] = []
     if (session.status === "interrupted") {
       tone = "warn"
-      text = `上次录音意外中断，已恢复 ${formatClock(session.durationMs, true)} 的录音和全部已确认转写。可以继续录音，或结束会议并补全摘要。`
+      text = t("card.alert.interrupted", formatClock(session.durationMs, true))
     } else if (session.error) {
       tone = "error"
       text = session.error
-      actions.push(["知道了", () => ((session.error = undefined), this.update())])
+      actions.push([t("card.alert.dismiss"), () => ((session.error = undefined), this.update())])
     } else if (session.isLive && session.asrState === "failed") {
       tone = "error"
-      text = `语音识别已停止：${session.asrDetail ?? "未知错误"}。录音仍在继续，恢复后未转写的时段会标记为缺口。`
-      actions.push(["重试", () => session.retryAsr()], ["设置", () => this.host.openSettings()])
+      text = t("card.alert.asrStopped", session.asrDetail ?? t("common.unknownError"))
+      actions.push([t("common.retry"), () => session.retryAsr()], [t("card.alert.settings"), () => this.host.openSettings()])
     } else if (session.isLive && session.asrState === "reconnecting") {
       tone = "warn"
-      text = `与${session.asrName || "识别服务"}的连接中断，正在自动重连。期间的音频已缓存，连上后会补发识别${session.asrDetail ? `（${session.asrDetail}）` : ""}。`
-      actions.push(["立即重连", () => session.retryAsr()])
+      text = t("card.alert.reconnecting", session.asrName, session.asrDetail ?? "")
+      actions.push([t("card.alert.reconnectNow"), () => session.retryAsr()])
     } else if (!session.llmProblem) {
       const failed = session.meta.summaries.filter((s) => s.status === "failed")
       const overview = session.meta.overview
@@ -491,16 +494,16 @@ export class MeetingCard extends MarkdownRenderChild {
       if (failed.length) {
         tone = "warn"
         const last = failed[failed.length - 1]
-        text = `${failed.length > 1 ? `${failed.length} 个阶段` : `阶段 ${last.index} `}的摘要生成失败：${last.error ?? "未知错误"}`
-        actions.push(["重试", () => failed.forEach((s) => session.retrySummary(s.index))])
+        text = failed.length > 1 ? t("card.alert.summariesFailed", failed.length, last.error ?? t("common.unknownError")) : t("card.alert.summaryFailed", last.index, last.error ?? t("common.unknownError"))
+        actions.push([t("common.retry"), () => failed.forEach((s) => session.retrySummary(s.index))])
       } else if (overview?.error && !session.overviewRunning) {
         tone = "warn"
-        text = `会议概览更新失败：${overview.error}`
-        actions.push(["重试", () => void session.updateOverview()])
+        text = t("card.alert.overviewFailed", overview.error)
+        actions.push([t("common.retry"), () => void session.updateOverview()])
       } else if (backlog > 0 && !session.isLive && !session.overviewRunning && session.meta.summaries.every((s) => s.status === "done" || s.status === "failed")) {
         tone = "warn"
-        text = `还有 ${backlog} 个阶段未并入会议概览`
-        actions.push(["合并", () => void session.updateOverview()])
+        text = t("card.alert.backlog", backlog)
+        actions.push([t("card.alert.merge"), () => void session.updateOverview()])
       }
     }
     this.alertEl.toggleClass("is-visible", !!text)
@@ -543,18 +546,18 @@ export class MeetingCard extends MarkdownRenderChild {
       a.createSpan({ text: label })
       a.addEventListener("click", () => this.host.openPath(path))
     }
-    link("captions", "原始转写", session.transcriptPath)
-    for (const [i, path] of session.meta.minutes.entries()) link("file-pen-line", session.meta.minutes.length > 1 ? `正式纪要 ${i + 1}` : "正式纪要", path)
+    link("captions", t("card.foot.raw"), session.transcriptPath)
+    for (const [i, path] of session.meta.minutes.entries()) link("file-pen-line", session.meta.minutes.length > 1 ? t("card.foot.minutesN", i + 1) : t("card.foot.minutes"), path)
     const segs = session.meta.segments
     if (segs.length) {
       const fmt = segs[segs.length - 1]
-      files.createSpan({ cls: "ml-audio-info", text: `录音 ${segs.length} 段 · ${Math.round(fmt.sampleRate / 1000)} kHz ${fmt.format === "ogg" ? "Opus" : "WAV"}` })
+      files.createSpan({ cls: "ml-audio-info", text: t("card.foot.audio", segs.length, Math.round(fmt.sampleRate / 1000), fmt.format === "ogg" ? "Opus" : "WAV") })
     }
     const ended = session.status === "ended" || session.status === "interrupted"
     const running = session.minutes.status === "running"
     const minutes = row.createEl("button", { cls: `ml-btn ml-minutes ${ended ? "is-primary" : ""}` })
     setIcon(minutes.createSpan({ cls: "ml-btn-icon" }), running ? "loader" : "file-pen-line")
-    minutes.createSpan({ text: running ? "纪要生成中…" : "生成正式纪要" })
+    minutes.createSpan({ text: running ? t("card.foot.generating") : t("card.foot.generate") })
     minutes.toggleClass("is-spinning", running)
     minutes.disabled = running || session.utterances.length === 0
     minutes.addEventListener("click", () => this.host.openMinutes(session))

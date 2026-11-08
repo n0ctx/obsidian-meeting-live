@@ -17,8 +17,8 @@ export function renderOpenAiCompatSettings({ app, containerEl, settings, save }:
   new Setting(containerEl)
     .setName(t("openai.settings.limit.name"))
     .setDesc(t("openai.settings.limit.desc", OPENAI_FILE_LIMIT / 1024 / 1024))
-    .addText((t) =>
-      t
+    .addText((field) =>
+      field
         .setPlaceholder(String(OPENAI_FILE_LIMIT / 1024 / 1024))
         .setValue(openai.fileSizeLimitMb > 0 ? String(openai.fileSizeLimitMb) : "")
         .onChange((v) => {

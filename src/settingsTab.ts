@@ -73,8 +73,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName(t("settings.voice.name"))
       .setDesc(t("settings.voice.desc"))
-      .addToggle((t) =>
-        t.setValue(this.s.voiceProcessing).onChange((v) => {
+      .addToggle((field) =>
+        field.setValue(this.s.voiceProcessing).onChange((v) => {
           this.s.voiceProcessing = v
           this.save()
         }),
@@ -87,8 +87,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName(t("settings.llm.test")).addButton((b) => b.setButtonText(t("settings.test")).onClick(() => void this.testLlm(b.buttonEl)))
 
     new Setting(containerEl).setName(t("settings.summary")).setHeading()
-    new Setting(containerEl).setName(t("settings.auto.name")).addToggle((t) =>
-      t.setValue(this.s.autoSummary).onChange((v) => {
+    new Setting(containerEl).setName(t("settings.auto.name")).addToggle((field) =>
+      field.setValue(this.s.autoSummary).onChange((v) => {
         this.s.autoSummary = v
         this.save()
       }),
@@ -120,9 +120,9 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName(t("settings.hotwords.name"))
         .setDesc(t("settings.hotwords.desc"))
-        .addTextArea((t) => {
-          t.inputEl.rows = 4
-          t.setValue(s.hotwords).onChange((v) => {
+        .addTextArea((field) => {
+          field.inputEl.rows = 4
+          field.setValue(s.hotwords).onChange((v) => {
             s.hotwords = v
             this.save()
           })
@@ -188,9 +188,9 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName(t("settings.llm.headers.name"))
         .setDesc(t("settings.llm.headers.desc"))
-        .addTextArea((t) => {
-          t.inputEl.rows = 3
-          t.setValue(s.llmHeaders).onChange((v) => {
+        .addTextArea((field) => {
+          field.inputEl.rows = 3
+          field.setValue(s.llmHeaders).onChange((v) => {
             s.llmHeaders = v
             this.save()
           })
@@ -230,8 +230,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName(t("settings.llm.limit.name"))
       .setDesc(t("settings.llm.limit.desc", preset.name, preset.inputTokens.toLocaleString()))
-      .addText((t) =>
-        t
+      .addText((field) =>
+        field
           .setPlaceholder(String(preset.inputTokens))
           .setValue(s.llmInputLimit > 0 ? String(s.llmInputLimit) : "")
           .onChange((v) => {
@@ -256,10 +256,10 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           this.save()
         }),
     )
-    setting.addTextArea((t) => {
-      area = t.inputEl
-      t.inputEl.rows = rows
-      t.setValue(this.s[key]).onChange((v) => {
+    setting.addTextArea((field) => {
+      area = field.inputEl
+      field.inputEl.rows = rows
+      field.setValue(this.s[key]).onChange((v) => {
         this.s[key] = v
         this.save()
       })

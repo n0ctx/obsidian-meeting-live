@@ -1,4 +1,5 @@
 import { FuzzySuggestModal, Modal, Notice, TFile, setIcon, type App } from "obsidian"
+import { t } from "../i18n/index.ts"
 import { DEFAULT_MINUTES_PROMPT, stripMeetingBlocks } from "../llm/minutes.ts"
 import type { Destination } from "../consent.ts"
 import type { MeetingSession } from "../meeting/session.ts"
@@ -21,25 +22,25 @@ export class ConsentModal extends Modal {
 
   override onOpen(): void {
     this.modalEl.addClass("ml-modal")
-    this.setTitle("开始前请确认数据去向")
+    this.setTitle(t("consent.title"))
     const list = this.contentEl.createDiv({ cls: "ml-consent" })
     const item = (icon: string, title: string, text: string) => {
       const row = list.createDiv({ cls: "ml-consent-row" })
       setIcon(row.createSpan({ cls: "ml-consent-icon" }), icon)
-      const t = row.createDiv()
-      t.createDiv({ cls: "ml-consent-title", text: title })
-      t.createDiv({ cls: "ml-consent-text", text })
+      const body = row.createDiv()
+      body.createDiv({ cls: "ml-consent-title", text: title })
+      body.createDiv({ cls: "ml-consent-text", text })
     }
-    item("hard-drive", "原始录音只保存在本地", "录音、原始转写和会议元数据写入当前 Vault 的会议目录，插件不会上传录音文件。")
+    item("hard-drive", t("consent.local.title"), t("consent.local.text"))
     for (const d of this.destinations) {
-      if (d.kind === "live") item("captions", `音频实时上传至${d.name}`, `录音时，音频流会实时发送到${d.name}语音识别服务（${d.host}）进行转写。`)
-      else if (d.kind === "file") item("file-audio", `录音文件上传至${d.name}`, `使用「录音生成访谈记录」时，所选录音文件会上传到${d.name}录音文件识别服务（${d.host}）进行转写。`)
-      else item("send", "转写文本发送至 LLM 服务", `阶段摘要和正式纪要会把转写文本与所选笔记发送到你配置的模型服务：${d.host}${d.detail ? ` · ${d.detail}` : ""}。`)
+      if (d.kind === "live") item("captions", t("consent.live.title", d.name), t("consent.live.text", d.name, d.host))
+      else if (d.kind === "file") item("file-audio", t("consent.file.title", d.name), t("consent.file.text", d.name, d.host))
+      else item("send", t("consent.llm.title"), t("consent.llm.text", d.host, d.detail ?? ""))
     }
-    list.createDiv({ cls: "ml-consent-note", text: "请确保已获得参会者对录音和使用云端服务处理的同意。同一去向只需确认一次，更换服务或地址后会再次确认。" })
+    list.createDiv({ cls: "ml-consent-note", text: t("consent.note") })
     const buttons = this.contentEl.createDiv({ cls: "modal-button-container" })
-    buttons.createEl("button", { text: "取消" }).addEventListener("click", () => this.close())
-    const ok = buttons.createEl("button", { cls: "mod-cta", text: "同意并开始" })
+    buttons.createEl("button", { text: t("common.cancel") }).addEventListener("click", () => this.close())
+    const ok = buttons.createEl("button", { cls: "mod-cta", text: t("consent.accept") })
     ok.addEventListener("click", () => {
       this.resolve(true)
       this.resolve = () => undefined
@@ -59,7 +60,7 @@ class NotePicker extends FuzzySuggestModal<TFile> {
   constructor(app: App, onPick: (file: TFile) => void) {
     super(app)
     this.onPick = onPick
-    this.setPlaceholder("选择要作为手动笔记参考的笔记")
+    this.setPlaceholder(t("minutes.pickNote"))
   }
 
   getItems(): TFile[] {
@@ -95,7 +96,7 @@ export class MinutesModal extends Modal {
 
   override onOpen(): void {
     this.modalEl.addClass("ml-modal", "ml-minutes-modal")
-    this.setTitle("生成正式纪要")
+    this.setTitle(t("minutes.title"))
     const { contentEl, session } = this
     const chars = session.utterances.reduce((n, u) => n + u.text.length, 0)
     const done = session.meta.summaries.filter((s) => s.status === "done").length
@@ -105,11 +106,11 @@ export class MinutesModal extends Modal {
       s.createDiv({ cls: "ml-source-value", text: value })
       s.createDiv({ cls: "ml-source-label", text: label })
     }
-    stat(`${session.utterances.length}`, `段原始转写 · ${chars.toLocaleString()} 字`)
-    stat(`${done}`, "段 AI 阶段摘要（仅供核对）")
-    if (session.meta.gaps.length) stat(`${session.meta.gaps.length}`, "处转写缺口")
+    stat(`${session.utterances.length}`, t("minutes.stat.segments", chars.toLocaleString()))
+    stat(`${done}`, t("minutes.stat.summaries"))
+    if (session.meta.gaps.length) stat(`${session.meta.gaps.length}`, t("minutes.stat.gaps"))
 
-    contentEl.createDiv({ cls: "ml-field-label", text: "手动笔记（用于核对事实与专有名词）" })
+    contentEl.createDiv({ cls: "ml-field-label", text: t("minutes.notes") })
     const noteList = contentEl.createDiv({ cls: "ml-note-list" })
     const renderNotes = () => {
       noteList.empty()
@@ -117,7 +118,7 @@ export class MinutesModal extends Modal {
         const row = noteList.createDiv({ cls: "ml-note-row" })
         setIcon(row.createSpan({ cls: "ml-note-icon" }), "notebook-pen")
         row.createSpan({ cls: "ml-note-path", text: path })
-        const remove = row.createEl("button", { cls: "ml-icon-btn", attr: { "aria-label": "移除" } })
+        const remove = row.createEl("button", { cls: "ml-icon-btn", attr: { "aria-label": t("common.remove") } })
         setIcon(remove, "x")
         remove.addEventListener("click", () => {
           this.notes.delete(path)
@@ -126,7 +127,7 @@ export class MinutesModal extends Modal {
       }
       const add = noteList.createEl("button", { cls: "ml-btn is-small is-ghost" })
       setIcon(add.createSpan({ cls: "ml-btn-icon" }), "plus")
-      add.createSpan({ text: "添加笔记" })
+      add.createSpan({ text: t("minutes.addNote") })
       add.addEventListener("click", () =>
         new NotePicker(this.app, (file) => {
           this.notes.add(file.path)
@@ -137,27 +138,27 @@ export class MinutesModal extends Modal {
     renderNotes()
 
     const promptHead = contentEl.createDiv({ cls: "ml-field-head" })
-    promptHead.createDiv({ cls: "ml-field-label", text: "纪要 Prompt" })
-    const reset = promptHead.createEl("button", { cls: "ml-link", text: "恢复默认" })
+    promptHead.createDiv({ cls: "ml-field-label", text: t("minutes.prompt") })
+    const reset = promptHead.createEl("button", { cls: "ml-link", text: t("settings.resetDefault") })
     const prompt = contentEl.createEl("textarea", { cls: "ml-prompt" })
     prompt.value = this.defaultPrompt
     reset.addEventListener("click", () => (prompt.value = DEFAULT_MINUTES_PROMPT))
     const saveRow = contentEl.createEl("label", { cls: "ml-save-default" })
     const save = saveRow.createEl("input", { attr: { type: "checkbox" } })
-    saveRow.createSpan({ text: "保存为默认 Prompt" })
+    saveRow.createSpan({ text: t("minutes.saveDefault") })
 
-    contentEl.createDiv({ cls: "ml-privacy", text: `转写、摘要和所选笔记会发送到 ${this.target}。结果保存为会议目录中的新文档，不会覆盖已有纪要或原始资料。` })
+    contentEl.createDiv({ cls: "ml-privacy", text: t("minutes.privacy", this.target) })
     const status = contentEl.createDiv({ cls: "ml-modal-status" })
     const buttons = contentEl.createDiv({ cls: "modal-button-container" })
-    buttons.createEl("button", { text: "取消" }).addEventListener("click", () => this.close())
-    const go = buttons.createEl("button", { cls: "mod-cta", text: "生成" })
+    buttons.createEl("button", { text: t("common.cancel") }).addEventListener("click", () => this.close())
+    const go = buttons.createEl("button", { cls: "mod-cta", text: t("minutes.generate") })
     go.disabled = session.utterances.length === 0
     go.addEventListener("click", () => void generate())
     const generate = async () => {
       if (save.checked) this.onSavePrompt(prompt.value)
       go.disabled = true
-      go.setText("生成中…")
-      status.setText("正在等待模型返回，长会议可能需要一两分钟。可以关闭此窗口，完成后会提示。")
+      go.setText(t("minutes.generating"))
+      status.setText(t("minutes.waiting"))
       const notes: { path: string; content: string }[] = []
       for (const path of this.notes) {
         const file = this.app.vault.getAbstractFileByPath(path)
@@ -166,16 +167,16 @@ export class MinutesModal extends Modal {
       session
         .generateMinutes(prompt.value, notes, (text) => status.setText(text))
         .then((path) => {
-          new Notice("正式纪要已生成")
+          new Notice(t("minutes.done"))
           this.onDone(path)
           this.close()
         })
         .catch((error: Error) => {
-          new Notice(`纪要生成失败：${error.message}`)
+          new Notice(t("minutes.failed", error.message))
           status.setText(error.message)
           status.addClass("is-error")
           go.disabled = false
-          go.setText("重试")
+          go.setText(t("common.retry"))
         })
     }
   }
