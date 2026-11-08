@@ -34,7 +34,7 @@ export interface Utterance {
   startMs: number
   endMs: number
   text: string
-  /** Speaker label when the recognizer separates speakers; not yet stored in transcripts. */
+  /** Id of the speaker ("1", "2", …) when the recognizer separates speakers, by voice and not by identity; kept in the transcript line. */
   speaker?: string
 }
 

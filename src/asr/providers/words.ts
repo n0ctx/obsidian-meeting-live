@@ -1,6 +1,6 @@
 // Joining the words of a transcript back into text, for services that return words rather than sentences.
 
-const CJK = /[⺀-鿿豈-﫿＀-￯]/
+import { CJK } from "../cjk.ts"
 
 /** Words are separated by spaces except between CJK characters, which Deepgram returns one by one. */
 export function joinWords(words: string[]): string {

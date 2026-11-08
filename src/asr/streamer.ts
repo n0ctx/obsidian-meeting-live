@@ -1,5 +1,6 @@
 import { ASR_RATE, PcmRing, msToSamples, samplesToMs } from "../audio/pcm.ts"
 import { newGap } from "../meeting/gap.ts"
+import { speakerId } from "../meeting/speakers.ts"
 import type { GapCode, TranscriptGap, Utterance } from "../meeting/types.ts"
 import { AsrError, type AsrConnect, type AsrConnection, type AsrUpdate, type AsrUtterance } from "./contract.ts"
 
@@ -40,7 +41,8 @@ const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000]
 /** Shifts a connection-relative utterance onto the meeting timeline. */
 function onTimeline(item: AsrUtterance, text: string, baseMs: number): Utterance {
   const u: Utterance = { startMs: baseMs + item.startMs, endMs: baseMs + Math.max(item.startMs, item.endMs), text }
-  if (item.speaker) u.speaker = item.speaker
+  const speaker = speakerId(item.speaker)
+  if (speaker) u.speaker = speaker
   return u
 }
 

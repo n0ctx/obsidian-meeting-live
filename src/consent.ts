@@ -3,7 +3,7 @@
 import { asrProvider } from "./asr/providers/registry.ts"
 import { chatCompletionsUrl } from "./llm/client.ts"
 import type { MeetingLiveSettings } from "./settings.ts"
-import { hostOf } from "./url.ts"
+import { hostOf, isLoopbackHost } from "./url.ts"
 
 export interface Destination {
   /** What is sent: live audio, recorded files, or meeting text. */
@@ -13,6 +13,8 @@ export interface Destination {
   host: string
   /** For the LLM, the model that reads the text. */
   detail?: string
+  /** The host is this machine (loopback): the data is still listed and agreed to, but it does not leave the computer. */
+  local?: true
 }
 
 /** Where the plugin would send data under these settings. Destinations that cannot be resolved to a host are left out. */
@@ -25,8 +27,11 @@ export function destinations(settings: MeetingLiveSettings): Destination[] {
     { kind: "file", name: file?.name ?? settings.fileProvider, host: file?.file?.host(settings) ?? "" },
     { kind: "llm", name: llmHost, host: llmHost, detail: settings.llmModel.trim() || undefined },
   ]
-  return list.filter((d) => d.host)
+  return list.filter((d) => d.host).map((d) => (isLoopbackHost(d.host) ? { ...d, local: true as const } : d))
 }
+
+/** Whether live audio stays on this machine under these settings. */
+export const liveIsLocal = (settings: MeetingLiveSettings): boolean => destinations(settings).some((d) => d.kind === "live" && d.local)
 
 export function destinationKey(d: Pick<Destination, "kind" | "host">): string {
   return `${d.kind}:${d.host.toLowerCase()}`

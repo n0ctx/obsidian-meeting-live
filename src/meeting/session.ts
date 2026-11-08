@@ -437,7 +437,7 @@ export class MeetingSession extends Events {
     record.attempts++
     this.trigger("summary")
     try {
-      const messages = buildSummaryMessages(this.meta.title, this.env.settings().summaryFocus, record, items, previous, this.meta.overview?.content)
+      const messages = buildSummaryMessages(this.meta.title, this.env.settings().summaryFocus, record, items, previous, this.meta.overview?.content, this.noteLang)
       const text = await llm.complete(messages, { json: true })
       const content = parseSummary(text, items)
       record.content = content

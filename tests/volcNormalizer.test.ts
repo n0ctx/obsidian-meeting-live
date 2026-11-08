@@ -2,6 +2,9 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { VolcNormalizer, utterancesOf, volcResultSink } from "../src/asr/providers/volc/normalize.ts"
 import type { AsrUpdate } from "../src/asr/contract.ts"
+import { buildVolcRequest } from "../src/asr/providers/volc/live.ts"
+import { volcProvider } from "../src/asr/providers/volc/index.ts"
+import { loadSettings } from "../src/settings.ts"
 
 const payload = (utterances: unknown[]) => ({ result: { text: "", utterances } })
 
@@ -78,4 +81,28 @@ test("the sink forwards each payload with its end-of-stream flag", () => {
   assert.equal(seen[0][0].utterances[0].text, "好")
   assert.equal(seen[0][1], false)
   assert.deepEqual(seen[1], [{ utterances: [], keepInterims: false }, true])
+})
+
+test("the speaker of an utterance is read from speaker_id, from additions and as digits of a longer label, and ignored otherwise", () => {
+  const speakers = (items: object[]) => new VolcNormalizer().update(payload(items.map((i) => ({ text: "好", start_time: 0, end_time: 100, definite: true, ...i }))), false).utterances.map((u) => u.speaker)
+  assert.deepEqual(speakers([{ speaker_id: "2" }, { speaker_id: 3 }, { additions: { speaker_id: "1" } }, { additions: { speaker: "4" } }, { speaker: "5" }]), ["2", "3", "1", "4", "5"])
+  assert.deepEqual(speakers([{ speaker_id: "speaker_3" }, { speaker_id: "" }, { speaker_id: "no digits" }, {}]), ["3", undefined, undefined, undefined])
+  // Without a label the utterance has no speaker key at all, so nothing changes for a service that sends none.
+  assert.equal("speaker" in new VolcNormalizer().update(payload([{ text: "好", start_time: 0, end_time: 100, definite: true }]), false).utterances[0], false)
+})
+
+test("the streaming request asks for speakers only when they are turned on, and the provider reports it", () => {
+  const base = { endpoint: "wss://example/api/v3/sauc/bigmodel_async", resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, hotwords: [] }
+  const request = (config: object) => (buildVolcRequest({ ...base, ...config }).request as Record<string, unknown>)
+  assert.equal("enable_speaker_info" in request({}), false)
+  assert.equal("enable_speaker_info" in request({ speakers: false }), false)
+  assert.equal(request({ speakers: true }).enable_speaker_info, true)
+  assert.equal(request({ speakers: true }).show_utterances, true, "speaker_id only comes with show_utterances")
+  assert.equal(request({ speakers: true }).enable_nonstream, true, "the async endpoint needs enable_nonstream with it")
+
+  const off = loadSettings({ version: 2 }).settings
+  assert.equal(volcProvider.live!.capabilities(off).diarization, false)
+  const on = loadSettings({ version: 2, providers: { volc: { speakers: true } } }).settings
+  assert.equal(volcProvider.live!.capabilities(on).diarization, true)
+  assert.equal(loadSettings({ volcAppId: "a" }).settings.providers.volc.speakers, false, "1.0.x settings migrate with it off")
 })

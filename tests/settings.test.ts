@@ -44,6 +44,7 @@ test("the author's 1.0.1 settings migrate to the nested shape without losing any
     accessTokenSecret: "",
     endWindowMs: 600,
     fileResourceId: "volc.seedasr.auc",
+    speakers: false,
   })
   assert.equal(settings.llmApiKeySecret, "deepseek-api-key")
   assert.equal(settings.hotwords, "某某科技\n某某资本")
@@ -143,7 +144,7 @@ test("settings saved before the second provider batch load with defaults for the
   assert.deepEqual(loaded.settings.providers.assemblyai, DEFAULT_SETTINGS.providers.assemblyai)
   // Saving adds the new sections, and loading that again changes nothing.
   const saved = storedSettings(loaded.settings, loaded.legacy)
-  assert.deepEqual(Object.keys(saved.providers as object).sort(), ["assemblyai", "dashscope", "deepgram", "openaiCompat", "volc"])
+  assert.deepEqual(Object.keys(saved.providers as object).sort(), ["assemblyai", "dashscope", "deepgram", "openaiCompat", "sherpa", "volc", "whisperLocal"])
   assert.deepEqual(loadSettings(JSON.parse(JSON.stringify(saved))).settings, loaded.settings)
   // The new sections never share objects with the defaults.
   loaded.settings.providers.dashscope.region = "intl"

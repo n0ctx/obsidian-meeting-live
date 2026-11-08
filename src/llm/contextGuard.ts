@@ -5,7 +5,7 @@ import { t } from "../i18n/index.ts"
 import type { Utterance } from "../meeting/types.ts"
 import type { ChatMessage, LlmClient } from "./client.ts"
 import { buildMinutesMessages, type MinutesInput } from "./minutes.ts"
-import { buildSummaryMessages, parseSummary, summaryUtterances } from "./summary.ts"
+import { buildSummaryMessages, parseSummary, summaryUtterances, transcriptLine } from "./summary.ts"
 
 const CJK = /[⺀-鿿가-힯豈-﫿︰-﹏＀-￯]/g
 
@@ -37,11 +37,12 @@ export interface GuardOptions {
 const tooSmall = (limit: number) => new Error(t("llm.tooSmall", limit.toLocaleString()))
 
 /** Sequential groups of utterances of at most `budget` estimated tokens; a group always holds at least one. */
-function parts(utterances: Utterance[], budget: number): Utterance[][] {
+function parts(utterances: Utterance[], budget: number, lang: MinutesInput["lang"]): Utterance[][] {
   const groups: Utterance[][] = []
   let used = Infinity
   for (const u of utterances) {
-    const size = estimateTokens(u.text) + 12
+    // The label a speaker adds to the line counts too.
+    const size = estimateTokens(u.speaker ? transcriptLine(u, lang) : u.text) + 12
     if (used + size > budget) {
       groups.push([])
       used = 0
@@ -55,7 +56,7 @@ function parts(utterances: Utterance[], budget: number): Utterance[][] {
 /** One part of the transcript as a few timestamped lines. A reply that cannot be parsed is kept whole at the part's start. */
 async function condensePart(llm: LlmClient, input: MinutesInput, part: Utterance[], options: GuardOptions): Promise<Utterance[]> {
   const window = { startMs: part[0].startMs, endMs: part[part.length - 1].endMs }
-  const text = await llm.complete(buildSummaryMessages(input.title, options.focus, window, part, [], undefined), { json: true })
+  const text = await llm.complete(buildSummaryMessages(input.title, options.focus, window, part, [], undefined, input.lang), { json: true })
   const content = parseSummary(text, part)
   return content ? summaryUtterances(content, window.startMs) : [{ startMs: window.startMs, endMs: window.startMs, text: text.trim() }]
 }
@@ -83,7 +84,7 @@ export async function writeMinutes(llm: LlmClient, prompt: string, input: Minute
       continue
     }
     if (rounds++ >= MAX_ROUNDS) throw new Error(t("llm.tooLong", MAX_ROUNDS, limit.toLocaleString()))
-    const groups = parts(utterances, budget)
+    const groups = parts(utterances, budget, input.lang)
     const next: Utterance[] = []
     for (const [i, part] of groups.entries()) {
       options.onProgress?.(t("minutes.condensing", i + 1, groups.length))

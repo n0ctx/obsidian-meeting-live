@@ -2,7 +2,9 @@ import { setIcon } from "obsidian"
 import { t } from "../i18n/index.ts"
 import { gapReason } from "../meeting/gap.ts"
 import type { MeetingSession } from "../meeting/session.ts"
+import { hasSpeakers, labelledText } from "../meeting/speakers.ts"
 import { formatClock, type TranscriptGap, type Utterance } from "../meeting/types.ts"
+import { speakerChip } from "./speakerChip.ts"
 
 const FOLLOW_THRESHOLD = 48
 
@@ -15,6 +17,7 @@ export class TranscriptPane {
   private readonly emptyEl: HTMLElement
   private readonly latestButton: HTMLButtonElement
   private readonly countEl: HTMLElement
+  private readonly speakerNoteEl: HTMLElement
   private readonly rows = new Map<number, HTMLElement>()
   private renderedGaps = 0
   private follow = true
@@ -30,6 +33,7 @@ export class TranscriptPane {
     this.countEl = title.createSpan({ cls: "ml-count" })
     head.appendChild(actions)
 
+    this.speakerNoteEl = this.el.createDiv({ cls: "ml-speaker-note", text: t("speaker.note") })
     this.scroller = this.el.createDiv({ cls: "ml-scroll" })
     this.emptyEl = this.scroller.createDiv({ cls: "ml-empty" })
     this.list = this.scroller.createDiv({ cls: "ml-lines" })
@@ -70,7 +74,9 @@ export class TranscriptPane {
     const row = createDiv({ cls: "ml-line" })
     const ts = row.createEl("button", { cls: "ml-ts", text: formatClock(u.startMs), attr: { "aria-label": t("transcript.playFrom", formatClock(u.startMs)) } })
     ts.dataset.ms = String(u.startMs)
-    row.createDiv({ cls: "ml-text", text: u.text })
+    const text = row.createDiv({ cls: "ml-text" })
+    if (u.speaker) speakerChip(text, u.speaker, this.session.noteLang)
+    text.appendText(u.text)
     row.dataset.ms = String(u.startMs)
     this.rows.set(Math.round(u.startMs), row)
     return row
@@ -107,7 +113,14 @@ export class TranscriptPane {
     if (interims.length) {
       this.interimEl.createSpan({ cls: "ml-ts is-live", text: formatClock(interims[0].startMs) })
       const text = this.interimEl.createDiv({ cls: "ml-text" })
-      text.createSpan({ text: interims.map((u) => u.text).join("") })
+      const body = text.createSpan()
+      let speaker: string | undefined
+      for (const u of interims) {
+        // A chip only where the speaker changes; a run by one speaker stays one stretch of text.
+        if (u.speaker && u.speaker !== speaker) speakerChip(body, u.speaker, this.session.noteLang)
+        speaker = u.speaker ?? speaker
+        body.appendText(u.text)
+      }
       text.createSpan({ cls: "ml-caret" })
     }
     this.updateMeta()
@@ -117,6 +130,7 @@ export class TranscriptPane {
   updateMeta(): void {
     const count = this.session.utterances.length
     const chars = this.session.utterances.reduce((n, u) => n + u.text.length, 0)
+    this.speakerNoteEl.toggleClass("is-visible", hasSpeakers(this.session.utterances) || hasSpeakers(this.session.interims))
     this.countEl.setText(count ? t("transcript.count", count, chars.toLocaleString()) : "")
     this.emptyEl.empty()
     const hasContent = count > 0 || this.session.interims.length > 0 || this.session.meta.gaps.length > 0
@@ -174,6 +188,6 @@ export class TranscriptPane {
   }
 
   plainText(): string {
-    return this.session.utterances.map((u) => `[${formatClock(u.startMs, true)}] ${u.text}`).join("\n")
+    return this.session.utterances.map((u) => `[${formatClock(u.startMs, true)}] ${labelledText(u, this.session.noteLang)}`).join("\n")
   }
 }

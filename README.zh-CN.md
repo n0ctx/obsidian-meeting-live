@@ -23,10 +23,11 @@
 
 | 服务 | 需要填写 | 说明 |
 | :-- | :-- | :-- |
-| 火山引擎 | 新版控制台填 API Key，旧版控制台填 App ID 和 Access Token；再填已开通的流式服务的 Resource ID，如 `volc.seedasr.sauc.duration` | WebSocket 地址已预填。支持热词和断句静音时长。语言由服务自动检测。 |
+| 火山引擎 | 新版控制台填 API Key，旧版控制台填 App ID 和 Access Token；再填已开通的流式服务的 Resource ID，如 `volc.seedasr.sauc.duration` | WebSocket 地址已预填。支持热词和断句静音时长。语言由服务自动检测。「区分说话人」（默认关闭）会按火山引擎说话人分离文档的写法让流式识别标注说话人；目前只用本地模拟的服务测试过。 |
 | 阿里云百炼 | API Key，以及它所属的地域（中国内地或国际）；Key 在[百炼控制台](https://www.alibabacloud.com/help/en/model-studio/get-api-key)创建 | 模型预填 `qwen-audio-3.1-asr-flash-streaming`，即文档为会议推荐的模型，支持热词。语言跟随「识别语言」设置，选自动检测时由服务判断。实时转写时不区分说话人。 |
 | AssemblyAI | [控制台](https://www.assemblyai.com/dashboard/home)里的 API Key | 模型预填 `universal-3-5-pro`，文档列出的语种包含普通话和日语，一场会议里多种语言混说也不用设置。支持热词。有一个实时区分说话人的选项。数据区域可选默认或欧盟，选欧盟则数据只在欧盟处理。按连接保持的时长计费。 |
-| Deepgram | API Key；模型（预填 `nova-3`） | 语言跟随「识别语言」设置，选自动检测时使用 Deepgram 的多语言模式。有一个区分说话人的选项，目前只记录在识别结果里，卡片暂不显示。只有自建服务才需要改 WebSocket 地址。 |
+| Deepgram | API Key；模型（预填 `nova-3`） | 语言跟随「识别语言」设置，选自动检测时使用 Deepgram 的多语言模式。「区分说话人」选项会在转写里把每一行标成「说话人 1」「说话人 2」……。只有自建服务才需要改 WebSocket 地址。 |
+| 本地识别（sherpa-onnx） | 无需填写，已预填地址 `ws://127.0.0.1:6006` | 在你的电脑上运行，免费、离线。中英文，没有说话人标签。见 [在自己电脑上做语音识别](#在自己电脑上做语音识别)。 |
 
 ### 录音文件（录音生成访谈记录）
 
@@ -37,6 +38,7 @@
 | AssemblyAI | 与上面相同的 Key 和地域 | 上传文件后等待转写结果，可按需区分说话人。支持最大 2.2 GB 的文件。 |
 | Deepgram | 与实时转写相同的 Key、模型和地址 | 返回带时间的句子，需要区分说话人时会给说话人编号。语言跟随「识别语言」，选自动检测时由 Deepgram 判断主要语种。文件最大 2 GB，处理超过 10 分钟会超时，过长的录音请先切短。 |
 | OpenAI 兼容接口 | 填到 `/v1` 的 API 地址、模型和 API Key | OpenAI 填 `https://api.openai.com/v1`，模型 `whisper-1`（已弃用，将于 2027-02-26 停止服务；替代品 `gpt-transcribe` 文档中未说明会返回时间点）；Groq 填 `https://api.groq.com/openai/v1`，模型 `whisper-large-v3`；本地 Whisper 服务填它自己的地址，Key 可以留空。`gpt-4o-transcribe-diarize` 可区分说话人；`gpt-*-transcribe` 只返回文本，没有时间点。服务的文件大小上限与 OpenAI 的 25 MB 不同时，可以在设置里改。 |
+| 本地 Whisper（whisper.cpp） | 无需填写，已预填地址 `http://127.0.0.1:8080/v1` | 在你的电脑上运行，免费、离线，200 MB 以内的录音原样发送。没有说话人标签。见下一节。 |
 
 超过大小上限的录音会先在本地压缩，仍然过大则按时间切成几段依次上传。
 
@@ -57,6 +59,68 @@
 
 可以调整推理强度、温度和输入上限（转写太长时，会先分段压缩再写纪要）。提示词默认简短，不限定语言：模型用转写的语言作答。建议换成自己的。
 
+## 在自己电脑上做语音识别
+
+免费、离线，不需要账号和密钥，音频不会离开你的电脑。下面两个程序都由你自己启动，插件不会安装或启动它们。在「设置 → Meeting Live」中，实时转写选「本地识别（sherpa-onnx）」，录音文件选「本地 Whisper（whisper.cpp）」，地址已经预填好。
+
+### 实时转写：sherpa-onnx
+
+[sherpa-onnx](https://k2-fsa.github.io/sherpa/onnx/websocket/online-websocket.html) 为 macOS、Windows 和 Linux 都提供现成的程序；下面这个流式模型约 134 MB，能识别中文和英文并带标点，在普通 CPU 上可以实时运行。（FunASR 的运行时服务是另一个候选，但它的文档只讲了用 Docker 运行，安装更麻烦。）只在 Apple 芯片的 macOS 上测试过；Windows 和 Linux 的步骤来自同一个发布页，没有实际运行过。
+
+macOS（Apple 芯片；Intel 的 Mac 把 `osx-arm64` 换成 `osx-x64`）：
+
+```bash
+mkdir -p ~/meeting-live-asr && cd ~/meeting-live-asr
+curl -LO https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-osx-arm64-shared-no-tts.tar.bz2
+curl -LO https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2
+tar xjf sherpa-onnx-v2.0.1-osx-arm64-shared-no-tts.tar.bz2
+tar xjf sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2
+# 启动服务（录音期间保持这个窗口打开）
+M=sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05
+./sherpa-onnx-v2.0.1-osx-arm64-shared-no-tts/bin/sherpa-onnx-online-websocket-server \
+  --port=6006 --num-work-threads=2 --num-threads=2 \
+  --tokens=$M/tokens.txt --encoder=$M/encoder.int8.onnx --decoder=$M/decoder.onnx --joiner=$M/joiner.int8.onnx
+```
+
+如果用浏览器而不是 `curl` 下载，macOS 会给文件加隔离标记：执行一次 `xattr -dr com.apple.quarantine ~/meeting-live-asr`。
+
+Linux（x86-64，未测试）：同样的命令，把 `osx-arm64-shared-no-tts` 换成 `linux-x64-shared-no-tts`。
+
+Windows（x86-64，未测试），在 PowerShell 中：
+
+```powershell
+mkdir $HOME\meeting-live-asr; cd $HOME\meeting-live-asr
+curl.exe -LO https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts.tar.bz2
+curl.exe -LO https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2
+tar -xf sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts.tar.bz2
+tar -xf sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2
+$M = "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05"
+.\sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts\bin\sherpa-onnx-online-websocket-server.exe --port=6006 --num-work-threads=2 --num-threads=2 --tokens=$M/tokens.txt --encoder=$M/encoder.int8.onnx --decoder=$M/decoder.onnx --joiner=$M/joiner.int8.onnx
+```
+
+服务打印出 `Started!` 就可以用了。插件里的地址是 `ws://127.0.0.1:6006`，点「测试」可以免费检查。需要知道：
+
+- 服务监听这台电脑的所有网络接口，而不只是本机。除非你打算共享，请不要让防火墙放行 6006 端口的外来连接。
+- 语言由模型决定（中英文混合），没有语言设置，也没有说话人标签。停顿一秒以上就会分行，所以一行里可能有不止一句。
+- 开会时服务如果停了，插件会继续录音，最多保留三分钟的音频，服务恢复后再补发；更长的中断和其他服务一样标记为空缺。
+
+### 录音文件：whisper.cpp
+
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) 的 `whisper-server` 使用 OpenAI 的转写格式，能在 macOS、Windows 和 Linux 上运行，只需要一个模型文件。在 macOS 上用 `base` 模型（148 MB，即下面命令里的那个）测试过；`small`（488 MB，同一地址的 `ggml-small.bin`）应该更准，但没有试过。
+
+macOS 和 Linux 用 [Homebrew](https://brew.sh)（Linux 上的 Homebrew 步骤未测试）：
+
+```bash
+brew install whisper-cpp ffmpeg
+mkdir -p ~/meeting-live-asr && cd ~/meeting-live-asr
+curl -L -o ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+whisper-server -m ~/meeting-live-asr/ggml-base.bin --host 127.0.0.1 --port 8080 --inference-path /v1/audio/transcriptions --convert --tmp-dir /tmp
+```
+
+Windows（未测试）：从 [发布页](https://github.com/ggml-org/whisper.cpp/releases) 最新的构建里下载 `whisper-bin-x64.zip`，用 `winget install ffmpeg` 装 ffmpeg，下载上面的模型文件，再用同样的参数运行 `whisper-server.exe`（`--tmp-dir` 用一个可写的文件夹）。
+
+`--convert` 让服务能读 Opus、m4a 等录音可能用的格式，不加的话只能读 WAV；`--inference-path` 让服务在插件请求的地址上应答。录音是中文时，请把「识别语言」设为中文：插件会要求输出简体字，否则小模型可能把中文听成英文，或者写成繁体。可以托管多个模型的服务（如 speaches）请用「OpenAI 兼容接口」。
+
 ## 使用
 
 - **实时会议**：在命令面板或左侧栏执行「插入会议组件」，点击开始录音。切换笔记或视图不会中断会议，状态栏会显示录音状态。
@@ -75,8 +139,8 @@
 
 | 环节 | 发送的内容 | 去向 |
 | :-- | :-- | :-- |
-| 实时转写 | 你的音频，录音时实时上传 | 实时识别服务的主机（火山引擎 `openspeech.bytedance.com`；阿里云百炼 `dashscope.aliyuncs.com` 或 `dashscope-intl.aliyuncs.com`；AssemblyAI `streaming.assemblyai.com` 或 `streaming.eu.assemblyai.com`；Deepgram `api.deepgram.com`），或你设置的地址 |
-| 录音文件 | 你选的音频文件，上传一次 | 火山引擎 `openspeech.bytedance.com`；阿里云百炼 `dashscope.aliyuncs.com` 或 `dashscope-intl.aliyuncs.com`（文件还会经过阿里云的临时存储，转写结果从阿里云存储上的签名地址取回）；AssemblyAI `api.assemblyai.com` 或 `api.eu.assemblyai.com`；Deepgram `api.deepgram.com`；或你的 OpenAI 兼容 API 地址所在主机 |
+| 实时转写 | 你的音频，录音时实时上传 | 实时识别服务的主机（火山引擎 `openspeech.bytedance.com`；阿里云百炼 `dashscope.aliyuncs.com` 或 `dashscope-intl.aliyuncs.com`；AssemblyAI `streaming.assemblyai.com` 或 `streaming.eu.assemblyai.com`；Deepgram `api.deepgram.com`），或你设置的地址。识别服务在本机（`127.0.0.1`、`localhost`）时，音频哪里也不去 |
+| 录音文件 | 你选的音频文件，上传一次 | 火山引擎 `openspeech.bytedance.com`；阿里云百炼 `dashscope.aliyuncs.com` 或 `dashscope-intl.aliyuncs.com`（文件还会经过阿里云的临时存储，转写结果从阿里云存储上的签名地址取回）；AssemblyAI `api.assemblyai.com` 或 `api.eu.assemblyai.com`；Deepgram `api.deepgram.com`；或你的 OpenAI 兼容 API 地址所在主机；用本地 Whisper 时留在本机 |
 | 摘要与纪要 | 转写文本、阶段摘要，生成纪要时还有你选择的笔记 | 你的大模型 API 地址所在主机（选预设时就是该服务自己的主机，如 `api.moonshot.cn`、`api.x.ai`） |
 
 - **按去向确认。** 发送任何数据之前，会有对话框列出去向和各自收到的内容。同意按环节和主机记录，所以把服务或地址换成你没同意过的主机会再次询问。对已经结束的会议生成纪要和摘要也一样：如果模型的主机在录音之后换了，确认之前不会发送任何内容。
@@ -95,7 +159,7 @@
   - Windows：在声音设置里启用「立体声混音」，或安装 VB-CABLE 等虚拟声卡。
   - Linux：在 PulseAudio 或 PipeWire 中选择对应输出的 **monitor** 源。
 - **麦克风权限。** 录音被拒绝时，插件会按你的系统指出在哪里允许（macOS 系统设置、Windows 隐私设置，Linux 则是沙盒和声音服务）。
-- **说话人标签。** 按声音自动区分，不代表身份；长录音分段识别时，各段之间的编号不稳定。实时转写的说话人标签暂不在卡片上显示。
+- **说话人标签。** 按声音自动区分，不代表身份；实时会议里由识别服务编号，重新连接后可能变化；长录音分段识别时，各段之间的编号同样不稳定。整理纪要时请换成真实姓名。
 - **AI 准确性。** 摘要和纪要可能有误，请对照转写和录音核实事实与数字。数字只按转写里的阿拉伯数字核对，用文字写出的数字会被标记，也不比较单位。
 
 ## 开发

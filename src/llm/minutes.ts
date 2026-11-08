@@ -1,7 +1,7 @@
 import type { Lang } from "../i18n/index.ts"
 import { formatClock, type SummaryRecord, type Utterance } from "../meeting/types.ts"
 import type { ChatMessage } from "./client.ts"
-import { summaryMarkdown, transcriptLines } from "./summary.ts"
+import { speakerCaution, summaryMarkdown, transcriptLines } from "./summary.ts"
 
 export const DEFAULT_MINUTES_PROMPT = `You write meeting notes from a raw speech-to-text transcript. Produce clear, accurate notes in Markdown.
 
@@ -38,8 +38,9 @@ export function buildMinutesMessages(prompt: string, input: MinutesInput): ChatM
     parts.push("## Stage summaries (for cross-checking only)", ...done.map((s) => summaryMarkdown(s, (ms) => formatClock(ms, true), "##", undefined, input.lang)), "")
   }
   parts.push(input.condensed ? CONDENSED_HEADING : "## Transcript")
-  if (input.speakerNote) parts.push(input.speakerNote)
-  parts.push(transcriptLines(input.utterances))
+  const caution = input.speakerNote ?? speakerCaution(input.utterances)
+  if (caution) parts.push(caution)
+  parts.push(transcriptLines(input.utterances, input.lang))
   return [
     { role: "system", content: prompt.trim() || DEFAULT_MINUTES_PROMPT },
     { role: "user", content: parts.join("\n") },

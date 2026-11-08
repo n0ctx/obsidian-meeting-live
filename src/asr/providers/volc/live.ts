@@ -14,6 +14,8 @@ export interface VolcConfig {
   accessToken: string
   endWindowMs: number
   hotwords: string[]
+  /** Label speakers: the request asks for enable_speaker_info, and utterances then carry the speaker. */
+  speakers?: boolean
 }
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
@@ -35,6 +37,9 @@ export function buildVolcRequest(config: VolcConfig): Record<string, unknown> {
     result_type: "single",
     end_window_size: config.endWindowMs,
   }
+  // The streaming speaker-separation page lists exactly these two flags (show_utterances is already on); results then carry speaker_id.
+  //   https://www.volcengine.com/docs/6561/2699972  (大模型ASR-说话人分离最佳实践: 流式大模型 SSD)
+  if (config.speakers) request.enable_speaker_info = true
   if (/bigmodel_async\/?$/.test(config.endpoint.trim())) request.enable_nonstream = true
   const hotwords = config.hotwords.map((w) => w.trim()).filter(Boolean).slice(0, 100)
   if (hotwords.length) request.corpus = { context: JSON.stringify({ hotwords: hotwords.map((word) => ({ word })) }) }

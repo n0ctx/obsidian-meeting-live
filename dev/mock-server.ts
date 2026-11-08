@@ -148,13 +148,19 @@ server.on("upgrade", (req, socket, head) => {
  * times in seconds from the first sample of the connection), KeepAlive and CloseStream as text, and on CloseStream the
  * remaining final, a Metadata message and a normal close. An empty binary frame ends the stream abnormally, as Deepgram does.
  */
-function deepgramSession(ws: WebSocket): void {
+function deepgramSession(ws: WebSocket, diarize: boolean): void {
   stats.deepgramConnections++
   let receivedMs = 0
   let index = Math.floor(Math.random() * SENTENCES.length)
   let segmentStart = 0
+  /** With diarize=true every word carries a speaker number from 0, alternating by sentence, as the documentation describes. */
+  const wordsOf = (text: string, start: number, end: number) => {
+    if (!diarize) return []
+    const chars = [...text]
+    return chars.map((word, i) => ({ word, punctuated_word: word, start: (start + ((end - start) * i) / chars.length) / 1000, end: (start + ((end - start) * (i + 1)) / chars.length) / 1000, confidence: 0.9, speaker: index % 2 }))
+  }
   const results = (text: string, start: number, end: number, final: boolean) =>
-    ws.send(JSON.stringify({ type: "Results", channel_index: [0, 1], duration: (end - start) / 1000, start: start / 1000, is_final: final, speech_final: final, channel: { alternatives: [{ transcript: text, confidence: 0.9, words: [] }] }, metadata: { request_id: "mock" } }))
+    ws.send(JSON.stringify({ type: "Results", channel_index: [0, 1], duration: (end - start) / 1000, start: start / 1000, is_final: final, speech_final: final, channel: { alternatives: [{ transcript: text, confidence: 0.9, words: wordsOf(text, start, end) }] }, metadata: { request_id: "mock" } }))
   const partial = () => {
     const sentence = SENTENCES[index % SENTENCES.length]
     return sentence.slice(0, Math.max(1, Math.floor((sentence.length * (receivedMs - segmentStart)) / SENTENCE_MS)))
@@ -188,17 +194,24 @@ function deepgramSession(ws: WebSocket): void {
 }
 
 wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-  if (req.url?.startsWith("/v1/listen")) return deepgramSession(ws)
+  if (req.url?.startsWith("/v1/listen")) {
+    // Live streaming asks with diarize_model (diarize=true is the deprecated spelling, still sent for files).
+    const params = new URL(req.url, "http://mock").searchParams
+    return deepgramSession(ws, params.has("diarize_model") || params.get("diarize") === "true")
+  }
   if (req.url?.startsWith(DASHSCOPE_PATH)) return dashscopeSession(ws)
   if (req.url?.startsWith(ASSEMBLYAI_WS_PATH)) return assemblyaiSession(ws, req)
   let sequence = 1
   let receivedMs = 0
   let index = Math.floor(Math.random() * SENTENCES.length)
   let sentenceStart = 0
+  // With enable_speaker_info in the request, utterances carry a speaker_id (1-based here), alternating by sentence.
+  let speakers = false
   const send = (utterances: unknown[], last = false) => ws.send(encodeServerResult(++sequence, { result: { text: "", utterances } }, last))
   ws.on("message", (data: Buffer) => {
     const frame = decodeClientFrame(data)
     if (frame.type === 1) {
+      speakers = (JSON.parse(frame.payload.toString()) as { request?: { enable_speaker_info?: boolean } }).request?.enable_speaker_info === true
       ws.send(encodeServerResult(sequence, { result: { text: "" } }, false))
       return
     }
@@ -206,13 +219,13 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const sentence = SENTENCES[index % SENTENCES.length]
     const progress = (receivedMs - sentenceStart) / SENTENCE_MS
     if (frame.last || progress >= 1) {
-      send([{ text: sentence, start_time: Math.round(sentenceStart), end_time: Math.round(receivedMs), definite: true }], frame.last)
+      send([{ text: sentence, start_time: Math.round(sentenceStart), end_time: Math.round(receivedMs), definite: true, ...(speakers ? { speaker_id: String((index % 2) + 1) } : {}) }], frame.last)
       index++
       sentenceStart = receivedMs + 300
       if (frame.last) ws.close()
     } else if (receivedMs > sentenceStart) {
       const chars = Math.max(1, Math.floor(sentence.length * progress))
-      send([{ text: sentence.slice(0, chars), start_time: Math.round(sentenceStart), end_time: Math.round(receivedMs), definite: false }])
+      send([{ text: sentence.slice(0, chars), start_time: Math.round(sentenceStart), end_time: Math.round(receivedMs), definite: false, ...(speakers ? { speaker_id: String((index % 2) + 1) } : {}) }])
     }
   })
   ws.on("error", () => undefined)

@@ -19,6 +19,7 @@ import { AsrStreamer, type AsrState } from "../src/asr/streamer.ts"
 import type { AudioChunk } from "../src/audio/transcode.ts"
 import { chat } from "../src/llm/client.ts"
 import { presetById } from "../src/llm/presets.ts"
+import { parseTranscript, utteranceLine } from "../src/meeting/transcriptFormat.ts"
 import type { TranscriptGap, Utterance } from "../src/meeting/types.ts"
 
 let server: ChildProcess
@@ -316,4 +317,51 @@ test("the Volcengine and LLM routes still answer", async () => {
     },
   )
   assert.ok(text.length > 0)
+})
+
+test("speaker labels travel from Deepgram's words to the finals, the transcript lines and back through the parser; without diarize there are none", async () => {
+  const listen = (diarize: boolean) => deepgramConnector({ endpoint: `${wsBase()}/v1/listen`, apiKey: "k", model: "nova-3", language: "zh", diarize })
+  const finalsOf = async (diarize: boolean) => {
+    const rec = recorder()
+    const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+    asr.begin(0, listen(diarize))
+    await waitFor(() => asr.currentState === "live")
+    for (let s = 0; s < 14; s++) {
+      asr.push(new Int16Array(16000).fill(200))
+      asr.tick()
+      await flush()
+    }
+    await asr.end()
+    return rec.finals
+  }
+  const labelled = await finalsOf(true)
+  assert.ok(labelled.length >= 2)
+  assert.ok(labelled.every((u) => u.speaker === "1" || u.speaker === "2"), JSON.stringify(labelled.map((u) => u.speaker)))
+  // The mock alternates speakers by sentence, so neighbouring finals differ.
+  for (let i = 1; i < labelled.length; i++) assert.notEqual(labelled[i].speaker, labelled[i - 1].speaker)
+  const file = labelled.map((u) => utteranceLine(u)).join("")
+  assert.deepEqual(parseTranscript(file).map((u) => [Math.round(u.startMs), u.text, u.speaker]), labelled.map((u) => [Math.round(u.startMs), u.text, u.speaker]))
+  assert.ok((await finalsOf(false)).every((u) => u.speaker === undefined))
+})
+
+test("Volcengine speakers: the request asks for them only when turned on, and speaker_id reaches the finals and the transcript", async () => {
+  const volc = (speakers: boolean) => volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, hotwords: [], speakers })
+  const finalsOf = async (speakers: boolean) => {
+    const rec = recorder()
+    const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+    asr.begin(0, volc(speakers))
+    await waitFor(() => asr.currentState === "live")
+    for (let s = 0; s < 16; s++) {
+      asr.push(new Int16Array(16000).fill(200))
+      asr.tick()
+      await flush()
+    }
+    await asr.end()
+    return rec.finals
+  }
+  const labelled = await finalsOf(true)
+  assert.ok(labelled.length >= 2)
+  assert.ok(labelled.every((u) => u.speaker === "1" || u.speaker === "2"), JSON.stringify(labelled.map((u) => u.speaker)))
+  assert.deepEqual(parseTranscript(labelled.map((u) => utteranceLine(u)).join("")).map((u) => u.speaker), labelled.map((u) => u.speaker))
+  assert.ok((await finalsOf(false)).every((u) => u.speaker === undefined))
 })

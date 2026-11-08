@@ -1,10 +1,15 @@
 import { tr, uiLang, type Lang } from "../i18n/index.ts"
 import { gapReason } from "./gap.ts"
+import { speakerId } from "./speakers.ts"
 import { formatClock, type MeetingMeta, type TranscriptGap, type Utterance } from "./types.ts"
 
 // "[00:00:08] text ^t8792-24362", or with the time linking back to the note: "[[note#^anchor|00:00:08]] text ^t8792-24362".
 const UTTERANCE = String.raw`^(?:\[(\d{2}:\d{2}:\d{2})\]|\[\[[^\]|\n]*\|(\d{2}:\d{2}:\d{2})\]\]) (.*) \^t(\d+)-(\d+)[ \t]*$`
 const UTTERANCE_LINE = new RegExp(UTTERANCE)
+
+// A speaker is written as a bold id at the start of the text, "[00:00:08] **S2** text ^t8792-24362". The id carries no language,
+// and earlier versions, whose pattern takes any text, read the line as plain text with the label in front.
+const SPEAKER_PREFIX = /^\*\*S([A-Za-z0-9]{1,8})\*\* (.+)$/
 
 export function blockId(u: Pick<Utterance, "startMs" | "endMs">): string {
   return `t${Math.round(u.startMs)}-${Math.round(u.endMs)}`
@@ -30,8 +35,9 @@ export function transcriptHeader(meta: Pick<MeetingMeta, "id" | "notePath" | "cr
 /** One transcript line; with `note`, its time links back to that note (path without extension). */
 export function utteranceLine(u: Utterance, note?: string): string {
   const text = u.text.replace(/\s*\n\s*/g, " ").trim()
+  const speaker = speakerId(u.speaker)
   const clock = formatClock(u.startMs, true)
-  return `${note ? `[[${note}|${clock}]]` : `[${clock}]`} ${text} ^${blockId(u)}\n\n`
+  return `${note ? `[[${note}|${clock}]]` : `[${clock}]`} ${speaker ? `**S${speaker}** ` : ""}${text} ^${blockId(u)}\n\n`
 }
 
 /** Points the time of every transcript line at `target(startMs)`, a link target such as "note#^anchor". */
@@ -57,7 +63,8 @@ export function parseTranscript(markdown: string): Utterance[] {
     const startMs = Number(match[4])
     if (seen.has(startMs)) continue
     seen.add(startMs)
-    result.push({ startMs, endMs: Number(match[5]), text: match[3] })
+    const labelled = SPEAKER_PREFIX.exec(match[3])
+    result.push(labelled ? { startMs, endMs: Number(match[5]), text: labelled[2], speaker: labelled[1] } : { startMs, endMs: Number(match[5]), text: match[3] })
   }
   return result.sort((a, b) => a.startMs - b.startMs)
 }

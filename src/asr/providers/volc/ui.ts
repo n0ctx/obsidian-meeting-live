@@ -19,6 +19,15 @@ export function renderVolcSettings({ app, containerEl, settings, save, roles }: 
   if (roles.live) {
     textField(new Setting(containerEl).setName("Resource ID"), volc, "resourceId", save, "volc.seedasr.sauc.duration")
     textField(new Setting(containerEl).setName(t("volc.settings.endpoint.name")).setDesc(t("volc.settings.endpoint.desc")), volc, "endpoint", save)
+    new Setting(containerEl)
+      .setName(t("volc.settings.speakers.name"))
+      .setDesc(t("volc.settings.speakers.desc"))
+      .addToggle((field) =>
+        field.setValue(volc.speakers).onChange((v) => {
+          volc.speakers = v
+          save()
+        }),
+      )
     if (VOLC_LIVE_CAPABILITIES.endWindow) {
       new Setting(containerEl)
         .setName(t("volc.settings.endWindow.name"))

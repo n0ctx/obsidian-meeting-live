@@ -1,6 +1,6 @@
 import { MarkdownRenderChild, Menu, Notice, TFile, setIcon, type App, type EventRef, type Events, type MarkdownPostProcessorContext } from "obsidian"
 import { inBackground } from "../background.ts"
-import { withLlmConsent, type Destination } from "../consent.ts"
+import { liveIsLocal, withLlmConsent, type Destination } from "../consent.ts"
 import { t, type Key } from "../i18n/index.ts"
 import type { LlmClient } from "../llm/client.ts"
 import type { MeetingManager } from "../meeting/manager.ts"
@@ -9,6 +9,7 @@ import { formatClock, formatShortDateTime, type MeetingStatus, type Utterance } 
 import { platformText } from "../platform.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { TimelinePlayer } from "./player.ts"
+import { speakerChip } from "./speakerChip.ts"
 import { TranscriptPane } from "./transcriptPane.ts"
 import { Waveform } from "./waveform.ts"
 
@@ -289,7 +290,7 @@ export class MeetingCard extends MarkdownRenderChild {
     check(true, "mic", t("card.check.recording"), t("card.check.recordingDetail", settings.audioFormat === "ogg" ? t("card.check.opus") : t("card.check.wav"), settings.folder))
     check(!asr.problem, "captions", t("card.check.live"), asr.problem ? t("card.check.liveProblem", asr.problem) : t("card.check.liveOk", asr.name))
     check(!llmProblem, "list", t("card.check.summary"), llmProblem ? t("card.check.summaryProblem", llmProblem) : t("card.check.summaryOk", settings.summaryIntervalMin, this.host.llm().model))
-    hero.createDiv({ cls: "ml-privacy", text: t("card.privacy", asr.name) })
+    hero.createDiv({ cls: "ml-privacy", text: t(liveIsLocal(settings) ? "card.privacyLocal" : "card.privacy", asr.name) })
   }
 
   private iconButton(parent: HTMLElement, icon: string, label: string, action: () => void): HTMLButtonElement {
@@ -536,16 +537,31 @@ export class MeetingCard extends MarkdownRenderChild {
   private renderCaption(): void {
     const session = this.session!
     const el = this.captionEl
-    const finals = session.utterances.slice(-3).map((u) => u.text)
-    const interim = session.interims.map((u) => u.text).join("")
+    const finals = session.utterances.slice(-3)
+    const interims = session.interims
+    const interim = interims.map((u) => u.text).join("")
     const visible = !!session.meta.collapsed && session.isLive && (finals.length > 0 || !!interim)
     el.toggleClass("is-visible", visible)
     el.empty()
     if (!visible) return
     const text = el.createDiv({ cls: "ml-caption-text" }).createSpan()
-    text.appendText(finals.join(" "))
+    // The speaker is named where it changes, so a stretch by one person reads as one run.
+    let speaker: string | undefined
+    const named = (into: HTMLElement, u: Utterance) => {
+      if (u.speaker && u.speaker !== speaker) speakerChip(into, u.speaker, session.noteLang)
+      speaker = u.speaker ?? speaker
+    }
+    finals.forEach((u, i) => {
+      named(text, u)
+      text.appendText(i < finals.length - 1 ? `${u.text} ` : u.text)
+    })
     if (interim) {
-      text.createSpan({ cls: "ml-caption-interim", text: `${finals.length ? " " : ""}${interim}` })
+      const live = text.createSpan({ cls: "ml-caption-interim" })
+      if (finals.length) live.appendText(" ")
+      for (const u of interims) {
+        named(live, u)
+        live.appendText(u.text)
+      }
       text.createSpan({ cls: "ml-caret" })
     }
   }
