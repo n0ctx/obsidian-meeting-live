@@ -153,13 +153,19 @@ server.on("upgrade", (req, socket, head) => {
  * times in seconds from the first sample of the connection), KeepAlive and CloseStream as text, and on CloseStream the
  * remaining final, a Metadata message and a normal close. An empty binary frame ends the stream abnormally, as Deepgram does.
  */
-function deepgramSession(ws: WebSocket): void {
+function deepgramSession(ws: WebSocket, diarize: boolean): void {
   stats.deepgramConnections++
   let receivedMs = 0
   let index = Math.floor(Math.random() * SENTENCES.length)
   let segmentStart = 0
+  /** With diarize=true every word carries a speaker number from 0, alternating by sentence, as the documentation describes. */
+  const wordsOf = (text: string, start: number, end: number) => {
+    if (!diarize) return []
+    const chars = [...text]
+    return chars.map((word, i) => ({ word, punctuated_word: word, start: (start + ((end - start) * i) / chars.length) / 1000, end: (start + ((end - start) * (i + 1)) / chars.length) / 1000, confidence: 0.9, speaker: index % 2 }))
+  }
   const results = (text: string, start: number, end: number, final: boolean) =>
-    ws.send(JSON.stringify({ type: "Results", channel_index: [0, 1], duration: (end - start) / 1000, start: start / 1000, is_final: final, speech_final: final, channel: { alternatives: [{ transcript: text, confidence: 0.9, words: [] }] }, metadata: { request_id: "mock" } }))
+    ws.send(JSON.stringify({ type: "Results", channel_index: [0, 1], duration: (end - start) / 1000, start: start / 1000, is_final: final, speech_final: final, channel: { alternatives: [{ transcript: text, confidence: 0.9, words: wordsOf(text, start, end) }] }, metadata: { request_id: "mock" } }))
   const partial = () => {
     const sentence = SENTENCES[index % SENTENCES.length]
     return sentence.slice(0, Math.max(1, Math.floor((sentence.length * (receivedMs - segmentStart)) / SENTENCE_MS)))
@@ -193,7 +199,7 @@ function deepgramSession(ws: WebSocket): void {
 }
 
 wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-  if (req.url?.startsWith("/v1/listen")) return deepgramSession(ws)
+  if (req.url?.startsWith("/v1/listen")) return deepgramSession(ws, new URL(req.url, "http://mock").searchParams.get("diarize") === "true")
   let sequence = 1
   let receivedMs = 0
   let index = Math.floor(Math.random() * SENTENCES.length)
