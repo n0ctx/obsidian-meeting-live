@@ -12,7 +12,7 @@ The primary user is the author: someone who runs investment interviews and inter
 
 ## Product Purpose
 
-Meeting Live is an Obsidian community plugin that turns a Markdown note into a live meeting workspace: local recording, real-time streaming transcription (Volcengine or Deepgram), AI stage summaries written into the note, formal notes from a prompt the user controls, and notes generated from an existing recording (Volcengine or any OpenAI-compatible transcription service). The user brings their own speech and language-model accounts. Success means the user can run a meeting without leaving the note and trust that nothing (audio, transcript, summary) is lost.
+Meeting Live is an Obsidian community plugin that turns a Markdown note into a live meeting workspace: local recording, real-time streaming transcription (Volcengine, Deepgram, or a recognizer running on the user's own computer), with speaker labels where the service gives them, AI stage summaries written into the note, formal notes from a prompt the user controls, and notes generated from an existing recording (Volcengine, any OpenAI-compatible transcription service, or a local Whisper server). The user brings their own speech and language-model accounts. Success means the user can run a meeting without leaving the note and trust that nothing (audio, transcript, summary) is lost.
 
 ## Positioning
 
@@ -29,6 +29,7 @@ The meeting lives inside the note as an embedded card, not in a separate app or 
 
 - Desktop only; developed and tested on macOS, with Windows and Linux supported in code but untested. Obsidian 1.11.4 or later.
 - Interface text is English or Simplified Chinese, following Obsidian's language; both ship in one dictionary (`src/i18n`) and a new string needs both. What the plugin writes into notes follows a separate setting (auto, Chinese, English), and the labels it writes are matched by parsers that must keep reading what earlier versions wrote.
+- A live speaker is stored in the raw transcript as a bold id at the start of the text (`[00:00:08] **S2** text ^t8792-24362`). 1.0.1 and 1.1.0 read such a line as plain text with the label in front, so the line pattern and the `^t<start>-<end>` anchor must not change; the id is language-neutral and is worded (`Speaker 2` / `说话人 2`) only where it is shown or sent to a model. Labels are by voice, not identity, and may change after a reconnect.
 - States the card must express: not started (with readiness checks), recording, paused, stopping, ended, interrupted; ASR live / connecting / reconnecting / failed / disabled; save state; summary failures; transcript gaps.
 - Styling is plain CSS in `styles.css`; UI is built with Obsidian DOM helpers and Lucide icons via `setIcon`.
 
