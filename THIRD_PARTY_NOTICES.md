@@ -2,7 +2,7 @@
 
 ## obsidian-voice2text
 
-`src/asr/volcProtocol.ts` adapts the Volcengine binary frame codec from
+`src/asr/providers/volc/protocol.ts` adapts the Volcengine binary frame codec from
 https://github.com/chenxuan520/obsidian-voice2text
 
 MIT License — Copyright (c) 2026 chenxuan
