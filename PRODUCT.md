@@ -12,7 +12,7 @@ The primary user is the author: someone who runs investment interviews and inter
 
 ## Product Purpose
 
-Meeting Live is an Obsidian community plugin that turns a Markdown note into a live meeting workspace: local recording, real-time Volcengine streaming transcription, AI stage summaries written into the note, formal notes from a prompt the user controls, and notes generated from an existing recording. Success means the user can run a meeting without leaving the note and trust that nothing (audio, transcript, summary) is lost.
+Meeting Live is an Obsidian community plugin that turns a Markdown note into a live meeting workspace: local recording, real-time streaming transcription (Volcengine or Deepgram), AI stage summaries written into the note, formal notes from a prompt the user controls, and notes generated from an existing recording (Volcengine or any OpenAI-compatible transcription service). The user brings their own speech and language-model accounts. Success means the user can run a meeting without leaving the note and trust that nothing (audio, transcript, summary) is lost.
 
 ## Positioning
 
@@ -27,8 +27,8 @@ The meeting lives inside the note as an embedded card, not in a separate app or 
 
 ## Capabilities and Constraints
 
-- Desktop only, tested on macOS; Obsidian 1.11.4 or later.
-- Interface text is Simplified Chinese only.
+- Desktop only; developed and tested on macOS, with Windows and Linux supported in code but untested. Obsidian 1.11.4 or later.
+- Interface text is English or Simplified Chinese, following Obsidian's language; both ship in one dictionary (`src/i18n`) and a new string needs both. What the plugin writes into notes follows a separate setting (auto, Chinese, English), and the labels it writes are matched by parsers that must keep reading what earlier versions wrote.
 - States the card must express: not started (with readiness checks), recording, paused, stopping, ended, interrupted; ASR live / connecting / reconnecting / failed / disabled; save state; summary failures; transcript gaps.
 - Styling is plain CSS in `styles.css`; UI is built with Obsidian DOM helpers and Lucide icons via `setIcon`.
 
