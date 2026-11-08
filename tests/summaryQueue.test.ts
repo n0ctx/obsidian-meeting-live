@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import type { ChatMessage } from "../src/llm/client.ts"
+import type { ChatMessage, CompleteOptions } from "../src/llm/client.ts"
 import { applyEdit, type TextEdit } from "../src/meeting/noteSummary.ts"
 import { MeetingSession, type SessionEnv } from "../src/meeting/session.ts"
 import type { MeetingMeta, SummaryRecord } from "../src/meeting/types.ts"
@@ -15,6 +15,7 @@ function stage(index: number, startMs: number, utterance: number): SummaryRecord
 
 function setup(reply: (messages: ChatMessage[]) => string) {
   const prompts: ChatMessage[][] = []
+  const options: (CompleteOptions | undefined)[] = []
   const files: Record<string, string> = { "m/原始转写.md": transcript, "访谈.md": "# 访谈\n\n```meeting-live\nid: m-1\n```\n\n我的速记\n" }
   const env = {
     store: {
@@ -32,28 +33,31 @@ function setup(reply: (messages: ChatMessage[]) => string) {
       problem: undefined,
       model: "fake",
       target: "fake",
-      complete: async (messages: ChatMessage[]) => {
+      inputLimit: 1_000_000,
+      complete: async (messages: ChatMessage[], asked?: CompleteOptions) => {
         prompts.push(messages)
+        options.push(asked)
         return reply(messages)
       },
     }),
   } as unknown as SessionEnv
   const meta = { id: "m-1", title: "访谈", notePath: "访谈.md", createdAt: "2026-10-27T14:30:00+08:00", summaries: [stage(1, 0, 1000), stage(2, 300_000, 302000)], gaps: [], segments: [], lastCutoffMs: 600_000 } as unknown as MeetingMeta
   const session = new MeetingSession(env, "m", meta, transcript)
-  return { session, prompts, files }
+  return { session, prompts, options, files }
 }
 
 const isOverview = (messages: ChatMessage[]) => messages[0].content.startsWith("You keep a running overview")
 
 test("each finished stage is merged into the overview, which the next stage sees as context", async () => {
   let overviews = 0
-  const { session, prompts, files } = setup((messages) => {
+  const { session, prompts, options, files } = setup((messages) => {
     if (!isOverview(messages)) return '{"title":"阶段","paragraphs":[{"topic":"收入","text":"收入 3.2 亿元","t":"00:00:01"}],"todos":[],"open":[]}'
     overviews++
     return `{"paragraphs":[{"topic":"经营","text":"第 ${overviews} 版概览","t":"00:00:01"}],"todos":[{"text":"核对口径"}],"open":[]}`
   })
   await session.runQueue()
   assert.deepEqual(prompts.map(isOverview), [false, true, false, true])
+  assert.deepEqual(options, [{ json: true }, { json: true }, { json: true }, { json: true }], "stage summaries and overviews ask for a JSON reply")
   assert.match(prompts[2][1].content, /overview so far \(context only\):\n经营: 第 1 版概览 \[00:00:01\]/)
   assert.match(prompts[3][1].content, /Current overview:\n经营: 第 1 版概览[^]*New stage summaries:\nStage 2 /)
   assert.deepEqual(session.meta.overview?.stages, [1, 2])

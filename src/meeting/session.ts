@@ -396,7 +396,7 @@ export class MeetingSession extends Events {
     this.trigger("summary")
     try {
       const messages = buildSummaryMessages(this.meta.title, this.env.settings().summaryFocus, record, items, previous, this.meta.overview?.content)
-      const text = await llm.complete(messages)
+      const text = await llm.complete(messages, { json: true })
       const content = parseSummary(text, items)
       record.content = content
       record.raw = content ? undefined : text
@@ -446,7 +446,7 @@ export class MeetingSession extends Events {
         }
         this.trigger("summary")
         try {
-          const text = await llm.complete(buildOverviewMessages(this.meta.title, this.env.settings().summaryFocus, overview.content, substantive))
+          const text = await llm.complete(buildOverviewMessages(this.meta.title, this.env.settings().summaryFocus, overview.content, substantive), { json: true })
           const content = parseSummary(text, this.utterances)
           if (!content) throw new Error("模型返回的概览格式无法识别")
           this.meta.overview = { stages: merged, content, createdAt: new Date().toISOString(), model: llm.model }

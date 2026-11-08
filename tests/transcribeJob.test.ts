@@ -41,6 +41,7 @@ test("a failed write-up retries without re-running recognition, then replaces th
       problem: undefined,
       model: "m",
       target: "t",
+      inputLimit: 1_000_000,
       complete: async (messages) => {
         llmCalls++
         if (llmCalls === 1) throw new Error("LLM 请求失败（HTTP 429）")
@@ -102,7 +103,7 @@ test("recording to notes asks for consent before anything is uploaded, and only 
     ensureConsent: async (kinds) => (asked.push(kinds), answer),
     fileAsr: () => asr,
     post: async () => (posts++, { status: 500, headers: {}, text: "" }),
-    llm: () => ({ problem: undefined, model: "m", target: "t", complete: async () => "" }),
+    llm: () => ({ problem: undefined, model: "m", target: "t", inputLimit: 1_000_000, complete: async () => "" }),
     prompt: () => "",
     transcriptFolder: () => "Meetings/录音转写",
   })

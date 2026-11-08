@@ -1,4 +1,5 @@
 import type { CompatibleEffort, LlmConfig } from "./llm/client.ts"
+import { DEFAULT_PRESET_ID, isPresetId, parseHeaders, presetById, presetForUrl } from "./llm/presets.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type { AudioFormat } from "./meeting/types.ts"
@@ -24,12 +25,18 @@ export interface MeetingLiveSettings {
   /** Recognition language for providers that take one. */
   asrLanguage: AsrLanguage
   hotwords: string
+  /** Id of the model service preset, which decides how requests are shaped. */
+  llmPreset: string
   llmBaseUrl: string
   llmModel: string
   llmTemperature: number
   llmEffort: CompatibleEffort
   /** SecretStorage id; the secret itself never touches data.json. */
   llmApiKeySecret: string
+  /** Extra request headers as "Name: value" lines, for presets that allow them. Not for secrets: this file is not secret storage. */
+  llmHeaders: string
+  /** Most a request may carry, in estimated tokens; 0 uses the preset's default. */
+  llmInputLimit: number
   autoSummary: boolean
   summaryIntervalMin: number
   summaryFocus: string
@@ -49,11 +56,14 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   providers: { volc: DEFAULT_VOLC },
   asrLanguage: "auto",
   hotwords: "",
+  llmPreset: DEFAULT_PRESET_ID,
   llmBaseUrl: "https://api.deepseek.com",
   llmModel: "deepseek-flash",
   llmTemperature: 0.2,
   llmEffort: "low",
   llmApiKeySecret: "",
+  llmHeaders: "",
+  llmInputLimit: 0,
   autoSummary: true,
   summaryIntervalMin: 5,
   summaryFocus: DEFAULT_SUMMARY_FOCUS,
@@ -85,6 +95,9 @@ export function loadSettings(raw: unknown): LoadedSettings {
     if (typeof value === typeof DEFAULT_SETTINGS[key]) (settings[key] as string | number | boolean) = value as string | number | boolean
   }
   if (!isAsrLanguage(settings.asrLanguage)) settings.asrLanguage = DEFAULT_SETTINGS.asrLanguage
+  // Settings from before presets existed are placed by their base URL, which is how requests were shaped then.
+  const hadPreset = isPresetId(stored.llmPreset)
+  if (!hadPreset) settings.llmPreset = presetForUrl(settings.llmBaseUrl).id
   const current = typeof stored.version === "number" && stored.version >= SETTINGS_VERSION
   settings.providers.volc = readVolcSettings(current ? (stored.providers as { volc?: unknown } | undefined)?.volc : stored, !current)
   if (Array.isArray(stored.consent)) settings.consent = stored.consent.filter((entry): entry is string => typeof entry === "string")
@@ -92,7 +105,7 @@ export function loadSettings(raw: unknown): LoadedSettings {
   if (settings.consent.length === 0 && stored.consentAccepted === true) settings.consent = seedConsent(settings)
   const legacy: Record<string, unknown> = {}
   for (const key of LEGACY_KEYS) if (key in stored) legacy[key] = stored[key]
-  return { settings, legacy, migrated: Object.keys(stored).length > 0 && !current }
+  return { settings, legacy, migrated: Object.keys(stored).length > 0 && (!current || !hadPreset) }
 }
 
 /** What goes into data.json: the legacy keys exactly as they were found, and the current settings. */
@@ -101,5 +114,15 @@ export function storedSettings(settings: MeetingLiveSettings, legacy: Record<str
 }
 
 export function llmConfig(secrets: SecretReader, s: MeetingLiveSettings): LlmConfig {
-  return { baseUrl: s.llmBaseUrl, apiKey: readSecret(secrets, s.llmApiKeySecret), model: s.llmModel, temperature: s.llmTemperature, effort: s.llmEffort }
+  const preset = presetById(s.llmPreset)
+  return {
+    preset,
+    baseUrl: s.llmBaseUrl,
+    apiKey: readSecret(secrets, s.llmApiKeySecret),
+    model: s.llmModel,
+    temperature: s.llmTemperature,
+    effort: s.llmEffort,
+    headers: preset.customHeaders ? parseHeaders(s.llmHeaders) : {},
+    inputLimit: s.llmInputLimit > 0 ? s.llmInputLimit : preset.inputTokens,
+  }
 }

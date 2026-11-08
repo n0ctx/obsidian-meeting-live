@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { chat, chatCompletionsUrl, chatRequestBody, extractCompletionText } from "../src/llm/client.ts"
+import { chat, chatCompletionsUrl, chatRequestBody, compatibleClient, extractCompletionText, llmConfigProblem, type ChatMessage, type LlmConfig } from "../src/llm/client.ts"
+import { LLM_PRESETS, parseHeaders, presetById, presetForUrl } from "../src/llm/presets.ts"
+import { DEFAULT_SETTINGS, llmConfig, loadSettings } from "../src/settings.ts"
 import { buildMinutesMessages, stripMeetingBlocks } from "../src/llm/minutes.ts"
 import { buildOverviewMessages, buildSummaryMessages, overviewMarkdown, parseSummary, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
 import { dueCutoff, uncovered } from "../src/meeting/schedule.ts"
@@ -138,29 +140,153 @@ test("minutes input strips the meeting block and orders sources", () => {
   assert.match(user.content, /Date: 2026-10-27/)
 })
 
+const config = (preset: string, patch: Partial<LlmConfig> = {}): LlmConfig => ({ preset: presetById(preset), baseUrl: presetById(preset).baseUrl, apiKey: "k", model: "m", temperature: 0.2, effort: "off", headers: {}, inputLimit: 1000, ...patch })
+
 test("chat client builds URLs, parses responses, surfaces API errors", async () => {
   assert.equal(chatCompletionsUrl("https://api.x.com/v1/"), "https://api.x.com/v1/chat/completions")
   assert.equal(chatCompletionsUrl("https://api.x.com/v1/chat/completions"), "https://api.x.com/v1/chat/completions")
   assert.equal(extractCompletionText({ choices: [{ message: { content: "<think>x</think>好" } }] }), "好")
-  const config = { baseUrl: "https://api.x.com/v1", apiKey: "k", model: "m", temperature: 0.2, effort: "off" as const }
+  const custom = config("custom", { baseUrl: "https://api.x.com/v1" })
   let sent: { url: string; headers: Record<string, string>; body: string } | undefined
-  const ok = await chat(config, [{ role: "user", content: "hi" }], async (url, headers, body) => {
+  const ok = await chat(custom, [{ role: "user", content: "hi" }], async (url, headers, body) => {
     sent = { url, headers, body }
     return { status: 200, text: JSON.stringify({ choices: [{ message: { content: "OK" } }] }) }
   })
   assert.equal(ok, "OK")
   assert.equal(sent?.headers.Authorization, "Bearer k")
-  await assert.rejects(chat(config, [], async () => ({ status: 401, text: '{"error":{"message":"bad key"}}' })), /HTTP 401.*bad key/)
+  await assert.rejects(chat(custom, [], async () => ({ status: 401, text: '{"error":{"message":"bad key"}}' })), /HTTP 401.*bad key/)
   assert.equal(JSON.parse(sent!.body).reasoning_effort, undefined)
 })
 
-test("reasoning effort is sent, with DeepSeek's thinking switch only for DeepSeek", () => {
-  const base = { apiKey: "k", model: "deepseek-flash", temperature: 0.2 }
-  const deepseek = chatRequestBody({ ...base, baseUrl: "https://api.deepseek.com", effort: "low" }, [])
-  assert.equal(deepseek.reasoning_effort, "low")
-  assert.deepEqual(deepseek.thinking, { type: "enabled" })
-  assert.deepEqual(chatRequestBody({ ...base, baseUrl: "https://api.deepseek.com/v1", effort: "off" }, []).thinking, { type: "disabled" })
-  const other = chatRequestBody({ ...base, baseUrl: "https://openrouter.ai/api/v1", effort: "high" }, [])
-  assert.equal(other.reasoning_effort, "high")
-  assert.equal(other.thinking, undefined)
+const hi: ChatMessage[] = [{ role: "user", content: "hi" }]
+
+test("the author's DeepSeek configuration sends exactly the request body it always did", () => {
+  const author = llmConfig({ getSecret: () => "key" }, { ...DEFAULT_SETTINGS, llmBaseUrl: "https://api.deepseek.com", llmModel: "deepseek-flash", llmEffort: "low", llmTemperature: 0.2 })
+  assert.equal(author.preset.id, "deepseek")
+  // Pinned as text so key order counts too; these strings are what 1.0.1 produced for the same input.
+  assert.equal(JSON.stringify(chatRequestBody(author, hi)), '{"model":"deepseek-flash","messages":[{"role":"user","content":"hi"}],"temperature":0.2,"stream":false,"reasoning_effort":"low","thinking":{"type":"enabled"}}')
+  // Summaries ask for JSON, but DeepSeek documents nothing about JSON output with thinking on, so with it on the body does not change.
+  assert.equal(JSON.stringify(chatRequestBody(author, hi, { json: true })), JSON.stringify(chatRequestBody(author, hi)))
+  const off = { ...author, effort: "off" as const }
+  assert.equal(JSON.stringify(chatRequestBody(off, hi)), '{"model":"deepseek-flash","messages":[{"role":"user","content":"hi"}],"temperature":0.2,"stream":false,"thinking":{"type":"disabled"}}')
+  assert.equal(JSON.stringify(chatRequestBody(off, hi, { json: true })), '{"model":"deepseek-flash","messages":[{"role":"user","content":"hi"}],"temperature":0.2,"stream":false,"thinking":{"type":"disabled"},"response_format":{"type":"json_object"}}')
+})
+
+test("an existing OpenAI-compatible host keeps the body it had: temperature and reasoning_effort, no thinking field", () => {
+  const body = chatRequestBody(config("custom", { baseUrl: "https://openrouter.ai/api/v1", effort: "high" }), hi)
+  assert.equal(JSON.stringify(body), '{"model":"m","messages":[{"role":"user","content":"hi"}],"temperature":0.2,"stream":false,"reasoning_effort":"high"}')
+  assert.equal(chatRequestBody(config("custom", { effort: "off" }), hi).reasoning_effort, undefined)
+})
+
+test("each preset shapes the request the way its documentation says", () => {
+  const body = (preset: string, effort: LlmConfig["effort"], json = false) => chatRequestBody(config(preset, { effort }), hi, { json })
+  // OpenAI: no temperature, effort as reasoning_effort, JSON mode available.
+  assert.deepEqual(body("openai", "medium", true), { model: "m", messages: hi, stream: false, reasoning_effort: "medium", response_format: { type: "json_object" } })
+  // Anthropic: neither temperature, effort nor json_object (a 400) is sent.
+  assert.deepEqual(body("anthropic", "high", true), { model: "m", messages: hi, stream: false })
+  // Gemini: effort only.
+  assert.deepEqual(body("gemini", "low", true), { model: "m", messages: hi, stream: false, reasoning_effort: "low" })
+  // OpenRouter and Ollama: temperature, effort and JSON mode.
+  for (const id of ["openrouter", "ollama"]) assert.deepEqual(body(id, "low", true), { model: "m", messages: hi, temperature: 0.2, stream: false, reasoning_effort: "low", response_format: { type: "json_object" } })
+  // LM Studio: temperature only.
+  assert.deepEqual(body("lmstudio", "high", true), { model: "m", messages: hi, temperature: 0.2, stream: false })
+  // Azure: effort only, and the key goes in `api-key`.
+  assert.deepEqual(body("azure", "low", true), { model: "m", messages: hi, stream: false, reasoning_effort: "low" })
+  // Custom never asks for JSON mode, since nothing is known about the server.
+  assert.equal("response_format" in body("custom", "off", true), false)
+  // Without the option, no preset asks for JSON.
+  for (const preset of LLM_PRESETS) assert.equal("response_format" in chatRequestBody(config(preset.id), hi), false, preset.id)
+})
+
+test("credentials follow the preset: Bearer, Azure's api-key header, none for a local server without a key, and extra headers", async () => {
+  const headersFor = async (c: LlmConfig) => {
+    let seen: Record<string, string> = {}
+    await chat(c, hi, async (_url, headers) => ((seen = headers), { status: 200, text: '{"choices":[{"message":{"content":"x"}}]}' }))
+    return seen
+  }
+  assert.deepEqual(await headersFor(config("openai")), { "Content-Type": "application/json", Authorization: "Bearer k" })
+  assert.deepEqual(await headersFor(config("azure", { headers: { "x-ms-client": "ml" } })), { "Content-Type": "application/json", "api-key": "k", "x-ms-client": "ml" })
+  assert.deepEqual(await headersFor(config("ollama", { apiKey: "" })), { "Content-Type": "application/json" })
+  assert.deepEqual(await headersFor(config("ollama", { apiKey: "local" })), { "Content-Type": "application/json", Authorization: "Bearer local" })
+  assert.equal(llmConfigProblem(config("ollama", { apiKey: "", baseUrl: "http://localhost:11434/v1" })), undefined)
+  assert.match(llmConfigProblem(config("openai", { apiKey: "" })) ?? "", /API Key/)
+  assert.match(llmConfigProblem(config("azure")) ?? "", /资源地址/)
+  assert.equal(llmConfigProblem(config("azure", { baseUrl: "https://mine.openai.azure.com/openai/v1" })), undefined)
+})
+
+test("a service that refuses or blanks a JSON reply is asked again without it", async () => {
+  const bodies: Record<string, unknown>[] = []
+  const reply = (statuses: number[]) => async (_url: string, _headers: Record<string, string>, body: string) => {
+    bodies.push(JSON.parse(body))
+    const status = statuses.shift() ?? 200
+    return { status, text: status === 200 && statuses.length === 0 && bodies.length > 1 ? '{"choices":[{"message":{"content":"{}"}}]}' : status === 200 ? '{"choices":[{"message":{"content":"  "}}]}' : '{"error":{"message":"nope"}}' }
+  }
+  const openai = config("openai")
+  // HTTP 400 on the JSON request, then success.
+  assert.equal(await chat(openai, hi, reply([400]), { json: true }), "{}")
+  assert.deepEqual(bodies.map((b) => "response_format" in b), [true, false])
+  // Blank content on the JSON request (DeepSeek's documented failure mode), then success.
+  bodies.length = 0
+  assert.equal(await chat(config("deepseek"), hi, reply([200]), { json: true }), "{}")
+  assert.deepEqual(bodies.map((b) => "response_format" in b), [true, false])
+  // A server error is not retried, and neither is a request that never asked for JSON.
+  bodies.length = 0
+  await assert.rejects(chat(openai, hi, reply([500]), { json: true }), /HTTP 500/)
+  assert.equal(bodies.length, 1)
+  bodies.length = 0
+  await assert.rejects(chat(openai, hi, reply([400])), /HTTP 400/)
+  assert.equal(bodies.length, 1)
+})
+
+test("the client reports the input limit: the user's, else the preset's", () => {
+  assert.equal(compatibleClient(config("deepseek", { inputLimit: 777 }), async () => ({ status: 200, text: "" })).inputLimit, 777)
+  const secrets = { getSecret: () => "k" }
+  assert.equal(llmConfig(secrets, DEFAULT_SETTINGS).inputLimit, 1_000_000)
+  assert.equal(llmConfig(secrets, { ...DEFAULT_SETTINGS, llmInputLimit: 30_000 }).inputLimit, 30_000)
+})
+
+test("existing configurations map to a preset by their base URL, anything else to Custom", () => {
+  const cases: [string, string][] = [
+    ["https://api.deepseek.com", "deepseek"],
+    ["https://api.deepseek.com/v1", "deepseek"],
+    ["https://api.deepseek.com/chat/completions", "deepseek"],
+    ["https://api.openai.com/v1", "openai"],
+    ["https://api.anthropic.com/v1/", "anthropic"],
+    ["https://generativelanguage.googleapis.com/v1beta/openai/", "gemini"],
+    ["https://openrouter.ai/api/v1", "openrouter"],
+    ["http://localhost:11434/v1", "ollama"],
+    ["http://127.0.0.1:11434/v1", "ollama"],
+    ["http://localhost:1234/v1", "lmstudio"],
+    ["https://my-res.openai.azure.com/openai/v1", "azure"],
+    ["http://127.0.0.1:8790/v1", "custom"],
+    ["https://ark.cn-beijing.volces.com/api/v3", "custom"],
+    ["", "custom"],
+    ["not a url", "custom"],
+  ]
+  for (const [url, id] of cases) assert.equal(presetForUrl(url).id, id, url)
+  assert.equal(loadSettings({ version: 2, llmBaseUrl: "https://openrouter.ai/api/v1" }).settings.llmPreset, "openrouter")
+  assert.equal(loadSettings({ llmBaseUrl: "http://10.0.0.5:8000/v1" }).settings.llmPreset, "custom")
+  // A stored choice wins over the URL, and an invalid one is placed by the URL.
+  assert.equal(loadSettings({ version: 2, llmPreset: "custom", llmBaseUrl: "https://api.deepseek.com" }).settings.llmPreset, "custom")
+  assert.equal(loadSettings({ version: 2, llmPreset: "gone", llmBaseUrl: "https://api.deepseek.com" }).settings.llmPreset, "deepseek")
+})
+
+test("a configuration saved before presets is written back with its preset, and once is enough", () => {
+  const before = { version: 2, llmBaseUrl: "https://api.deepseek.com", llmModel: "deepseek-flash", llmEffort: "low", llmTemperature: 0.2 }
+  const first = loadSettings(before)
+  assert.equal(first.migrated, true)
+  assert.equal(first.settings.llmPreset, "deepseek")
+  const second = loadSettings(JSON.parse(JSON.stringify(first.settings)))
+  assert.equal(second.migrated, false)
+  assert.deepEqual(second.settings, first.settings)
+  assert.equal(loadSettings(null).migrated, false)
+})
+
+test("extra headers are parsed from lines and only presets that allow them use them", () => {
+  assert.deepEqual(parseHeaders("X-Org: acme\n# comment\nbad line\nX-Empty:\n  X-Trim :  v:with:colons  \n:novalue\nbad name: v"), { "X-Org": "acme", "X-Trim": "v:with:colons" })
+  const settings = { ...DEFAULT_SETTINGS, llmHeaders: "X-Org: acme" }
+  const secrets = { getSecret: () => "k" }
+  assert.deepEqual(llmConfig(secrets, { ...settings, llmPreset: "custom" }).headers, { "X-Org": "acme" })
+  assert.deepEqual(llmConfig(secrets, { ...settings, llmPreset: "azure" }).headers, { "X-Org": "acme" })
+  assert.deepEqual(llmConfig(secrets, { ...settings, llmPreset: "deepseek" }).headers, {})
 })

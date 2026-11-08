@@ -4,6 +4,7 @@ import { asrProvider, fileProviders, liveProviders } from "./asr/providers/regis
 import type { AsrProvider } from "./asr/providers/types.ts"
 import { listInputDevices } from "./audio/capture.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
+import { LLM_PRESETS, presetById } from "./llm/presets.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type MeetingLivePlugin from "./main.ts"
 import type { MeetingLiveSettings } from "./settings.ts"
@@ -159,34 +160,78 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
   }
 
   private compatibleSettings(containerEl: HTMLElement): void {
-    containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: "任意 OpenAI 兼容的 Chat Completions 接口，例如 DeepSeek、火山方舟、通义千问、OpenRouter 或本地模型服务。" })
-    textField(new Setting(containerEl).setName("API 地址").setDesc("填到 /v1 或完整的 /chat/completions 地址。"), this.s, "llmBaseUrl", () => this.save(), "https://api.deepseek.com/v1")
-    textField(new Setting(containerEl).setName("模型"), this.s, "llmModel", () => this.save(), "deepseek-flash")
-    secretField(this.app, new Setting(containerEl).setName("API Key"), this.s, "llmApiKeySecret", () => this.save())
-    new Setting(containerEl)
-      .setName("推理强度")
-      .setDesc("发送 reasoning_effort；DeepSeek 同时开启思考模式。模型不支持推理时选关闭。")
-      .addDropdown((d) =>
-        d
-          .addOption("off", "关闭")
-          .addOption("low", "低")
-          .addOption("medium", "中")
-          .addOption("high", "高")
-          .setValue(this.s.llmEffort)
-          .onChange((v) => {
-            this.s.llmEffort = v as MeetingLiveSettings["llmEffort"]
+    const s = this.s
+    const preset = presetById(s.llmPreset)
+    containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: "选择模型服务；预设会填入地址和建议的模型，并按该服务的文档决定请求里带哪些参数。没有列出的 OpenAI 兼容服务选「自定义」。" })
+    new Setting(containerEl).setName("服务").addDropdown((d) => {
+      for (const p of LLM_PRESETS) d.addOption(p.id, p.name)
+      d.setValue(preset.id).onChange((id) => {
+        const next = presetById(id)
+        s.llmPreset = next.id
+        if (next.id !== "custom") {
+          s.llmBaseUrl = next.baseUrl
+          s.llmModel = next.model
+        }
+        this.save()
+        this.display()
+      })
+    })
+    textField(new Setting(containerEl).setName("API 地址").setDesc("填到 /v1 或完整的 /chat/completions 地址。"), s, "llmBaseUrl", () => this.save(), preset.baseUrl || "https://api.example.com/v1")
+    textField(new Setting(containerEl).setName("模型").setDesc(preset.id === "azure" ? "填写 Azure 中的部署名称。" : ""), s, "llmModel", () => this.save(), preset.model || "模型名称")
+    secretField(this.app, new Setting(containerEl).setName(preset.keyRequired ? "API Key" : "API Key（可选）").setDesc(preset.keyRequired ? "" : "本地服务通常不需要；填写后会随请求发送。"), s, "llmApiKeySecret", () => this.save())
+    if (preset.customHeaders) {
+      new Setting(containerEl)
+        .setName("额外请求头")
+        .setDesc("每行一个，格式「名称: 值」。保存在插件配置里，不要填写密钥。")
+        .addTextArea((t) => {
+          t.inputEl.rows = 3
+          t.setValue(s.llmHeaders).onChange((v) => {
+            s.llmHeaders = v
             this.save()
-          }),
-      )
+          })
+        })
+    }
+    if (preset.effort !== "none") {
+      new Setting(containerEl)
+        .setName("推理强度")
+        .setDesc(preset.effort === "deepseek" ? "发送 reasoning_effort 并开关 DeepSeek 的思考模式。模型不支持推理时选关闭。" : "发送 reasoning_effort；选关闭则不发送。模型不支持推理时选关闭。")
+        .addDropdown((d) =>
+          d
+            .addOption("off", "关闭")
+            .addOption("low", "低")
+            .addOption("medium", "中")
+            .addOption("high", "高")
+            .setValue(s.llmEffort)
+            .onChange((v) => {
+              s.llmEffort = v as MeetingLiveSettings["llmEffort"]
+              this.save()
+            }),
+        )
+    }
+    if (preset.temperature) {
+      new Setting(containerEl)
+        .setName("温度")
+        .setDesc("越低越保守，事实性任务建议 0–0.3。开启推理后多数模型会忽略此项。")
+        .addSlider((slider) =>
+          slider
+            .setLimits(0, 1, 0.05)
+            .setValue(s.llmTemperature)
+            .onChange((v) => {
+              s.llmTemperature = v
+              this.save()
+            }),
+        )
+    }
     new Setting(containerEl)
-      .setName("温度")
-      .setDesc("越低越保守，事实性任务建议 0–0.3。开启推理后多数模型会忽略此项。")
-      .addSlider((s) =>
-        s
-          .setLimits(0, 1, 0.05)
-          .setValue(this.s.llmTemperature)
+      .setName("输入上限（tokens）")
+      .setDesc(`一次请求最多带多少内容的估算值。生成纪要时超过它，会先分段压缩转写再整理。留空使用「${preset.name}」的默认值 ${preset.inputTokens.toLocaleString()}；本地模型请按实际上下文长度填写。`)
+      .addText((t) =>
+        t
+          .setPlaceholder(String(preset.inputTokens))
+          .setValue(s.llmInputLimit > 0 ? String(s.llmInputLimit) : "")
           .onChange((v) => {
-            this.s.llmTemperature = v
+            const n = Math.floor(Number(v))
+            s.llmInputLimit = Number.isFinite(n) && n > 0 ? n : 0
             this.save()
           }),
       )
