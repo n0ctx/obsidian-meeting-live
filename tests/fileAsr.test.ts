@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { assertCoverage, groupBySpeaker, renderInterviewRecord, speakerUtterances, transcribeFile, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../src/asr/fileAsr.ts"
 import { buildMinutesMessages } from "../src/llm/minutes.ts"
-import { prepareAudio } from "../src/audio/transcode.ts"
+import { prepareChunks } from "../src/audio/transcode.ts"
 
 const result: FileAsrResult = {
   durationMs: 20_000,
@@ -61,12 +61,13 @@ test("a provider can post a binary body, and the result still goes through the c
 test("recordings are uploaded as they are when the service takes them, otherwise they need recompressing", async () => {
   const limits = { directFormats: { m4a: "mp4", mp3: "mp3" }, maxBytes: 10 }
   const small = new Uint8Array([1, 2, 3])
-  const direct = await prepareAudio(small, "M4A", limits)
-  assert.deepEqual({ format: direct.format, transcoded: direct.transcoded, bytes: direct.bytes }, { format: "mp4", transcoded: false, bytes: 3 })
+  const [direct, ...rest] = await prepareChunks(small, "M4A", limits)
+  assert.deepEqual({ format: direct.format, transcoded: direct.transcoded, bytes: direct.bytes, offsetMs: direct.offsetMs }, { format: "mp4", transcoded: false, bytes: 3, offsetMs: 0 })
   assert.equal(direct.data, small)
+  assert.equal(rest.length, 0)
   // Too large, or a format the service does not take, goes through the local decoder, which Node does not have.
-  await assert.rejects(prepareAudio(new Uint8Array(11), "mp3", limits))
-  await assert.rejects(prepareAudio(small, "flac", limits))
+  await assert.rejects(prepareChunks(new Uint8Array(11), "mp3", limits))
+  await assert.rejects(prepareChunks(small, "flac", limits))
 })
 
 test("coverage check rejects empty and silently truncated results", () => {

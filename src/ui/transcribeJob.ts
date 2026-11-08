@@ -1,8 +1,9 @@
 import { Events, Notice, TFile, type App } from "obsidian"
-import { renderInterviewRecord, speakerUtterances, transcribeFile, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
+import { transcribeChunks, type ChunkResults } from "../asr/chunked.ts"
+import { renderInterviewRecord, speakerUtterances, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
 import { appendJobBlock, hasJobBlock, newJobId, placeJobResult, removeJobBlock } from "../asr/jobBlock.ts"
 import type { Destination } from "../consent.ts"
-import { prepareAudio } from "../audio/transcode.ts"
+import { prepareChunks, type AudioChunk } from "../audio/transcode.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { writeMinutes } from "../llm/contextGuard.ts"
 import { stripMeetingBlocks } from "../llm/minutes.ts"
@@ -67,6 +68,10 @@ export class TranscribeJob {
   private readonly speakers: boolean
   /** Kept after a failed write-up so a retry does not re-run (and re-bill) recognition. */
   private transcribed: { result: FileAsrResult; rawPath: string } | undefined
+  /** A recording cut into pieces and what was recognized of them so far, so a retry continues instead of paying for the first pieces again. */
+  private pieces: { chunks: AudioChunk[]; done: ChunkResults } | undefined
+  /** Which piece is being uploaded, when the recording was cut into several. */
+  part: { index: number; total: number } | undefined
   onChange: (() => void) | undefined
 
   constructor(app: App, deps: TranscribeDeps, target: TFile, source: AudioSource, file: FileAsrProvider, options: { speakers: boolean; writeUp: boolean }) {
@@ -86,7 +91,8 @@ export class TranscribeJob {
   /** Status-bar text, e.g. "识别中 01:20". */
   get label(): string {
     const elapsed = this.stage === "recognizing" || this.stage === "writing" ? ` ${formatClock(Date.now() - this.stageStartedAt)}` : ""
-    return `${STAGE_LABEL[this.stage]}${elapsed}`
+    const part = this.part && this.part.total > 1 && (this.stage === "uploading" || this.stage === "recognizing") ? ` ${this.part.index + 1}/${this.part.total}` : ""
+    return `${STAGE_LABEL[this.stage]}${part}${elapsed}`
   }
 
   get recognized(): boolean {
@@ -107,12 +113,22 @@ export class TranscribeJob {
     try {
       if (!this.transcribed) {
         this.setStage("reading")
-        const audio = await prepareAudio(await this.source.read(), this.source.extension, { directFormats: this.file.directFormats, maxBytes: this.file.capabilities.fileSizeLimit })
-        const result = await transcribeFile(this.file, audio, {
-          speakers: this.speakers,
-          post: this.deps.post,
-          onStage: (s) => this.setStage(s.stage === "uploading" ? "uploading" : "recognizing"),
-        })
+        this.pieces ??= { chunks: await prepareChunks(await this.source.read(), this.source.extension, { directFormats: this.file.directFormats, maxBytes: this.file.capabilities.fileSizeLimit }), done: [] }
+        const result = await transcribeChunks(
+          this.file,
+          this.pieces.chunks,
+          {
+            speakers: this.speakers,
+            post: this.deps.post,
+            onStage: (s) => this.setStage(s.stage === "uploading" ? "uploading" : "recognizing"),
+            onPart: (index, total) => {
+              this.part = { index, total }
+              this.onChange?.()
+            },
+          },
+          this.pieces.done,
+        )
+        this.pieces = undefined
         const rawPath = this.writeUp ? await this.saveRawTranscript(result) : ""
         this.transcribed = { result, rawPath }
       }
@@ -142,11 +158,12 @@ export class TranscribeJob {
     if (llm.problem) throw new Error(llm.problem)
     this.setStage("writing")
     const notes = stripMeetingBlocks(await this.app.vault.read(this.target))
-    const input = { title: this.target.basename, date: formatDate(new Date(this.source.modified)), utterances: speakerUtterances(done.result), summaries: [], notes: notes ? [{ path: this.target.path, content: notes }] : [] }
+    const speakerNote = done.result.utterances.some((u) => u.speaker) && (done.result.chunks ?? 1) > 1 ? `Note: the recording was recognized in ${done.result.chunks} separate parts, so speaker numbers may not refer to the same person in different parts.` : undefined
+    const input = { title: this.target.basename, date: formatDate(new Date(this.source.modified)), utterances: speakerUtterances(done.result), summaries: [], notes: notes ? [{ path: this.target.path, content: notes }] : [], speakerNote }
     const text = await writeMinutes(llm, this.deps.prompt(), input, { focus: this.deps.summaryFocus() })
     const raw = done.rawPath.replace(/\.md$/, "")
     const lines = [
-      `> [!info] 访谈记录由 ${llm.model} 根据录音「${this.source.name}」的转写整理（时长 ${formatClock(done.result.durationMs, true)}，${formatDateTime(new Date())}）。发布前请对照原始转写核实关键事实与数字。`,
+      `> [!info] 访谈记录由 ${llm.model} 根据录音「${this.source.name}」的转写整理（${done.result.durationMs ? `时长 ${formatClock(done.result.durationMs, true)}，` : ""}${formatDateTime(new Date())}）。发布前请对照原始转写核实关键事实与数字。`,
       `> 原始转写：[[${raw}|${raw.split("/").pop()}]]`,
       "",
     ]

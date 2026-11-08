@@ -23,9 +23,12 @@ export interface FileUtterance {
 }
 
 export interface FileAsrResult {
+  /** Length of the recording; 0 when the service did not say, which turns the truncation check off. */
   durationMs: number
   utterances: FileUtterance[]
   text: string
+  /** How many pieces the recording was cut into and recognized separately; absent for a recording recognized whole. */
+  chunks?: number
 }
 
 export type FileAsrStage = { stage: "uploading" } | { stage: "recognizing"; waitedMs: number }
@@ -122,9 +125,10 @@ export function renderInterviewRecord(result: FileAsrResult, meta: RecordMeta, w
   if (withHeading) lines.push(`# ${meta.title}`, "")
   lines.push(`## 访谈记录 · ${meta.source}`, "")
   if (meta.vaultPath) lines.push(`![[${meta.vaultPath}]]`, "")
-  const facts = [`时长 ${formatClock(result.durationMs, true)}`, speakers.size ? `${speakers.size} 位说话人` : "", `${result.utterances.length} 句`, `转写于 ${meta.transcribedAt}`].filter(Boolean)
+  const facts = [result.durationMs ? `时长 ${formatClock(result.durationMs, true)}` : "", speakers.size ? `${speakers.size} 位说话人` : "", `${result.utterances.length} 句`, `转写于 ${meta.transcribedAt}`].filter(Boolean)
   lines.push(`> [!info] ${meta.provider}录音文件识别原始转写（${meta.model}）`, `> ${facts.join(" · ")}`)
   if (speakers.size) lines.push("> 说话人编号由声音自动区分，不代表身份，请按实际人物替换。")
+  if (speakers.size && (result.chunks ?? 1) > 1) lines.push(`> 录音较长，分 ${result.chunks} 段分别识别，说话人编号在各段之间不一定对应同一个人。`)
   lines.push("")
   if (blocks.length === 0) lines.push(result.text, "")
   for (const block of blocks) {
