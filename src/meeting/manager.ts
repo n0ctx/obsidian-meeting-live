@@ -4,7 +4,7 @@ import { providerNameIn } from "../asr/providers/registry.ts"
 import { noteLang } from "./labels.ts"
 import { upgradeSummaries } from "../llm/summary.ts"
 import { MeetingSession, type SessionEnv } from "./session.ts"
-import { TRANSCRIPT_FILE, meetingFile, newMeetingId, type MeetingStore } from "./store.ts"
+import { newMeetingId, transcriptFileName, type MeetingStore } from "./store.ts"
 import { localTimestamp, type MeetingMeta } from "./types.ts"
 
 /** Owns every meeting runtime for the lifetime of the plugin, independent of rendered views. */
@@ -79,7 +79,7 @@ export class MeetingManager extends Events {
       if (!entry) return undefined
       const meta = await this.store.readMeta(entry.folder)
       upgradeSummaries(meta)
-      const transcript = await this.store.readTranscript(this.store.path(entry.folder, meetingFile(meta.name, TRANSCRIPT_FILE)))
+      const transcript = await this.store.readTranscript(this.store.path(entry.folder, transcriptFileName(meta)))
       const session = new MeetingSession(this.sessionEnv(), entry.folder, meta, transcript)
       session.on("change", () => this.trigger("session-change", session))
       this.sessions.set(id, session)

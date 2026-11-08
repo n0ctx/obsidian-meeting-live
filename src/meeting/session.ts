@@ -12,7 +12,7 @@ import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
 import { placeSummary } from "./noteSummary.ts"
 import { noteLang } from "./labels.ts"
-import { TRANSCRIPT_FILE, meetingFile, movedPath, noteName, type MeetingStore } from "./store.ts"
+import { meetingFile, movedPath, noteName, transcriptFileName, type MeetingStore } from "./store.ts"
 import { audioLine, blockId, gapLine, linkTranscript, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
 import { formatClock, formatDate, formatDateTime, totalDuration, type AudioFormat, type AudioSegment, type MeetingMeta, type SummaryRecord, type TranscriptGap, type Utterance } from "./types.ts"
 
@@ -104,7 +104,7 @@ export class MeetingSession extends Events {
   }
 
   get transcriptPath(): string {
-    return this.env.store.path(this.folder, meetingFile(this.meta.name, TRANSCRIPT_FILE))
+    return this.env.store.path(this.folder, transcriptFileName(this.meta))
   }
 
   get llmProblem(): string | undefined {

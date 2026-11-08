@@ -429,6 +429,7 @@ export const en: Dictionary = {
   "note.gapLine": (from, to, reason) => `> [!warning] Transcript gap ${from} – ${to}: ${reason}. The recording is saved and that stretch can be played back.`,
   "note.minutesTitle": (title) => `${title} minutes`,
   "note.minutesCaution": "> [!caution] These minutes were written by AI from the raw transcript. Check key facts and figures against the transcript and the recording before publishing.",
+  "note.transcriptFile": "Raw transcript",
   "note.minutesFile": "Minutes",
   "note.audioNamed": (name, n) => `${name} recording ${n}`,
   "note.audioBare": (n) => `recording-${n}`,

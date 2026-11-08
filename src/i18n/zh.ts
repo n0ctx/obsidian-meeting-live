@@ -429,6 +429,7 @@ export const zh = {
   "note.gapLine": (from: string, to: string, reason: string) => `> [!warning] 转写缺口 ${from} – ${to}：${reason}。录音已保存，可回放该时段。`,
   "note.minutesTitle": (title: string) => `${title} 纪要`,
   "note.minutesCaution": "> [!caution] 本纪要由 AI 根据原始转写整理，发布前请对照转写与录音核实关键事实与数字。",
+  "note.transcriptFile": "原始转写",
   "note.minutesFile": "正式纪要",
   "note.audioNamed": (name: string, n: string) => `${name} 录音 ${n}`,
   "note.audioBare": (n: string) => `录音-${n}`,

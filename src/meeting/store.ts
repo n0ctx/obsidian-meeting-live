@@ -7,9 +7,9 @@ import type { MeetingMeta } from "./types.ts"
 
 export const META_FILE = "meeting.json"
 /**
- * The raw transcript's file name stays Chinese whatever the note language. It is not stored in meeting.json: every load derives the
- * path from the meeting's name and this constant, and the summary links in notes point at it. Another name would orphan existing
- * meetings and make a downgrade to 1.0.x lose track of its transcripts.
+ * The raw transcript's file name (without the meeting name in front) in meetings created before it was stored in meeting.json,
+ * and what a meeting without `transcriptFile` still resolves to. It stays Chinese: the summary links in existing notes point at it,
+ * and a downgrade to 1.0.x finds transcripts by it.
  */
 export const TRANSCRIPT_FILE = "原始转写.md"
 export const AUDIO_DIR = "audio"
@@ -38,6 +38,11 @@ export function movedPath(path: string, folder: string, target: string, from: st
   const slash = path.lastIndexOf("/")
   const file = path.slice(slash + 1)
   return `${target}${path.slice(folder.length, slash)}/${file.startsWith(`${from} `) ? to + file.slice(from.length) : file}`
+}
+
+/** The raw transcript's file name within a meeting's folder: the stored name, else the legacy one. */
+export function transcriptFileName(meta: Pick<MeetingMeta, "name" | "transcriptFile">): string {
+  return meetingFile(meta.name, meta.transcriptFile ?? TRANSCRIPT_FILE)
 }
 
 export function newMeetingId(): string {
@@ -95,15 +100,19 @@ export class MeetingStore {
     return entries
   }
 
-  /** Creates the meeting folder; `provider` is the display name, in `lang`, of the live recognizer the transcript header credits. */
+  /**
+   * Creates the meeting folder; `provider` is the display name, in `lang`, of the live recognizer the transcript header credits.
+   * The raw transcript is named in `lang` too, and the name is kept in `meta`, so a later change of language never moves it.
+   */
   async create(meta: MeetingMeta, provider: string, lang: Lang = uiLang()): Promise<string> {
     const root = normalizePath(this.root())
     if (!(await this.adapter.exists(root))) await this.adapter.mkdir(root)
     meta.name = await this.freeName(root, noteName(meta.notePath))
+    meta.transcriptFile = `${tr(lang, "note.transcriptFile")}.md`
     const folder = this.path(root, meta.name)
     await this.adapter.mkdir(folder)
     await this.adapter.mkdir(this.path(folder, AUDIO_DIR))
-    await this.adapter.write(this.path(folder, meetingFile(meta.name, TRANSCRIPT_FILE)), transcriptHeader(meta, provider, lang))
+    await this.adapter.write(this.path(folder, transcriptFileName(meta)), transcriptHeader(meta, provider, lang))
     await this.saveMeta(folder, meta)
     return folder
   }

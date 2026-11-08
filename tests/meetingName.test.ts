@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import { FileSystemAdapter, TFile, TFolder } from "obsidian"
 import { MeetingSession, type SessionEnv } from "../src/meeting/session.ts"
-import { MeetingStore, movedPath } from "../src/meeting/store.ts"
+import { MeetingStore, movedPath, transcriptFileName } from "../src/meeting/store.ts"
 import type { MeetingMeta } from "../src/meeting/types.ts"
 import { DEFAULT_SETTINGS } from "../src/settings.ts"
 
@@ -36,7 +36,7 @@ function tempVault() {
     },
   }
   const list = (path: string) => readdirSync(full(path), { recursive: true }).map(String).sort()
-  return { store: new MeetingStore(app as never, () => "Meetings"), list, renames, put: (path: string) => writeFileSync(full(path), "") }
+  return { store: new MeetingStore(app as never, () => "Meetings"), root, list, renames, put: (path: string) => writeFileSync(full(path), "") }
 }
 
 const meeting = (notePath: string) => ({ id: "m-1", title: notePath.slice(6, -3), notePath, createdAt: "2026-10-30T10:00:00+08:00" }) as MeetingMeta
@@ -127,4 +127,49 @@ test("meetings from before named files and hand-edited titles stay as they are",
   assert.equal(calls.length, 0)
   assert.equal(s.meta.title, "投后访谈")
   assert.equal(s.transcriptPath, "Meetings/2026-10-30 旧会议/原始转写.md")
+})
+
+test("a new meeting names its raw transcript in the note language and stores the name", async () => {
+  const { store, root, list } = tempVault()
+  const zh = meeting("Daily/周会.md")
+  await store.create(zh, "火山引擎", "zh")
+  assert.equal(zh.transcriptFile, "原始转写.md")
+  assert.deepEqual(list("Meetings/周会"), ["audio", "meeting.json", "周会 原始转写.md"])
+
+  const en = meeting("Daily/Weekly sync.md")
+  const folder = await store.create(en, "Volcengine", "en")
+  assert.equal(en.transcriptFile, "Raw transcript.md")
+  assert.deepEqual(list(folder), ["Weekly sync Raw transcript.md", "audio", "meeting.json"])
+  assert.equal(JSON.parse(readFileSync(join(root, `${folder}/meeting.json`), "utf8")).transcriptFile, "Raw transcript.md")
+  assert.equal(transcriptFileName(en), "Weekly sync Raw transcript.md")
+})
+
+test("a meeting without a stored transcript name resolves to the Chinese one, as before", () => {
+  assert.equal(transcriptFileName({ name: "周会" }), "周会 原始转写.md")
+  assert.equal(transcriptFileName({ name: undefined }), "原始转写.md")
+  assert.equal(transcriptFileName({ name: "Weekly sync", transcriptFile: "Raw transcript.md" }), "Weekly sync Raw transcript.md")
+})
+
+test("the stored transcript name follows the meeting when its note is renamed, and old meetings keep theirs", async () => {
+  const { store, list } = tempVault()
+  const en = meeting("Daily/Weekly sync.md")
+  const folder = await store.create(en, "Volcengine", "en")
+  const legacy = meeting("Daily/周会.md")
+  delete legacy.transcriptFile
+  const old = await store.create(legacy, "火山引擎", "zh")
+  assert.deepEqual(await store.renameMeeting(folder, "Weekly sync", "Board sync"), { folder: "Meetings/Board sync", name: "Board sync" })
+  assert.deepEqual(list("Meetings/Board sync"), ["Board sync Raw transcript.md", "audio", "meeting.json"])
+  assert.deepEqual(await store.renameMeeting(old, "周会", "董事会"), { folder: "Meetings/董事会", name: "董事会" })
+  assert.deepEqual(list("Meetings/董事会"), ["audio", "meeting.json", "董事会 原始转写.md"])
+
+  // Through the session: stored name and legacy derivation both land on the renamed file.
+  for (const [stored, expected] of [
+    ["Raw transcript.md", "Meetings/Board sync/Board sync Raw transcript.md"],
+    [undefined, "Meetings/Board sync/Board sync 原始转写.md"],
+  ] as const) {
+    const { session: s } = session({ title: "Weekly sync", name: "Weekly sync", transcriptFile: stored, notePath: "Daily/Weekly sync.md", status: "paused" })
+    await s.setNotePath("Daily/Board sync.md")
+    await s.stop()
+    assert.equal(s.transcriptPath, expected)
+  }
 })

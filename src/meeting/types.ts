@@ -96,6 +96,11 @@ export interface MeetingMeta {
   title: string
   /** Name of the meeting folder and prefix of its files, following the note's name; absent for meetings created before files were named. */
   name?: string
+  /**
+   * The raw transcript's file name after the meeting name ("原始转写.md", "Raw transcript.md"), fixed when the meeting is created.
+   * Absent for meetings created before it was stored, which use the Chinese name.
+   */
+  transcriptFile?: string
   notePath: string
   createdAt: string
   updatedAt: string
