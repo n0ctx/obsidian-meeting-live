@@ -858,7 +858,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  max-width: 200px;
+  max-width: 240px;
   height: 20px;
   color: var(--ml-ink-3);
   white-space: nowrap;
