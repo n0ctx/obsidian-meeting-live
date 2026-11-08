@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { test } from "node:test"
 import { FileSystemAdapter, TFile, TFolder } from "obsidian"
 import { MeetingSession, type SessionEnv } from "../src/meeting/session.ts"
-import { MeetingStore, movedPath, transcriptFileName } from "../src/meeting/store.ts"
+import { MeetingStore, movedPath, noteName, transcriptFileName } from "../src/meeting/store.ts"
 import type { MeetingMeta } from "../src/meeting/types.ts"
 import { DEFAULT_SETTINGS } from "../src/settings.ts"
 
@@ -172,4 +172,13 @@ test("the stored transcript name follows the meeting when its note is renamed, a
     await s.stop()
     assert.equal(s.transcriptPath, expected)
   }
+})
+
+test("meeting names stay valid on Windows: no trailing dots or spaces, no reserved device names", () => {
+  assert.equal(noteName("Notes/Weekly sync..md"), "Weekly sync")
+  assert.equal(noteName("Notes/CON.md"), "CON meeting")
+  assert.equal(noteName("Notes/com1.md"), "com1 meeting")
+  assert.equal(noteName("Notes/nul.backup.md"), "nul.backup meeting")
+  assert.equal(noteName("Notes/Console review.md"), "Console review")
+  assert.equal(noteName("Notes/2026年11月05日善后会.md"), "2026年11月05日善后会")
 })

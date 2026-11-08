@@ -19,8 +19,14 @@ export interface IndexEntry {
   meta: MeetingMeta
 }
 
+/** Device names Windows reserves, with or without an extension: a file or folder named so cannot be created there. */
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i
+
 function sanitize(name: string): string {
-  return name.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) || t("note.meetingFallback")
+  // Windows drops trailing dots and spaces from file names, so a name ending in one would not match its own files there.
+  const clean = name.replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60).replace(/[. ]+$/, "")
+  if (!clean) return t("note.meetingFallback")
+  return WINDOWS_RESERVED.test(clean) ? `${clean} meeting` : clean
 }
 
 /** The name a meeting takes from its note. */
