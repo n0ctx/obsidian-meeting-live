@@ -1,4 +1,5 @@
 // Turns Volcengine streaming ASR results into the neutral contract, including the quirks of the service.
+import { speakerId } from "../../../meeting/speakers.ts"
 import type { AsrConnectionHandlers, AsrUpdate, AsrUtterance } from "../../contract.ts"
 
 interface RawUtterance {
@@ -7,6 +8,20 @@ interface RawUtterance {
   end_time?: unknown
   definite?: unknown
   words?: { start_time?: unknown }[]
+  /** The streaming speaker-separation page says utterances carry `speaker_id`; the file API puts `speaker` in `additions`, so every spelling is read. */
+  speaker_id?: unknown
+  speaker?: unknown
+  additions?: { speaker_id?: unknown; speaker?: unknown }
+}
+
+/** The speaker of an utterance as an id a transcript line can hold: a number or a short alphanumeric label as sent, else the digits it ends with. */
+function speakerOf(item: RawUtterance): string | undefined {
+  for (const raw of [item.speaker_id, item.additions?.speaker_id, item.additions?.speaker, item.speaker]) {
+    const text = typeof raw === "number" && Number.isFinite(raw) ? String(raw) : typeof raw === "string" ? raw.trim() : ""
+    const id = speakerId(text) ?? /(\d+)$/.exec(text)?.[1]
+    if (id) return id
+  }
+  return undefined
 }
 
 /** The first utterance of a connection arrives without start_time; fall back to its first word, then the previous utterance. */
@@ -38,7 +53,8 @@ export class VolcNormalizer {
       const end = Number(item.end_time)
       if (Number.isFinite(end)) previousEnd = end
       if (!text) continue
-      parsed.push({ text, startMs: start, endMs: Number.isFinite(end) && end >= start ? end : start, final: item.definite === true })
+      const speaker = speakerOf(item)
+      parsed.push({ text, startMs: start, endMs: Number.isFinite(end) && end >= start ? end : start, final: item.definite === true, ...(speaker ? { speaker } : {}) })
     }
     // The service sometimes moves on from an utterance without ever confirming it; the text is kept as it stood.
     const latestStart = Math.max(...parsed.map((u) => u.startMs))

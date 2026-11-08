@@ -217,3 +217,25 @@ test("speaker labels travel from Deepgram's words to the finals, the transcript 
   assert.deepEqual(parseTranscript(file).map((u) => [Math.round(u.startMs), u.text, u.speaker]), labelled.map((u) => [Math.round(u.startMs), u.text, u.speaker]))
   assert.ok((await finalsOf(false)).every((u) => u.speaker === undefined))
 })
+
+test("Volcengine speakers: the request asks for them only when turned on, and speaker_id reaches the finals and the transcript", async () => {
+  const volc = (speakers: boolean) => volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, hotwords: [], speakers })
+  const finalsOf = async (speakers: boolean) => {
+    const rec = recorder()
+    const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+    asr.begin(0, volc(speakers))
+    await waitFor(() => asr.currentState === "live")
+    for (let s = 0; s < 16; s++) {
+      asr.push(new Int16Array(16000).fill(200))
+      asr.tick()
+      await flush()
+    }
+    await asr.end()
+    return rec.finals
+  }
+  const labelled = await finalsOf(true)
+  assert.ok(labelled.length >= 2)
+  assert.ok(labelled.every((u) => u.speaker === "1" || u.speaker === "2"), JSON.stringify(labelled.map((u) => u.speaker)))
+  assert.deepEqual(parseTranscript(labelled.map((u) => utteranceLine(u)).join("")).map((u) => u.speaker), labelled.map((u) => u.speaker))
+  assert.ok((await finalsOf(false)).every((u) => u.speaker === undefined))
+})

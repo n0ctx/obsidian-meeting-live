@@ -184,6 +184,8 @@ export const zh = {
   "volc.settings.accessToken": "Access Token（旧版控制台）",
   "volc.settings.endpoint.name": "WebSocket 地址",
   "volc.settings.endpoint.desc": "默认使用双向流式优化版（bigmodel_async），结果有变化时才返回，并启用二遍识别提升准确率。",
+  "volc.settings.speakers.name": "区分说话人",
+  "volc.settings.speakers.desc": "识别时按声音给说话人编号，显示在转写里，并交给摘要和纪要。编号不代表身份，重新连接后可能变化。默认关闭：开启会让流结束时的延迟略有增加。",
   "volc.settings.endWindow.name": "断句静音时长",
   "volc.settings.endWindow.desc": "说话停顿超过该时长即确认一句，单位毫秒，最小 200。",
   "volc.settings.fileResource.name": "录音文件识别 Resource ID",

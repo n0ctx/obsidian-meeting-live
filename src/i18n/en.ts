@@ -184,6 +184,8 @@ export const en: Dictionary = {
   "volc.settings.accessToken": "Access token (old console)",
   "volc.settings.endpoint.name": "WebSocket address",
   "volc.settings.endpoint.desc": "Defaults to the optimized bidirectional streaming endpoint (bigmodel_async), which returns results only when they change and runs a second pass for accuracy.",
+  "volc.settings.speakers.name": "Separate speakers",
+  "volc.settings.speakers.desc": "Numbers the speakers by voice during recognition, shows them in the transcript and passes them to summaries and minutes. Numbers do not identify people and may change after a reconnect. Off by default: it adds a little delay at the end of the stream.",
   "volc.settings.endWindow.name": "Silence that ends a sentence",
   "volc.settings.endWindow.desc": "A pause longer than this confirms a sentence. In milliseconds, minimum 200.",
   "volc.settings.fileResource.name": "Recorded-file Resource ID",

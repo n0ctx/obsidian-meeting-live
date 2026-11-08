@@ -44,6 +44,7 @@ test("the author's 1.0.1 settings migrate to the nested shape without losing any
     accessTokenSecret: "",
     endWindowMs: 600,
     fileResourceId: "volc.seedasr.auc",
+    speakers: false,
   })
   assert.equal(settings.llmApiKeySecret, "deepseek-api-key")
   assert.equal(settings.hotwords, "某某科技\n某某资本")

@@ -204,10 +204,13 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
   let receivedMs = 0
   let index = Math.floor(Math.random() * SENTENCES.length)
   let sentenceStart = 0
+  // With enable_speaker_info in the request, utterances carry a speaker_id (1-based here), alternating by sentence.
+  let speakers = false
   const send = (utterances: unknown[], last = false) => ws.send(encodeServerResult(++sequence, { result: { text: "", utterances } }, last))
   ws.on("message", (data: Buffer) => {
     const frame = decodeClientFrame(data)
     if (frame.type === 1) {
+      speakers = (JSON.parse(frame.payload.toString()) as { request?: { enable_speaker_info?: boolean } }).request?.enable_speaker_info === true
       ws.send(encodeServerResult(sequence, { result: { text: "" } }, false))
       return
     }
@@ -215,13 +218,13 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const sentence = SENTENCES[index % SENTENCES.length]
     const progress = (receivedMs - sentenceStart) / SENTENCE_MS
     if (frame.last || progress >= 1) {
-      send([{ text: sentence, start_time: Math.round(sentenceStart), end_time: Math.round(receivedMs), definite: true }], frame.last)
+      send([{ text: sentence, start_time: Math.round(sentenceStart), end_time: Math.round(receivedMs), definite: true, ...(speakers ? { speaker_id: String((index % 2) + 1) } : {}) }], frame.last)
       index++
       sentenceStart = receivedMs + 300
       if (frame.last) ws.close()
     } else if (receivedMs > sentenceStart) {
       const chars = Math.max(1, Math.floor(sentence.length * progress))
-      send([{ text: sentence.slice(0, chars), start_time: Math.round(sentenceStart), end_time: Math.round(receivedMs), definite: false }])
+      send([{ text: sentence.slice(0, chars), start_time: Math.round(sentenceStart), end_time: Math.round(receivedMs), definite: false, ...(speakers ? { speaker_id: String((index % 2) + 1) } : {}) }])
     }
   })
   ws.on("error", () => undefined)

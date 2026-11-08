@@ -11,6 +11,8 @@ export interface VolcSettings {
   endWindowMs: number
   /** Resource that recognizes recorded files. */
   fileResourceId: string
+  /** Ask the live stream to label speakers (enable_speaker_info). Off unless chosen: it adds delay at the end of the stream. */
+  speakers: boolean
 }
 
 export const DEFAULT_VOLC: VolcSettings = {
@@ -21,10 +23,12 @@ export const DEFAULT_VOLC: VolcSettings = {
   accessTokenSecret: "",
   endWindowMs: 800,
   fileResourceId: "volc.seedasr.auc",
+  speakers: false,
 }
 
 /** Where each setting lived in the flat settings of 1.0.x. */
-const FLAT_KEYS: Record<keyof VolcSettings, string> = {
+/** `speakers` is newer than 1.0.x and has no flat key. */
+const FLAT_KEYS: Record<Exclude<keyof VolcSettings, "speakers">, string> = {
   endpoint: "volcEndpoint",
   resourceId: "volcResourceId",
   appId: "volcAppId",
@@ -42,7 +46,9 @@ export function readVolcSettings(source: unknown, flat: boolean): VolcSettings {
   const stored = source && typeof source === "object" ? (source as Record<string, unknown>) : {}
   const result = { ...DEFAULT_VOLC }
   for (const key of Object.keys(DEFAULT_VOLC) as (keyof VolcSettings)[]) {
-    const value = stored[flat ? FLAT_KEYS[key] : key]
+    const name = flat ? FLAT_KEYS[key as keyof typeof FLAT_KEYS] : key
+    if (!name) continue
+    const value = stored[name]
     if (typeof value === typeof DEFAULT_VOLC[key]) (result as Record<string, unknown>)[key] = value
   }
   return result
@@ -57,5 +63,6 @@ export function volcConfig(secrets: SecretReader, volc: VolcSettings, hotwords: 
     accessToken: readSecret(secrets, volc.accessTokenSecret),
     endWindowMs: volc.endWindowMs,
     hotwords: hotwords.split(/\n|,|，/),
+    speakers: volc.speakers,
   }
 }

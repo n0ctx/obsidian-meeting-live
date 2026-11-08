@@ -23,7 +23,7 @@ You choose a service for each role in **Settings → Meeting Live**. Credentials
 
 | Service | What to fill in | Notes |
 | :-- | :-- | :-- |
-| Volcengine | An API key (new console), or an App ID and Access Token (old console); the Resource ID of the streaming service you enabled, such as `volc.seedasr.sauc.duration` | The WebSocket address is prefilled. Supports hotwords and a sentence-pause setting. The language is detected by the service. |
+| Volcengine | An API key (new console), or an App ID and Access Token (old console); the Resource ID of the streaming service you enabled, such as `volc.seedasr.sauc.duration` | The WebSocket address is prefilled. Supports hotwords and a sentence-pause setting. The language is detected by the service. **Separate speakers** (off by default) asks the stream to label speakers, as Volcengine's speaker-separation documentation describes; it has only been tested against a local stand-in for the service. |
 | Deepgram | An API key; the model (prefilled with `nova-3`) | The language follows the **Recognition language** setting; auto-detect uses Deepgram's multilingual mode. **Separate speakers** labels each line `Speaker 1`, `Speaker 2` … in the transcript. Change the WebSocket address only for a self-hosted server. |
 | Local (sherpa-onnx) | Nothing: the address `ws://127.0.0.1:6006` is prefilled | Runs on your computer, free and offline. Chinese and English, no speaker labels. See [Speech recognition on your own computer](#speech-recognition-on-your-own-computer). |
 
