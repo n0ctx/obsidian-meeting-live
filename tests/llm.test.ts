@@ -7,6 +7,7 @@ import { DEFAULT_MINUTES_PROMPT, buildMinutesMessages, stripMeetingBlocks } from
 import { DEFAULT_SUMMARY_FOCUS, buildOverviewMessages, buildSummaryMessages, overviewMarkdown, parseSummary, splitFigures, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
 import { dueCutoff, uncovered } from "../src/meeting/schedule.ts"
 import type { MeetingMeta, SummaryRecord, Utterance } from "../src/meeting/types.ts"
+import { setLanguage } from "./support/obsidian.ts"
 
 const utterances: Utterance[] = [
   { startMs: 1000, endMs: 4000, text: "今年收入预计 3.2 亿元，去年 2.1 亿。" },
@@ -198,6 +199,67 @@ test("each preset shapes the request the way its documentation says", () => {
   for (const preset of LLM_PRESETS) assert.equal("response_format" in chatRequestBody(config(preset.id), hi), false, preset.id)
 })
 
+test("the presets added for other services shape the request the way their documentation says", () => {
+  const body = (preset: string, effort: LlmConfig["effort"], json = false) => chatRequestBody(config(preset, { effort }), hi, { json })
+  const plain = { model: "m", messages: hi, stream: false }
+  // Qwen, SiliconFlow and Mistral: temperature, JSON mode where documented, and never reasoning_effort (model-specific or undocumented).
+  for (const id of ["qwen", "qwen-intl", "siliconflow", "siliconflow-intl", "mistral"]) assert.deepEqual(body(id, "high", true), { ...plain, temperature: 0.2, response_format: { type: "json_object" } }, id)
+  // Kimi: K3 fixes temperature and takes other reasoning_effort values than ours, and JSON mode is not documented with always-on thinking.
+  for (const id of ["kimi", "kimi-intl"]) assert.deepEqual(body(id, "high", true), plain, id)
+  // GLM: temperature (0, 1) only; thinking is always on for glm-5.3, so neither effort nor JSON mode.
+  for (const id of ["glm", "glm-intl"]) assert.deepEqual(body(id, "high", true), { ...plain, temperature: 0.2 }, id)
+  // Ark: temperature is fixed on some models so it is left out; effort goes as reasoning_effort; JSON mode is beta.
+  assert.deepEqual(body("ark", "medium", true), { ...plain, reasoning_effort: "medium" })
+  // MiniMax: temperature has no effect; reasoning_effort is for M3.1-Flash and is left out when off, since "none" is rejected.
+  for (const id of ["minimax", "minimax-intl"]) {
+    assert.deepEqual(body(id, "low", true), { ...plain, reasoning_effort: "low" }, id)
+    assert.deepEqual(body(id, "off", true), plain, id)
+  }
+  // Grok: temperature and reasoning_effort; response_format is not described.
+  assert.deepEqual(body("grok", "low", true), { ...plain, temperature: 0.2, reasoning_effort: "low" })
+})
+
+test("every preset is found again from its own address, names itself in both languages, and needs a key unless it is local", () => {
+  const ids = LLM_PRESETS.map((p) => p.id)
+  assert.equal(new Set(ids).size, ids.length)
+  for (const locale of ["zh-CN", "en"]) {
+    setLanguage(locale)
+    const names = LLM_PRESETS.map((p) => p.name)
+    assert.ok(names.every((n) => n.trim()), locale)
+    assert.equal(new Set(names).size, names.length, `${locale}: no two presets share a name`)
+  }
+  setLanguage("zh-CN")
+  assert.equal(ids.at(-1), "custom", "Custom stays last: it is what presetById falls back to")
+  for (const preset of LLM_PRESETS) {
+    assert.ok(preset.name.trim(), preset.id)
+    if (preset.id === "custom" || preset.id === "azure") continue
+    assert.equal(presetForUrl(preset.baseUrl).id, preset.id, `${preset.id} is found from its base URL`)
+    if (!["openrouter", "ollama", "lmstudio"].includes(preset.id)) assert.ok(preset.model, `${preset.id} suggests a model`)
+    assert.equal(preset.keyRequired, !["ollama", "lmstudio"].includes(preset.id), preset.id)
+    assert.ok(preset.inputTokens >= 4096, preset.id)
+  }
+  // A region is one choice in the list, not an address to type: the two hosts of a service are two presets.
+  for (const [china, international] of [["qwen", "qwen-intl"], ["kimi", "kimi-intl"], ["glm", "glm-intl"], ["siliconflow", "siliconflow-intl"], ["minimax", "minimax-intl"]]) {
+    assert.notEqual(presetById(china).baseUrl, presetById(international).baseUrl)
+    assert.notEqual(presetById(china).name, presetById(international).name)
+    assert.equal(presetById(china).model, presetById(international).model)
+  }
+})
+
+test("choosing a service by its settings fills the address and model, and an existing DeepSeek user is untouched", () => {
+  const secrets = { getSecret: () => "k" }
+  const qwen = llmConfig(secrets, { ...DEFAULT_SETTINGS, llmPreset: "qwen", llmBaseUrl: presetById("qwen").baseUrl, llmModel: presetById("qwen").model })
+  assert.equal(chatCompletionsUrl(qwen.baseUrl), "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")
+  assert.equal(qwen.inputLimit, 256_000)
+  assert.equal(qwen.headers && Object.keys(qwen.headers).length, 0)
+  // A stored DeepSeek choice loads as it was, and nothing about it is flagged for migration.
+  const stored = JSON.parse(JSON.stringify({ ...DEFAULT_SETTINGS, llmApiKeySecret: "ds" }))
+  const loaded = loadSettings(stored)
+  assert.equal(loaded.migrated, false)
+  assert.equal(loaded.settings.llmPreset, "deepseek")
+  assert.equal(llmConfig(secrets, loaded.settings).preset.id, "deepseek")
+})
+
 test("credentials follow the preset: Bearer, Azure's api-key header, none for a local server without a key, and extra headers", async () => {
   const headersFor = async (c: LlmConfig) => {
     let seen: Record<string, string> = {}
@@ -259,7 +321,22 @@ test("existing configurations map to a preset by their base URL, anything else t
     ["http://localhost:1234/v1", "lmstudio"],
     ["https://my-res.openai.azure.com/openai/v1", "azure"],
     ["http://127.0.0.1:8790/v1", "custom"],
-    ["https://ark.cn-beijing.volces.com/api/v3", "custom"],
+    ["https://api.example.com/v1", "custom"],
+    ["https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen"],
+    ["https://dashscope-intl.aliyuncs.com/compatible-mode/v1/", "qwen-intl"],
+    ["https://my-space.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", "qwen"],
+    ["https://api.moonshot.cn/v1", "kimi"],
+    ["https://api.moonshot.ai/v1", "kimi-intl"],
+    ["https://open.bigmodel.cn/api/paas/v4/", "glm"],
+    ["https://api.z.ai/api/paas/v4", "glm-intl"],
+    ["https://ark.cn-beijing.volces.com/api/v3", "ark"],
+    ["https://api.siliconflow.cn/v1", "siliconflow"],
+    ["https://api.siliconflow.com/v1", "siliconflow-intl"],
+    ["https://api.minimax.cn/v1", "minimax"],
+    ["https://api.minimaxi.com/v1", "minimax"],
+    ["https://api.minimax.io/v1", "minimax-intl"],
+    ["https://api.x.ai/v1", "grok"],
+    ["https://api.mistral.ai/v1", "mistral"],
     ["", "custom"],
     ["not a url", "custom"],
   ]

@@ -214,7 +214,7 @@ test("closing locally is silent, and sending after the socket is gone is an erro
   assert.deepEqual(seen.results, [])
 })
 
-test("Deepgram is a live-only provider: settings resolve it, its host is the endpoint's, and it is not offered for files", () => {
+test("Deepgram does live and recorded files: settings resolve both, the host is the endpoint's, and it is not offered where it cannot work", () => {
   const { settings } = loadSettings(null)
   settings.liveProvider = "deepgram"
   settings.providers.deepgram.apiKeySecret = "dg"
@@ -225,8 +225,13 @@ test("Deepgram is a live-only provider: settings resolve it, its host is the end
   assert.match(resolveLive({ secrets: secrets(null), settings }).problem ?? "", /API Key/)
   assert.deepEqual(destinations(settings).find((d) => d.kind === "live"), { kind: "live", name: "Deepgram", host: "api.deepgram.com" })
   settings.fileProvider = "deepgram"
-  assert.match(resolveFile({ secrets: secrets("k"), settings }).problem ?? "", /Deepgram不支持录音文件识别/)
-  assert.equal(destinations(settings).some((d) => d.kind === "file"), false)
+  const file = resolveFile({ secrets: secrets("k"), settings })
+  assert.equal(file.problem, undefined)
+  assert.equal(file.host, "api.deepgram.com")
+  assert.match(resolveFile({ secrets: secrets(null), settings }).problem ?? "", /API Key/)
+  assert.deepEqual(destinations(settings).find((d) => d.kind === "file"), { kind: "file", name: "Deepgram", host: "api.deepgram.com" })
+  settings.providers.deepgram.endpoint = "ws://127.0.0.1:8790/v1/listen"
+  assert.equal(destinations(settings).find((d) => d.kind === "file")?.host, "127.0.0.1:8790")
   settings.liveProvider = "openai-compat"
   assert.match(resolveLive({ secrets: secrets("k"), settings }).problem ?? "", /不支持实时识别/)
 })

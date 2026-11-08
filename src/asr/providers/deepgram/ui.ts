@@ -6,16 +6,18 @@ import type { ProviderSettingsContext } from "../types.ts"
 import { deepgramConfigProblem, deepgramConnector } from "./live.ts"
 import { deepgramConfig } from "./settings.ts"
 
-export function renderDeepgramSettings({ app, containerEl, settings, save }: ProviderSettingsContext): void {
+export function renderDeepgramSettings({ app, containerEl, settings, save, roles }: ProviderSettingsContext): void {
   const deepgram = settings.providers.deepgram
-  new Setting(containerEl).setName(t("deepgram.settings.heading", t("provider.deepgram"))).setHeading()
+  new Setting(containerEl).setName(t(roles.live ? "deepgram.settings.heading" : "deepgram.settings.headingFile", t("provider.deepgram"))).setHeading()
   containerEl.createDiv({
     cls: "setting-item-description ml-settings-note",
-    text: t("deepgram.settings.note"),
+    text: roles.live ? t("deepgram.settings.note") : t("deepgram.settings.fileNote"),
   })
+  if (roles.live && roles.file) containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("deepgram.settings.fileNote") })
   secretField(app, new Setting(containerEl).setName("API Key"), deepgram, "apiKeySecret", save)
   textField(new Setting(containerEl).setName(t("deepgram.settings.model")), deepgram, "model", save, "nova-3")
   textField(new Setting(containerEl).setName(t("deepgram.settings.endpoint.name")).setDesc(t("deepgram.settings.endpoint.desc")), deepgram, "endpoint", save, "wss://api.deepgram.com/v1/listen")
+  if (!roles.live) return
   new Setting(containerEl)
     .setName(t("deepgram.settings.diarize.name"))
     .setDesc(t("deepgram.settings.diarize.desc"))

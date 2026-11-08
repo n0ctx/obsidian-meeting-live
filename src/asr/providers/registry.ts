@@ -2,12 +2,14 @@
 import { t, type Lang } from "../../i18n/index.ts"
 import type { AsrConnect } from "../contract.ts"
 import type { FileAsrProvider } from "../fileAsr.ts"
+import { assemblyAiProvider } from "./assemblyai/index.ts"
+import { dashScopeProvider } from "./dashscope/index.ts"
 import { deepgramProvider } from "./deepgram/index.ts"
 import { openAiCompatProvider } from "./openaiCompat/index.ts"
 import { volcProvider } from "./volc/index.ts"
 import type { AsrProvider, ProviderEnv } from "./types.ts"
 
-export const ASR_PROVIDERS: readonly AsrProvider[] = [volcProvider, deepgramProvider, openAiCompatProvider]
+export const ASR_PROVIDERS: readonly AsrProvider[] = [volcProvider, dashScopeProvider, assemblyAiProvider, deepgramProvider, openAiCompatProvider]
 
 export function asrProvider(id: string): AsrProvider | undefined {
   return ASR_PROVIDERS.find((p) => p.id === id)

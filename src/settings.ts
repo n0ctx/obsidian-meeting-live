@@ -6,6 +6,8 @@ import type { AudioFormat } from "./meeting/types.ts"
 import { seedConsent } from "./consent.ts"
 import { isAsrLanguage, type AsrLanguage } from "./asr/language.ts"
 import { isNoteLanguage, type NoteLanguage } from "./i18n/index.ts"
+import { DEFAULT_ASSEMBLYAI, readAssemblyAiSettings, type AssemblyAiSettings } from "./asr/providers/assemblyai/settings.ts"
+import { DEFAULT_DASHSCOPE, readDashScopeSettings, type DashScopeSettings } from "./asr/providers/dashscope/settings.ts"
 import { DEFAULT_DEEPGRAM, readDeepgramSettings, type DeepgramSettings } from "./asr/providers/deepgram/settings.ts"
 import { DEFAULT_OPENAI_COMPAT, readOpenAiCompatSettings, type OpenAiCompatSettings } from "./asr/providers/openaiCompat/settings.ts"
 import { DEFAULT_VOLC, VOLC_FLAT_KEYS, readVolcSettings, type VolcSettings } from "./asr/providers/volc/settings.ts"
@@ -24,7 +26,7 @@ export interface MeetingLiveSettings {
   /** Provider id used to transcribe recorded files. */
   fileProvider: string
   /** Configuration of each provider, kept apart so a provider can be added without touching the rest. */
-  providers: { volc: VolcSettings; deepgram: DeepgramSettings; openaiCompat: OpenAiCompatSettings }
+  providers: { volc: VolcSettings; deepgram: DeepgramSettings; openaiCompat: OpenAiCompatSettings; dashscope: DashScopeSettings; assemblyai: AssemblyAiSettings }
   /** Recognition language for providers that take one. */
   asrLanguage: AsrLanguage
   /** Language of what the plugin writes into notes; auto follows the interface language. */
@@ -58,7 +60,7 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   voiceProcessing: false,
   liveProvider: "volc",
   fileProvider: "volc",
-  providers: { volc: DEFAULT_VOLC, deepgram: DEFAULT_DEEPGRAM, openaiCompat: DEFAULT_OPENAI_COMPAT },
+  providers: { volc: DEFAULT_VOLC, deepgram: DEFAULT_DEEPGRAM, openaiCompat: DEFAULT_OPENAI_COMPAT, dashscope: DEFAULT_DASHSCOPE, assemblyai: DEFAULT_ASSEMBLYAI },
   asrLanguage: "auto",
   noteLanguage: "auto",
   hotwords: "",
@@ -114,6 +116,8 @@ export function loadSettings(raw: unknown): LoadedSettings {
   settings.providers.volc = readVolcSettings(current ? storedProviders?.volc : stored, !current)
   settings.providers.deepgram = readDeepgramSettings(storedProviders?.deepgram)
   settings.providers.openaiCompat = readOpenAiCompatSettings(storedProviders?.openaiCompat)
+  settings.providers.dashscope = readDashScopeSettings(storedProviders?.dashscope)
+  settings.providers.assemblyai = readAssemblyAiSettings(storedProviders?.assemblyai)
   if (Array.isArray(stored.consent)) settings.consent = stored.consent.filter((entry): entry is string => typeof entry === "string")
   // The single yes of 1.0.x covered the destinations configured at the time, which are the ones to be seeded.
   if (settings.consent.length === 0 && stored.consentAccepted === true) settings.consent = seedConsent(settings)

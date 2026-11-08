@@ -127,3 +127,33 @@ test("the author, who agreed under 1.0.1, is not asked before recording to notes
   const { settings } = loadSettings(authorData())
   assert.equal(await ensureConsentFor(settings, never, noSave, ["file", "llm"]), true)
 })
+
+test("the new services are asked about per destination: a region or a model service on another host asks again, and a Volcengine and DeepSeek user is not asked anything new", async () => {
+  const volcUser = loadSettings(authorData()).settings
+  assert.equal(needsConsent(volcUser), false, "the 1.0.1 yes still covers everything that user sends")
+
+  const { settings } = loadSettings(null)
+  settings.liveProvider = "dashscope"
+  settings.fileProvider = "assemblyai"
+  const first = asker()
+  assert.equal(await ensureConsentFor(settings, first.ask, noSave), true)
+  assert.deepEqual(first.asked[0].map((d) => [d.kind, d.host]), [["live", "dashscope.aliyuncs.com"], ["file", "api.assemblyai.com"], ["llm", "api.deepseek.com"]])
+  assert.equal(needsConsent(settings), false)
+
+  // The same service in another region is another destination.
+  settings.providers.dashscope.region = "intl"
+  settings.providers.assemblyai.region = "eu"
+  assert.equal(needsConsent(settings, ["live"]), true)
+  assert.equal(needsConsent(settings, ["file"]), true)
+  const second = asker()
+  await ensureConsentFor(settings, second.ask, noSave, ["live"])
+  assert.deepEqual(second.asked[0].map((d) => d.host), ["dashscope-intl.aliyuncs.com"], "only the destinations of the asked kinds are listed")
+  assert.equal(needsConsent(settings, ["live"]), false)
+  assert.equal(needsConsent(settings, ["file"]), true, "the file destination was not part of that question")
+
+  // A model service preset on another host asks about the LLM only.
+  settings.llmBaseUrl = "https://api.moonshot.cn/v1"
+  const third = asker()
+  await ensureConsentFor(settings, third.ask, noSave, ["llm"])
+  assert.deepEqual(third.asked[0].map((d) => d.host), ["api.moonshot.cn"])
+})

@@ -24,6 +24,8 @@
 | 服务 | 需要填写 | 说明 |
 | :-- | :-- | :-- |
 | 火山引擎 | 新版控制台填 API Key，旧版控制台填 App ID 和 Access Token；再填已开通的流式服务的 Resource ID，如 `volc.seedasr.sauc.duration` | WebSocket 地址已预填。支持热词和断句静音时长。语言由服务自动检测。 |
+| 阿里云百炼 | API Key，以及它所属的地域（中国内地或国际）；Key 在[百炼控制台](https://www.alibabacloud.com/help/en/model-studio/get-api-key)创建 | 模型预填 `qwen-audio-3.1-asr-flash-streaming`，即文档为会议推荐的模型，支持热词。语言跟随「识别语言」设置，选自动检测时由服务判断。实时转写时不区分说话人。 |
+| AssemblyAI | [控制台](https://www.assemblyai.com/dashboard/home)里的 API Key | 模型预填 `universal-3-5-pro`，文档列出的语种包含普通话和日语，一场会议里多种语言混说也不用设置。支持热词。有一个实时区分说话人的选项。数据区域可选默认或欧盟，选欧盟则数据只在欧盟处理。按连接保持的时长计费。 |
 | Deepgram | API Key；模型（预填 `nova-3`） | 语言跟随「识别语言」设置，选自动检测时使用 Deepgram 的多语言模式。有一个区分说话人的选项，目前只记录在识别结果里，卡片暂不显示。只有自建服务才需要改 WebSocket 地址。 |
 
 ### 录音文件（录音生成访谈记录）
@@ -31,6 +33,9 @@
 | 服务 | 需要填写 | 说明 |
 | :-- | :-- | :-- |
 | 火山引擎 | 与上面相同的凭证；再填录音文件服务的 Resource ID，如 `volc.seedasr.auc` | 区分说话人。 |
+| 阿里云百炼 | 与上面相同的 Key 和地域 | 使用 `fun-asr`，可区分说话人（建议单个录音不超过 2 小时）。录音先在本地转成单声道 Opus。文件再传到阿里云的临时存储（保存 48 小时，上限 1 GB，文档注明仅适用于开发和测试），再提交任务并下载转写结果。 |
+| AssemblyAI | 与上面相同的 Key 和地域 | 上传文件后等待转写结果，可按需区分说话人。支持最大 2.2 GB 的文件。 |
+| Deepgram | 与实时转写相同的 Key、模型和地址 | 返回带时间的句子，需要区分说话人时会给说话人编号。语言跟随「识别语言」，选自动检测时由 Deepgram 判断主要语种。文件最大 2 GB，处理超过 10 分钟会超时，过长的录音请先切短。 |
 | OpenAI 兼容接口 | 填到 `/v1` 的 API 地址、模型和 API Key | OpenAI 填 `https://api.openai.com/v1`，模型 `whisper-1`（已弃用，将于 2027-02-26 停止服务；替代品 `gpt-transcribe` 文档中未说明会返回时间点）；Groq 填 `https://api.groq.com/openai/v1`，模型 `whisper-large-v3`；本地 Whisper 服务填它自己的地址，Key 可以留空。`gpt-4o-transcribe-diarize` 可区分说话人；`gpt-*-transcribe` 只返回文本，没有时间点。服务的文件大小上限与 OpenAI 的 25 MB 不同时，可以在设置里改。 |
 
 超过大小上限的录音会先在本地压缩，仍然过大则按时间切成几段依次上传。
@@ -43,6 +48,9 @@
 | :-- | :-- |
 | DeepSeek、OpenAI、OpenRouter | API Key。 |
 | Anthropic 和 Gemini（它们的 OpenAI 兼容接口） | API Key。 |
+| 通义千问、Kimi、智谱 GLM、硅基流动、MiniMax（每个地域一个预设：中国内地或国际） | 在对应地域的平台创建的 API Key。不同地域的 Key 不通用，所以选哪个预设就决定了地址。 |
+| 火山方舟（豆包） | 方舟控制台的 API Key；模型已预填，需要先在你的账号里开通（也可以填接入点 ID `ep-…`）。 |
+| xAI Grok、Mistral | API Key。xAI 把 Chat Completions 列为旧接口，目前仍可用，没有公布下线日期。 |
 | Azure OpenAI | 你的资源地址，部署名称（填在模型一栏），API Key，需要时再加额外请求头。 |
 | Ollama、LM Studio | 你运行的模型名称；Key 可选。把输入上限设为模型实际的上下文长度。 |
 | 自定义 | 其他任意 OpenAI 兼容服务的地址、模型和 Key，可加额外请求头。 |
@@ -67,9 +75,9 @@
 
 | 环节 | 发送的内容 | 去向 |
 | :-- | :-- | :-- |
-| 实时转写 | 你的音频，录音时实时上传 | 实时识别服务的主机（火山引擎 `openspeech.bytedance.com`；Deepgram `api.deepgram.com`），或你设置的地址 |
-| 录音文件 | 你选的音频文件，上传一次 | 火山引擎 `openspeech.bytedance.com`，或你的 OpenAI 兼容 API 地址所在主机 |
-| 摘要与纪要 | 转写文本、阶段摘要，生成纪要时还有你选择的笔记 | 你的大模型 API 地址所在主机 |
+| 实时转写 | 你的音频，录音时实时上传 | 实时识别服务的主机（火山引擎 `openspeech.bytedance.com`；阿里云百炼 `dashscope.aliyuncs.com` 或 `dashscope-intl.aliyuncs.com`；AssemblyAI `streaming.assemblyai.com` 或 `streaming.eu.assemblyai.com`；Deepgram `api.deepgram.com`），或你设置的地址 |
+| 录音文件 | 你选的音频文件，上传一次 | 火山引擎 `openspeech.bytedance.com`；阿里云百炼 `dashscope.aliyuncs.com` 或 `dashscope-intl.aliyuncs.com`（文件还会经过阿里云的临时存储，转写结果从阿里云存储上的签名地址取回）；AssemblyAI `api.assemblyai.com` 或 `api.eu.assemblyai.com`；Deepgram `api.deepgram.com`；或你的 OpenAI 兼容 API 地址所在主机 |
+| 摘要与纪要 | 转写文本、阶段摘要，生成纪要时还有你选择的笔记 | 你的大模型 API 地址所在主机（选预设时就是该服务自己的主机，如 `api.moonshot.cn`、`api.x.ai`） |
 
 - **按去向确认。** 发送任何数据之前，会有对话框列出去向和各自收到的内容。同意按环节和主机记录，所以把服务或地址换成你没同意过的主机会再次询问。对已经结束的会议生成纪要和摘要也一样：如果模型的主机在录音之后换了，确认之前不会发送任何内容。
 - **密钥。** API Key 保存在 Obsidian 的密钥存储中，设置文件里只记录密钥名称，不含密钥本身。
@@ -99,7 +107,7 @@ npm run build   # 类型检查与生产构建
 node --import ./tests/support/register.mjs dev/mock-server.ts 8790   # 本地模拟语音和模型服务
 ```
 
-模拟服务器说火山引擎、Deepgram、OpenAI 风格转写和 OpenAI 兼容模型的协议，因此不需要任何付费密钥。其中的加载器代替 Obsidian 的模块，共享代码会引用它。
+模拟服务器说火山引擎、阿里云百炼、AssemblyAI、Deepgram、OpenAI 风格转写和 OpenAI 兼容模型的协议，因此不需要任何付费密钥。其中的加载器代替 Obsidian 的模块，共享代码会引用它。
 
 ## 许可
 

@@ -4,8 +4,13 @@ import assert from "node:assert/strict"
 import { spawn, type ChildProcess } from "node:child_process"
 import { after, before, test } from "node:test"
 import { transcribeChunks } from "../src/asr/chunked.ts"
-import type { AsrError } from "../src/asr/contract.ts"
+import type { AsrConnect, AsrError } from "../src/asr/contract.ts"
 import type { FileAsrPost } from "../src/asr/fileAsr.ts"
+import { deepgramFileProvider } from "../src/asr/providers/deepgram/file.ts"
+import { assemblyAiFileProvider } from "../src/asr/providers/assemblyai/file.ts"
+import { assemblyAiConnector } from "../src/asr/providers/assemblyai/live.ts"
+import { dashScopeFileProvider } from "../src/asr/providers/dashscope/file.ts"
+import { dashScopeConnector } from "../src/asr/providers/dashscope/live.ts"
 import { deepgramConnector } from "../src/asr/providers/deepgram/live.ts"
 import { openAiFileProvider } from "../src/asr/providers/openaiCompat/file.ts"
 import { volcConnector } from "../src/asr/providers/volc/live.ts"
@@ -31,7 +36,7 @@ before(async () => {
 })
 after(() => server.kill())
 
-const stats = async () => (await (await fetch(`${base}/stats`)).json()) as { deepgramConnections: number; keepAlives: number; binaryFrames: number; emptyFrames: number; closeStreams: number }
+const stats = async () => (await (await fetch(`${base}/stats`)).json()) as Record<"deepgramConnections" | "keepAlives" | "binaryFrames" | "emptyFrames" | "closeStreams" | "dashscopeConnections" | "dashscopeFinishTasks" | "assemblyaiConnections" | "assemblyaiTerminates" | "assemblyaiConfigUpdates" | "assemblyaiUploads", number>
 const wsBase = () => base.replace("http", "ws")
 const flush = () => new Promise((r) => setTimeout(r, 5))
 async function waitFor(condition: () => boolean, ms = 8000) {
@@ -42,6 +47,8 @@ async function waitFor(condition: () => boolean, ms = 8000) {
   }
 }
 
+const dashscope = (apiKey = "k") => dashScopeConnector({ endpoint: `${wsBase()}/api-ws/v1/inference`, apiKey, model: "qwen-audio-3.1-asr-flash-streaming", language: "zh", hotwords: [] })
+const assemblyai = (apiKey = "k", patch: Partial<Parameters<typeof assemblyAiConnector>[0]> = {}) => assemblyAiConnector({ endpoint: `${wsBase()}/v3/ws`, apiKey, model: "universal-3-5-pro", diarize: false, keyterms: [], ...patch })
 const deepgram = (apiKey = "k") => deepgramConnector({ endpoint: `${wsBase()}/v1/listen`, apiKey, model: "nova-3", language: "zh", diarize: false })
 
 function recorder() {
@@ -53,11 +60,15 @@ function recorder() {
   return { events, finals, gaps, states, interims: () => interims }
 }
 
-test("Deepgram through the streamer: a forced drop mid-meeting recovers with no duplicate and no lost final", async () => {
-  const before = await stats()
+/**
+ * A meeting through the streamer against a mock route: a drop mid-meeting while audio keeps arriving, then recovery with every
+ * second of audio covered exactly once. `connections` reads how many times the route has been connected to.
+ */
+async function recoversFromDrop(connect: AsrConnect, connections: () => Promise<number>): Promise<Utterance[]> {
+  const first = await connections()
   const rec = recorder()
   const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
-  asr.begin(0, deepgram())
+  asr.begin(0, connect)
   await waitFor(() => asr.currentState === "live")
 
   const TOTAL_S = 14
@@ -85,7 +96,7 @@ test("Deepgram through the streamer: a forced drop mid-meeting recovers with no 
   assert.deepEqual(rec.gaps, [], "nothing was lost to a gap")
   assert.ok(rec.states.includes("reconnecting") && rec.states.at(-1) === "idle")
   assert.deepEqual(rec.interims(), [])
-  assert.ok((await stats()).deepgramConnections - before.deepgramConnections >= 2, "the drop forced a second connection")
+  assert.ok((await connections()) - first >= 2, "the drop forced a second connection")
 
   // No duplicates: each final starts after the previous ended, and no start repeats.
   const starts = rec.finals.map((u) => Math.round(u.startMs))
@@ -95,6 +106,55 @@ test("Deepgram through the streamer: a forced drop mid-meeting recovers with no 
   for (let i = 1; i < rec.finals.length; i++) assert.ok(Math.abs(rec.finals[i].startMs - rec.finals[i - 1].endMs) <= 2, `final ${i} starts at ${rec.finals[i].startMs}, the one before ended at ${rec.finals[i - 1].endMs}`)
   assert.ok(Math.abs(rec.finals.at(-1)!.endMs - TOTAL_S * 1000) <= 2, `last final ends at ${rec.finals.at(-1)!.endMs}`)
   for (const u of rec.finals) assert.ok(u.text.length > 0)
+  return rec.finals
+}
+
+test("Deepgram through the streamer: a forced drop mid-meeting recovers with no duplicate and no lost final", async () => {
+  await recoversFromDrop(deepgram(), async () => (await stats()).deepgramConnections)
+})
+
+test("DashScope through the streamer: a forced drop mid-meeting recovers with no duplicate and no lost final, and the run ends with finish-task", async () => {
+  const before = await stats()
+  await recoversFromDrop(dashscope(), async () => (await stats()).dashscopeConnections)
+  assert.equal((await stats()).dashscopeFinishTasks - before.dashscopeFinishTasks, 1, "the end of the run is a finish-task")
+})
+
+test("AssemblyAI through the streamer: a forced drop mid-meeting recovers with no duplicate and no lost final, and the run ends with Terminate", async () => {
+  const before = await stats()
+  await recoversFromDrop(assemblyai("k", { keyterms: ["科创板"] }), async () => (await stats()).assemblyaiConnections)
+  const after = await stats()
+  assert.equal(after.assemblyaiTerminates - before.assemblyaiTerminates, 1)
+  assert.ok(after.assemblyaiConfigUpdates - before.assemblyaiConfigUpdates >= 2, "keyterms are sent on every connection, the reconnect included")
+})
+
+test("AssemblyAI speaker labels travel from the turns to the streamer's finals, and the formatted-turn models settle each turn once", async () => {
+  for (const model of ["universal-3-5-pro", "universal-streaming-multilingual"]) {
+    const rec = recorder()
+    const asr = new AsrStreamer(rec.events, { manualTicks: true, maxChunksPerTick: 1000, finalTimeoutMs: 3000 })
+    asr.begin(0, assemblyai("k", { diarize: true, model }))
+    await waitFor(() => asr.currentState === "live")
+    for (let s = 0; s < 10; s++) {
+      asr.push(new Int16Array(16000).fill(200))
+      asr.tick()
+      await flush()
+    }
+    await asr.end()
+    assert.ok(rec.finals.length >= 2, model)
+    assert.deepEqual(rec.finals.slice(0, 2).map((u) => u.speaker), ["A", "B"], model)
+    const starts = rec.finals.map((u) => Math.round(u.startMs))
+    assert.equal(new Set(starts).size, starts.length, `${model}: no turn is final twice`)
+  }
+})
+
+test("AssemblyAI: a refused key closes with 1008, which is fatal and stops the streamer; the test button's check passes and reports it", async () => {
+  const failing = new AsrStreamer(recorder().events, { manualTicks: true })
+  failing.begin(0, assemblyai("bad"))
+  await waitFor(() => failing.currentState === "failed")
+  failing.dispose()
+  assert.deepEqual(await runLiveTest(assemblyai()), { ok: true, logId: undefined })
+  const refused = await runLiveTest(assemblyai("bad"))
+  assert.equal(refused.ok, false)
+  assert.match(refused.message ?? "", /拒绝了连接/)
 })
 
 test("Deepgram end of stream: CloseStream makes the server send the last final and close, and no empty frame is sent", async () => {
@@ -124,6 +184,21 @@ test("Deepgram connection errors come back as the fatal kind the streamer stops 
   failing.begin(0, deepgram("bad"))
   await waitFor(() => failing.currentState === "failed")
   failing.dispose()
+})
+
+test("DashScope: a refused key is fatal and stops the streamer, and the test button's check passes and reports it", async () => {
+  const error = (await dashscope("bad")({ onResult: () => undefined, onClose: () => undefined }).catch((e: unknown) => e)) as AsrError
+  assert.equal(error.fatal, true)
+  assert.match(error.message, /鉴权失败/)
+  const failing = new AsrStreamer(recorder().events, { manualTicks: true })
+  failing.begin(0, dashscope("bad"))
+  await waitFor(() => failing.currentState === "failed")
+  failing.dispose()
+
+  assert.deepEqual(await runLiveTest(dashscope()), { ok: true, logId: undefined })
+  const refused = await runLiveTest(dashscope("bad"))
+  assert.equal(refused.ok, false)
+  assert.match(refused.message ?? "", /鉴权失败/)
 })
 
 test("the test button's connection check passes against the mock and reports a refused key", async () => {
@@ -173,6 +248,57 @@ test("pieces of a long recording go up in order and come back on one timeline", 
   assert.deepEqual(starts, [...starts].sort((a, b) => a - b))
   assert.ok(starts.includes(40_000) && starts.includes(80_000), "each piece's first line sits at its offset")
   assert.ok(merged.utterances.at(-1)!.endMs <= 100_000)
+})
+
+test("the AssemblyAI file flow against the mock: upload, submit, poll, with and without speaker labels, and a refused key", async () => {
+  const get = async (url: string, headers: Record<string, string>) => {
+    const response = await fetch(url, { headers })
+    return { status: response.status, headers: Object.fromEntries(response.headers), text: await response.text() }
+  }
+  const file = (apiKey = "k") => assemblyAiFileProvider({ baseUrl: base, apiKey, language: "zh" })
+  const plain = await file().transcribe(upload(30), { speakers: false, post, get, sleep: async () => undefined })
+  assert.equal(plain.durationMs, 30_000)
+  assert.ok(plain.utterances.length >= 7)
+  assert.equal(plain.utterances[0].startMs, 0)
+  assert.equal(plain.utterances[1].startMs, 4200)
+  assert.equal(plain.utterances.every((u) => u.speaker === undefined), true)
+
+  const labelled = await file().transcribe(upload(30), { speakers: true, post, get, sleep: async () => undefined })
+  assert.deepEqual(labelled.utterances.slice(0, 3).map((u) => u.speaker), ["A", "B", "A"])
+
+  await assert.rejects(file("bad").transcribe(upload(5), { speakers: false, post, get }), /鉴权失败.*Authentication error/)
+  const empty = { ...upload(1), data: new Uint8Array(0), bytes: 0 }
+  await assert.rejects(file().transcribe(empty, { speakers: false, post, get, sleep: async () => undefined }), /识别失败.*Transcoding failed/)
+})
+
+test("the Deepgram file adapter against the mock: timed utterances, speakers on request, automatic language, and a refused key", async () => {
+  const file = (apiKey = "k", language: string | undefined = "zh") => deepgramFileProvider({ url: `${base}/v1/listen`, apiKey, model: "nova-3", language })
+  const plain = await file().transcribe(upload(30), { speakers: false, post })
+  assert.equal(plain.durationMs, 30_000)
+  assert.ok(plain.utterances.length >= 7)
+  assert.equal(plain.utterances[1].startMs, 4200)
+  assert.equal(plain.utterances.every((u) => u.speaker === undefined), true)
+  const labelled = await file("k", undefined).transcribe(upload(30), { speakers: true, post })
+  assert.deepEqual(labelled.utterances.slice(0, 3).map((u) => u.speaker), ["1", "2", "1"])
+  await assert.rejects(file("bad").transcribe(upload(5), { speakers: false, post }), /鉴权失败.*Invalid credentials/)
+  await assert.rejects(file().transcribe({ ...upload(1), data: new Uint8Array(0), bytes: 0 }, { speakers: false, post }), /HTTP 400.*audio is empty/)
+})
+
+test("the DashScope file flow against the mock: temporary upload, task, polling and result, with and without speakers, and a refused key", async () => {
+  const get = async (url: string, headers: Record<string, string>) => {
+    const response = await fetch(url, { headers })
+    return { status: response.status, headers: Object.fromEntries(response.headers), text: await response.text() }
+  }
+  const file = (apiKey = "k") => dashScopeFileProvider({ baseUrl: base, apiKey, model: "fun-asr", language: "zh" })
+  const plain = await file().transcribe(upload(30), { speakers: false, post, get, sleep: async () => undefined })
+  assert.equal(plain.durationMs, 30_000)
+  assert.ok(plain.utterances.length >= 7)
+  assert.equal(plain.utterances[1].startMs, 4200)
+  assert.equal(plain.utterances.every((u) => u.speaker === undefined), true)
+  const labelled = await file().transcribe(upload(30), { speakers: true, post, get, sleep: async () => undefined })
+  assert.deepEqual(labelled.utterances.slice(0, 3).map((u) => u.speaker), ["1", "2", "1"])
+  await assert.rejects(file("bad").transcribe(upload(5), { speakers: false, post, get }), /鉴权失败.*Invalid API-key provided/)
+  await assert.rejects(file().transcribe({ ...upload(1), data: new Uint8Array(0), bytes: 0 }, { speakers: false, post, get, sleep: async () => undefined }), /识别失败.*FILE_DOWNLOAD_FAILED/)
 })
 
 test("the Volcengine and LLM routes still answer", async () => {
