@@ -5,6 +5,7 @@ import type { FileAsrCall, FileAsrProvider, FileAsrResponse, FileAsrResult } fro
 import { VOLC_CAPABILITIES, VOLC_ID, VOLC_NAME } from "./info.ts"
 
 export const FILE_ASR_BASE = "https://openspeech.bytedance.com"
+export const FILE_ASR_HOST = new URL(FILE_ASR_BASE).host
 const SUBMIT_PATH = "/api/v3/auc/bigmodel/submit"
 const QUERY_PATH = "/api/v3/auc/bigmodel/query"
 const STATUS_OK = "20000000"
@@ -139,7 +140,7 @@ export function volcFileProvider(auth: FileAsrAuth): FileAsrProvider {
   return {
     id: VOLC_ID,
     name: VOLC_NAME,
-    host: new URL(FILE_ASR_BASE).host,
+    host: FILE_ASR_HOST,
     model: auth.resourceId,
     capabilities: VOLC_CAPABILITIES,
     directFormats: VOLC_DIRECT_FORMATS,

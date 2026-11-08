@@ -1,13 +1,12 @@
 import { MarkdownView, Notice, Plugin, TFile, requestUrl, type Editor } from "obsidian"
-import { volcFileProvider } from "./asr/providers/volc/file.ts"
-import { volcConfigProblem, volcConnector } from "./asr/providers/volc/live.ts"
+import { resolveFile, resolveLive } from "./asr/providers/registry.ts"
+import type { ProviderEnv } from "./asr/providers/types.ts"
 import { compatibleClient, type HttpPost, type LlmClient } from "./llm/client.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import { MeetingManager } from "./meeting/manager.ts"
 import type { MeetingSession } from "./meeting/session.ts"
 import { MeetingStore } from "./meeting/store.ts"
 import { formatClock } from "./meeting/types.ts"
-import { volcConfig } from "./asr/providers/volc/settings.ts"
 import { DEFAULT_SETTINGS, llmConfig, loadSettings, storedSettings, type MeetingLiveSettings } from "./settings.ts"
 import { MeetingLiveSettingTab } from "./settingsTab.ts"
 import { JobBar } from "./ui/jobBar.ts"
@@ -48,11 +47,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     const store = new MeetingStore(this.app, () => this.settings.folder)
     this.manager = new MeetingManager(store, {
       settings: () => this.settings,
-      asrConnector: () => {
-        const config = this.volc()
-        const problem = volcConfigProblem(config)
-        return problem ? { connect: null, problem } : { connect: volcConnector(config) }
-      },
+      asrConnector: () => resolveLive(this.providerEnv()),
       llm: () => this.llm(),
     })
 
@@ -110,12 +105,12 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
 
   // ---------------------------------------------------------------- CardHost
 
-  private volc() {
-    return volcConfig(this.app.secretStorage, this.settings.providers.volc, this.settings.hotwords)
+  private providerEnv(): ProviderEnv {
+    return { secrets: this.app.secretStorage, settings: this.settings }
   }
 
   asrProblem(): string | undefined {
-    return volcConfigProblem(this.volc())
+    return resolveLive(this.providerEnv()).problem
   }
 
   /** The configured model provider; rebuilt per call so setting changes apply immediately. */
@@ -219,10 +214,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     new TranscribeFileModal(
       this.app,
       {
-        fileAsr: () => {
-          const config = this.volc()
-          return volcFileProvider({ apiKey: config.apiKey, appId: config.appId, accessToken: config.accessToken, resourceId: this.settings.providers.volc.fileResourceId.trim() || "volc.seedasr.auc" })
-        },
+        fileAsr: () => resolveFile(this.providerEnv()),
         post: this.filePost,
         llm: () => this.llm(),
         prompt: () => this.settings.minutesPrompt,

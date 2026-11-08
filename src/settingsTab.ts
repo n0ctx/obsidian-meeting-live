@@ -1,11 +1,11 @@
-import { Notice, PluginSettingTab, SecretComponent, Setting, type App } from "obsidian"
+import { Notice, PluginSettingTab, Setting, type App } from "obsidian"
+import { asrProvider } from "./asr/providers/registry.ts"
 import { listInputDevices } from "./audio/capture.ts"
-import { volcConfigProblem, volcConnector } from "./asr/providers/volc/live.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type MeetingLivePlugin from "./main.ts"
-import { volcConfig } from "./asr/providers/volc/settings.ts"
 import type { MeetingLiveSettings } from "./settings.ts"
+import { secretField, textField } from "./ui/settingFields.ts"
 
 export class MeetingLiveSettingTab extends PluginSettingTab {
   private readonly plugin: MeetingLivePlugin
@@ -23,29 +23,6 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     void this.plugin.saveSettings()
   }
 
-  private text(setting: Setting, target: object, key: string, placeholder = "") {
-    const values = target as Record<string, string>
-    setting.addText((t) =>
-      t
-        .setPlaceholder(placeholder)
-        .setValue(String(values[key]))
-        .onChange((v) => {
-          values[key] = v.trim()
-          this.save()
-        }),
-    )
-  }
-
-  private secret(setting: Setting, target: object, key: string) {
-    const values = target as Record<string, string>
-    setting.addComponent((el) =>
-      new SecretComponent(this.app, el).setValue(values[key]).onChange((id) => {
-        values[key] = id ?? ""
-        this.save()
-      }),
-    )
-  }
-
   override display(): void {
     const { containerEl } = this
     containerEl.empty()
@@ -56,7 +33,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     privacy.createSpan({ text: "：原始录音和转写只保存在本库。录音时音频实时上传至火山引擎识别；摘要和纪要会把转写文本发送到下方配置的 LLM 服务。凭证保存在 Obsidian 的密钥存储中，不写入笔记、会议文件或插件配置。" })
 
     new Setting(containerEl).setName("录音").setHeading()
-    this.text(new Setting(containerEl).setName("会议数据目录").setDesc("每场会议一个子文件夹，包含录音、原始转写、AI 摘要与元数据。"), this.s, "folder", "Meetings")
+    textField(new Setting(containerEl).setName("会议数据目录").setDesc("每场会议一个子文件夹，包含录音、原始转写、AI 摘要与元数据。"), this.s, "folder", () => this.save(), "Meetings")
     new Setting(containerEl)
       .setName("录音格式")
       .setDesc("Opus：48 kHz 高码率压缩，约 45 MB/小时，适合长会议。WAV：无损 PCM，约 330 MB/小时。")
@@ -95,45 +72,11 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
         }),
       )
 
-    new Setting(containerEl).setName("火山引擎语音识别").setHeading()
-    containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: "新版控制台只需 API Key；旧版控制台填写 App ID 与 Access Token。Resource ID 需与控制台开通的服务一致：2.0 小时版 volc.seedasr.sauc.duration，1.0 小时版 volc.bigasr.sauc.duration。" })
-    this.secret(new Setting(containerEl).setName("API Key（新版控制台）"), this.s.providers.volc, "apiKeySecret")
-    this.text(new Setting(containerEl).setName("App ID（旧版控制台）"), this.s.providers.volc, "appId")
-    this.secret(new Setting(containerEl).setName("Access Token（旧版控制台）"), this.s.providers.volc, "accessTokenSecret")
-    this.text(new Setting(containerEl).setName("Resource ID"), this.s.providers.volc, "resourceId", "volc.seedasr.sauc.duration")
-    this.text(new Setting(containerEl).setName("WebSocket 地址").setDesc("默认使用双向流式优化版（bigmodel_async），结果有变化时才返回，并启用二遍识别提升准确率。"), this.s.providers.volc, "endpoint")
-    new Setting(containerEl)
-      .setName("断句静音时长")
-      .setDesc("说话停顿超过该时长即确认一句，单位毫秒，最小 200。")
-      .addSlider((s) =>
-        s
-          .setLimits(200, 2000, 100)
-          .setValue(this.s.providers.volc.endWindowMs)
-          .onChange((v) => {
-            this.s.providers.volc.endWindowMs = v
-            this.save()
-          }),
-      )
-    new Setting(containerEl)
-      .setName("热词")
-      .setDesc("公司名、人名、产品名等，一行一个，最多 100 个，提升专有名词识别准确率。")
-      .addTextArea((t) => {
-        t.inputEl.rows = 4
-        t.setValue(this.s.hotwords).onChange((v) => {
-          this.s.hotwords = v
-          this.save()
-        })
-      })
-    this.text(
-      new Setting(containerEl).setName("录音文件识别 Resource ID").setDesc("命令「转写录音文件到当前笔记」使用，凭证与上方相同。2.0：volc.seedasr.auc；1.0：volc.bigasr.auc；极速版：volc.bigasr.auc_turbo。"),
-      this.s.providers.volc,
-      "fileResourceId",
-      "volc.seedasr.auc",
-    )
-    new Setting(containerEl)
-      .setName("测试识别连接")
-      .setDesc("建立一次连接并发送 1 秒静音，会产生极少量计费时长。")
-      .addButton((b) => b.setButtonText("测试").onClick(() => void this.testAsr(b.buttonEl)))
+    for (const id of new Set([this.s.liveProvider, this.s.fileProvider])) {
+      const provider = asrProvider(id)
+      if (provider) provider.renderSettings({ app: this.app, containerEl, settings: this.s, save: () => this.save() })
+      else containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: `未知的语音识别服务「${id}」。` })
+    }
 
     new Setting(containerEl).setName("LLM").setHeading()
     this.compatibleSettings(containerEl)
@@ -166,9 +109,9 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
 
   private compatibleSettings(containerEl: HTMLElement): void {
     containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: "任意 OpenAI 兼容的 Chat Completions 接口，例如 DeepSeek、火山方舟、通义千问、OpenRouter 或本地模型服务。" })
-    this.text(new Setting(containerEl).setName("API 地址").setDesc("填到 /v1 或完整的 /chat/completions 地址。"), this.s, "llmBaseUrl", "https://api.deepseek.com/v1")
-    this.text(new Setting(containerEl).setName("模型"), this.s, "llmModel", "deepseek-flash")
-    this.secret(new Setting(containerEl).setName("API Key"), this.s, "llmApiKeySecret")
+    textField(new Setting(containerEl).setName("API 地址").setDesc("填到 /v1 或完整的 /chat/completions 地址。"), this.s, "llmBaseUrl", () => this.save(), "https://api.deepseek.com/v1")
+    textField(new Setting(containerEl).setName("模型"), this.s, "llmModel", () => this.save(), "deepseek-flash")
+    secretField(this.app, new Setting(containerEl).setName("API Key"), this.s, "llmApiKeySecret", () => this.save())
     new Setting(containerEl)
       .setName("推理强度")
       .setDesc("发送 reasoning_effort；DeepSeek 同时开启思考模式。模型不支持推理时选关闭。")
@@ -220,33 +163,6 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
         this.save()
       })
     })
-  }
-
-  private async testAsr(button: HTMLButtonElement): Promise<void> {
-    const config = volcConfig(this.app.secretStorage, this.s.providers.volc, this.s.hotwords)
-    const problem = volcConfigProblem(config)
-    if (problem) return void new Notice(problem)
-    button.disabled = true
-    try {
-      let resolveFinal: () => void = () => undefined
-      const final = new Promise<void>((r) => (resolveFinal = r))
-      const { connection, logId } = await volcConnector(config)({
-        onResult: (_data, last) => last && resolveFinal(),
-        onClose: (error) => {
-          new Notice(error.message)
-          resolveFinal()
-        },
-      })
-      for (let i = 0; i < 5; i++) connection.sendAudio(new Int16Array(3200), false)
-      connection.sendAudio(new Int16Array(0), true)
-      await Promise.race([final, new Promise((r) => window.setTimeout(r, 8000))])
-      connection.close()
-      new Notice(`火山引擎连接成功${logId ? `（logid ${logId}）` : ""}`)
-    } catch (error) {
-      new Notice((error as Error).message, 10000)
-    } finally {
-      button.disabled = false
-    }
   }
 
   private async testLlm(button: HTMLButtonElement): Promise<void> {

@@ -16,6 +16,9 @@ export class Events {
   }
 }
 
+// Settings-page classes: only imported by modules under test, never constructed.
+export class Setting {}
+export class SecretComponent {}
 export class FileSystemAdapter {}
 export class MarkdownView {}
 export const normalizePath = (path: string) => path
