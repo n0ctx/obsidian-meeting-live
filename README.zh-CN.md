@@ -93,20 +93,20 @@ $M = "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-20
 服务打印出 `Started!` 就可以用了。插件里的地址是 `ws://127.0.0.1:6006`，点「测试」可以免费检查。需要知道：
 
 - 服务监听这台电脑的所有网络接口，而不只是本机。除非你打算共享，请不要让防火墙放行 6006 端口的外来连接。
-- 语言由模型决定（中英文混合），没有语言设置，也没有说话人标签。静音约一秒就会结束一句。
+- 语言由模型决定（中英文混合），没有语言设置，也没有说话人标签。停顿一秒以上就会分行，所以一行里可能有不止一句。
 - 开会时服务如果停了，插件会继续录音，最多保留三分钟的音频，服务恢复后再补发；更长的中断和其他服务一样标记为空缺。
 
 ### 录音文件：whisper.cpp
 
-[whisper.cpp](https://github.com/ggml-org/whisper.cpp) 的 `whisper-server` 使用 OpenAI 的转写格式，能在 macOS、Windows 和 Linux 上运行，只需要一个模型文件。在 macOS 上用 `base` 模型（148 MB）测试过；`small`（488 MB）更准，但没有试过。
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) 的 `whisper-server` 使用 OpenAI 的转写格式，能在 macOS、Windows 和 Linux 上运行，只需要一个模型文件。在 macOS 上用 `base` 模型（148 MB，即下面命令里的那个）测试过；`small`（488 MB，同一地址的 `ggml-small.bin`）应该更准，但没有试过。
 
 macOS 和 Linux 用 [Homebrew](https://brew.sh)（Linux 上的 Homebrew 步骤未测试）：
 
 ```bash
 brew install whisper-cpp ffmpeg
 mkdir -p ~/meeting-live-asr && cd ~/meeting-live-asr
-curl -L -o ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
-whisper-server -m ~/meeting-live-asr/ggml-small.bin --host 127.0.0.1 --port 8080 --inference-path /v1/audio/transcriptions --convert --tmp-dir /tmp
+curl -L -o ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+whisper-server -m ~/meeting-live-asr/ggml-base.bin --host 127.0.0.1 --port 8080 --inference-path /v1/audio/transcriptions --convert --tmp-dir /tmp
 ```
 
 Windows（未测试）：从 [发布页](https://github.com/ggml-org/whisper.cpp/releases) 最新的构建里下载 `whisper-bin-x64.zip`，用 `winget install ffmpeg` 装 ffmpeg，下载上面的模型文件，再用同样的参数运行 `whisper-server.exe`（`--tmp-dir` 用一个可写的文件夹）。

@@ -93,20 +93,20 @@ $M = "sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-punct-int8-20
 The server is ready when it prints `Started!`. In the plugin the address is `ws://127.0.0.1:6006`; **Test** checks it for free. Things to know:
 
 - The server listens on every network interface of the computer, not only on this one. Keep your firewall from admitting connections to port 6006 unless you mean to share it.
-- The language is whatever the model knows (Chinese and English together); there is no language setting and no speaker labels. A sentence ends after about a second of silence.
+- The language is whatever the model knows (Chinese and English together); there is no language setting and no speaker labels. Text is cut into lines at pauses of a second or more, so a line can hold more than one sentence.
 - If the server stops during a meeting, the plugin keeps recording, keeps the audio for up to three minutes and sends it when the server is back; longer outages are marked as gaps like any other provider's.
 
 ### Recorded files: whisper.cpp
 
-[whisper.cpp](https://github.com/ggml-org/whisper.cpp)'s `whisper-server` speaks the OpenAI transcription format, runs on macOS, Windows and Linux, and needs one model file. Tested on macOS with the `base` model (148 MB); `small` (488 MB) is more accurate but was not tried.
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp)'s `whisper-server` speaks the OpenAI transcription format, runs on macOS, Windows and Linux, and needs one model file. Tested on macOS with the `base` model (148 MB, the one in the commands below). `small` (488 MB, `ggml-small.bin` from the same address) should be more accurate but was not tried.
 
 macOS and Linux with [Homebrew](https://brew.sh) (the Homebrew steps on Linux are untested):
 
 ```bash
 brew install whisper-cpp ffmpeg
 mkdir -p ~/meeting-live-asr && cd ~/meeting-live-asr
-curl -L -o ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
-whisper-server -m ~/meeting-live-asr/ggml-small.bin --host 127.0.0.1 --port 8080 --inference-path /v1/audio/transcriptions --convert --tmp-dir /tmp
+curl -L -o ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+whisper-server -m ~/meeting-live-asr/ggml-base.bin --host 127.0.0.1 --port 8080 --inference-path /v1/audio/transcriptions --convert --tmp-dir /tmp
 ```
 
 Windows (untested): download `whisper-bin-x64.zip` from the newest build on the [releases page](https://github.com/ggml-org/whisper.cpp/releases), install ffmpeg with `winget install ffmpeg`, download the model file above, and run `whisper-server.exe` with the same options (use a folder you can write to for `--tmp-dir`).
