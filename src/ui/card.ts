@@ -212,10 +212,11 @@ export class MeetingCard extends MarkdownRenderChild {
         this.titleInput.blur()
       }
     })
-    this.metaEl = main.createDiv({ cls: "ml-meta" })
-    this.statusEl = this.metaEl.createSpan({ cls: "ml-status" })
+    // The status pill sits beside the chips, not in them: the chips' row may be squeezed to nothing, the pill never is.
+    this.statusEl = main.createSpan({ cls: "ml-status" })
     this.statusEl.createSpan({ cls: "ml-dot" })
     this.statusText = this.statusEl.createSpan()
+    this.metaEl = main.createDiv({ cls: "ml-meta" })
     // Chips live in the status line of the expanded card and move up into the header row of the capsule.
     this.chips = createSpan({ cls: "ml-chips" })
 

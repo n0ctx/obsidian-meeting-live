@@ -129,16 +129,28 @@
   min-width: 0;
 }
 
+/* The chips take what the title and the status pill leave. They do not reserve room: a minimum of min-content would hold back the width of
+   the widest chip, even a hidden one, and cut a short title short. Chips that do not fit wrap onto the hidden second line. */
 .ml-meta {
+  --ml-chip-gap: 14px;
   display: flex;
   flex: 1 1 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 14px;
-  /* Never narrower than the status pill: chips that do not fit wrap onto the hidden second line instead. */
-  min-width: min-content;
-  height: 22px;
+  gap: 0 var(--ml-chip-gap);
+  min-width: 0;
+  /* One chip row (20px) exactly, so the top of the wrapped second row never peeks out below it. */
+  height: 20px;
   overflow: hidden;
+}
+
+/* An empty first item, so that the first chip is not the first on its line: a chip wider than the row then wraps out of sight like the rest
+   instead of being cut off at the edge. Its negative margin cancels the gap after it. */
+.ml-meta::before {
+  content: "";
+  flex: none;
+  height: 20px;
+  margin-right: calc(-1 * var(--ml-chip-gap));
 }
 
 .ml-title-wrap {
@@ -199,6 +211,8 @@
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
+  /* Head-main's own 10px gap plus this makes the 14px the chips are spaced by. */
+  margin-right: 4px;
 }
 
 .ml-status[data-status="idle"],
@@ -905,7 +919,8 @@
 .ml-card.is-capsule .ml-head { grid-template-columns: minmax(0, 1fr) auto; min-height: 44px; padding: 6px 8px 6px 14px; }
 .ml-card.is-capsule input.ml-title,
 .ml-card.is-capsule .ml-title-wrap::after { font-size: 14px !important; }
-.ml-card.is-capsule .ml-meta { gap: 0 12px; font-size: 11.5px; }
+.ml-card.is-capsule .ml-meta { --ml-chip-gap: 12px; font-size: 11.5px; }
+.ml-card.is-capsule .ml-status { margin-right: 2px; }
 .ml-card.is-capsule .ml-wave { width: 56px; height: 18px; }
 
 @container (max-width: 560px) {
