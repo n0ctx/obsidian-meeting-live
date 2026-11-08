@@ -128,6 +128,241 @@ export const LLM_PRESETS: readonly LlmPreset[] = [
     customHeaders: false,
     inputTokens: 128_000,
   },
+  // The presets below are for services that publish an OpenAI-compatible Chat Completions endpoint. A service with separate
+  // regional platforms has one preset per region: keys do not cross regions, and choosing the preset picks the address.
+  // Request shaping follows the same rule as above: send a parameter only where the documentation says it is accepted, and where
+  // it says a model rejects or fixes a value, send nothing. Input limits are the documented context window capped at 256,000
+  // estimated tokens so that a long transcript is condensed rather than sent whole, or 128,000 where no window was found.
+  {
+    // https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions (base URLs: the legacy hosts "remain fully functional" and need no workspace id; Bearer; temperature [0, 2); thinking is `enable_thinking`, and `reasoning_effort` is documented for qwen3.8 only, so it is not sent)
+    // https://www.alibabacloud.com/help/en/model-studio/json-mode (json_object needs "json" in the prompt; qwen-plus supports it in its default, non-thinking mode)
+    // https://www.alibabacloud.com/help/en/model-studio/get-api-key (keys cannot be used across regions)
+    id: "qwen",
+    get name() {
+      return t("preset.qwen")
+    },
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-plus",
+    matches: (url) => url.hostname === "dashscope.aliyuncs.com" || url.hostname.endsWith(".cn-beijing.maas.aliyuncs.com"),
+    temperature: true,
+    effort: "none",
+    json: "always",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // Same service and documents as above, for the international (Singapore) region.
+    id: "qwen-intl",
+    get name() {
+      return t("preset.qwenIntl")
+    },
+    baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-plus",
+    matches: (url) => url.hostname === "dashscope-intl.aliyuncs.com" || url.hostname.endsWith(".ap-southeast-1.maas.aliyuncs.com"),
+    temperature: true,
+    effort: "none",
+    json: "always",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // https://platform.kimi.com/docs/guide/start-using-kimi-api (https://api.moonshot.cn/v1, kimi-k3.1-pro; Bearer)
+    // https://platform.kimi.ai/docs/api/chat (https://api.moonshot.ai/v1; K3 models fix temperature, so none is sent; K3 reasoning_effort takes low/high/max only, so none is sent; json_object is documented but K3 always thinks and the docs do not say they combine, so it is not requested)
+    // Whether a .cn key works on the .ai host is not stated; they are treated as separate.
+    id: "kimi",
+    get name() {
+      return t("preset.kimi")
+    },
+    baseUrl: "https://api.moonshot.cn/v1",
+    model: "kimi-k3.1-pro",
+    matches: (url) => url.hostname === "api.moonshot.cn",
+    temperature: false,
+    effort: "none",
+    json: "never",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // Same service and documents as above, for the international platform.
+    id: "kimi-intl",
+    get name() {
+      return t("preset.kimiIntl")
+    },
+    baseUrl: "https://api.moonshot.ai/v1",
+    model: "kimi-k3.1-pro",
+    matches: (url) => url.hostname === "api.moonshot.ai",
+    temperature: false,
+    effort: "none",
+    json: "never",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // https://docs.bigmodel.cn/cn/guide/develop/openai/introduction (https://open.bigmodel.cn/api/paas/v4, glm-5.3; Bearer; temperature in (0, 1))
+    // https://docs.z.ai/api-reference/llm/chat-completion (glm-5.3 can only think, with reasoning_effort limited to low/high/max, so none is sent; json_object is for text models, but thinking is always on and the docs do not say they combine, so it is not requested)
+    id: "glm",
+    get name() {
+      return t("preset.glm")
+    },
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    model: "glm-5.3",
+    matches: (url) => url.hostname === "open.bigmodel.cn",
+    temperature: true,
+    effort: "none",
+    json: "never",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // Same models and parameters as above on Z.ai's international platform (https://api.z.ai/api/paas/v4, from the Z.ai reference above); temperature [0, 1].
+    id: "glm-intl",
+    get name() {
+      return t("preset.glmIntl")
+    },
+    baseUrl: "https://api.z.ai/api/paas/v4",
+    model: "glm-5.3",
+    matches: (url) => url.hostname === "api.z.ai",
+    temperature: true,
+    effort: "none",
+    json: "never",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // https://docs.volcengine.com/docs/82379/1298454 (POST https://ark.cn-beijing.volces.com/api/v3/chat/completions; API key auth; temperature [0, 2] but fixed at 1.0 on the doubao-seed-2-0 pro and lite models, so none is sent; reasoning_effort takes none to max on the models that support it; json_object is marked beta and depends on the model, so it is not requested)
+    // The model id is the one the reference names (doubao-seed-2-0-lite-260428); the model list page did not render, so the window is unknown. Ark also accepts an endpoint id (ep-...) here.
+    // BytePlus ModelArk (international) is not offered: its documentation could not be read.
+    id: "ark",
+    get name() {
+      return t("preset.ark")
+    },
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    model: "doubao-seed-2-0-lite-260428",
+    matches: (url) => url.hostname.startsWith("ark.") && url.hostname.endsWith(".volces.com"),
+    temperature: false,
+    effort: "reasoning_effort",
+    json: "never",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 128_000,
+  },
+  {
+    // https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions (https://api.siliconflow.cn/v1; Bearer; temperature 0 to 2; json_object works for language models if the prompt asks for JSON; reasoning_effort only for a few models, so none is sent)
+    // The text example there is deepseek-ai/DeepSeek-V4-Flash; the documentation gives no context window per model.
+    id: "siliconflow",
+    get name() {
+      return t("preset.siliconflow")
+    },
+    baseUrl: "https://api.siliconflow.cn/v1",
+    model: "deepseek-ai/DeepSeek-V4-Flash",
+    matches: (url) => url.hostname === "api.siliconflow.cn",
+    temperature: true,
+    effort: "none",
+    json: "always",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 128_000,
+  },
+  {
+    // https://docs.siliconflow.com/en/api-reference/chat-completions/chat-completions (https://api.siliconflow.com/v1, Bearer; the same parameters as the China site; this page does not mention reasoning_effort)
+    // Whether an account and key of one site work on the other is not stated; they are treated as separate.
+    id: "siliconflow-intl",
+    get name() {
+      return t("preset.siliconflowIntl")
+    },
+    baseUrl: "https://api.siliconflow.com/v1",
+    model: "deepseek-ai/DeepSeek-V4-Flash",
+    matches: (url) => url.hostname === "api.siliconflow.com",
+    temperature: true,
+    effort: "none",
+    json: "always",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 128_000,
+  },
+  {
+    // https://platform.minimax.cn/docs/api-reference/text-openai-api (OPENAI_BASE_URL https://api.minimax.cn/v1; temperature is not supported and any value passed has no effect; reasoning_effort is for MiniMax-M3.1-Flash and "none" is rejected, which "off" never sends; response_format is not covered, so JSON is not requested)
+    // api.minimaxi.com, the host older material uses, is also recognized when settings are migrated.
+    id: "minimax",
+    get name() {
+      return t("preset.minimax")
+    },
+    baseUrl: "https://api.minimax.cn/v1",
+    model: "MiniMax-M3.1-Flash",
+    matches: (url) => url.hostname === "api.minimax.cn" || url.hostname === "api.minimaxi.com",
+    temperature: false,
+    effort: "reasoning_effort",
+    json: "never",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // https://platform.minimax.io/docs/api-reference/text-openai-api (OPENAI_BASE_URL https://api.minimax.io/v1, MiniMax-M3.1-Flash with a 1M context; the same parameters as above)
+    id: "minimax-intl",
+    get name() {
+      return t("preset.minimaxIntl")
+    },
+    baseUrl: "https://api.minimax.io/v1",
+    model: "MiniMax-M3.1-Flash",
+    matches: (url) => url.hostname === "api.minimax.io",
+    temperature: false,
+    effort: "reasoning_effort",
+    json: "never",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // https://docs.x.ai/developers/rest-api-reference/inference/chat-completions (https://api.x.ai/v1, Bearer; temperature 0 to 2, values above 1 are sampled at 1; reasoning_effort values depend on the model; response_format is not described)
+    // https://docs.x.ai/docs/models (grok-4.7, 500k context) and https://docs.x.ai/docs/guides/reasoning (grok-4.7 takes low/medium/high/xhigh and cannot turn reasoning off)
+    // xAI calls Chat Completions a legacy endpoint and recommends the Responses API for new work; no shutdown date is announced.
+    id: "grok",
+    name: "xAI Grok",
+    baseUrl: "https://api.x.ai/v1",
+    model: "grok-4.7",
+    matches: (url) => url.hostname === "api.x.ai",
+    temperature: true,
+    effort: "reasoning_effort",
+    json: "never",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 256_000,
+  },
+  {
+    // https://docs.mistral.ai/api/endpoint/chat (https://api.mistral.ai/v1, Bearer; temperature recommended 0.0 to 0.7; json_object works if the prompt asks for JSON; reasoning_effort takes different values per model, and Small 4 takes only high and none, so none is sent)
+    // mistral-small-latest is the alias the reference's sample response shows; the window it points to was not found.
+    id: "mistral",
+    name: "Mistral",
+    baseUrl: "https://api.mistral.ai/v1",
+    model: "mistral-small-latest",
+    matches: (url) => url.hostname === "api.mistral.ai",
+    temperature: true,
+    effort: "none",
+    json: "always",
+    auth: "bearer",
+    keyRequired: true,
+    customHeaders: false,
+    inputTokens: 128_000,
+  },
   {
     // https://docs.ollama.com/api/openai-compatibility (base URL, key ignored locally, temperature, JSON mode, reasoning_effort)
     // The OpenAI endpoint cannot set the context size, and the docs give no default, hence the small limit.

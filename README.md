@@ -48,6 +48,9 @@ Any OpenAI-compatible Chat Completions service. A preset fills in the address an
 | :-- | :-- |
 | DeepSeek, OpenAI, OpenRouter | An API key. |
 | Anthropic and Gemini (their OpenAI-compatible endpoints) | An API key. |
+| Alibaba Qwen, Moonshot Kimi, Zhipu GLM, SiliconFlow, MiniMax (one preset per region: China or International) | An API key created on that region's platform. Keys do not work across regions, so choosing the preset chooses the address. |
+| Volcengine Ark (Doubao) | An API key from the Ark console; the model is prefilled and must be enabled in your account (an endpoint id `ep-…` also works). |
+| xAI Grok, Mistral | An API key. xAI lists Chat Completions as a legacy endpoint, still working, with no shutdown date announced. |
 | Azure OpenAI | The address of your resource, the deployment name as the model, an API key, and extra headers if you need them. |
 | Ollama, LM Studio | The model name you run; the key is optional. Set the input limit to your model's real context length. |
 | Custom | The address, model and key of any other OpenAI-compatible service, plus optional headers. |
@@ -74,7 +77,7 @@ Network use. The plugin contacts only the services you configure, and each only 
 | :-- | :-- | :-- |
 | Live transcription | Your audio, streamed while recording | The host of the live service (Volcengine: `openspeech.bytedance.com`; Alibaba Cloud Bailian: `dashscope.aliyuncs.com` or `dashscope-intl.aliyuncs.com`; AssemblyAI: `streaming.assemblyai.com` or `streaming.eu.assemblyai.com`; Deepgram: `api.deepgram.com`), or the address you set |
 | Recorded files | The audio file you pick, uploaded once | Volcengine `openspeech.bytedance.com`; Alibaba Cloud Bailian `dashscope.aliyuncs.com` or `dashscope-intl.aliyuncs.com` (the file also passes through Alibaba Cloud's temporary storage, and the transcript comes back from a signed address on Alibaba Cloud storage); AssemblyAI `api.assemblyai.com` or `api.eu.assemblyai.com`; Deepgram `api.deepgram.com`; or the host of your OpenAI-compatible API address |
-| Summaries and minutes | Transcript text, stage summaries and, for minutes, the notes you choose | The host of your LLM API address |
+| Summaries and minutes | Transcript text, stage summaries and, for minutes, the notes you choose | The host of your LLM API address (for a preset, the service's own host, such as `api.moonshot.cn` or `api.x.ai`) |
 
 - **Consent per destination.** Before anything is sent, a dialog lists the destinations and what each receives. Agreement is recorded per role and host, so changing a service or an address to a host you have not agreed to asks again. This also applies to minutes and summaries of a meeting that has finished: if the model's host changed since the recording, nothing is sent until you confirm.
 - **Secrets.** API keys are kept in Obsidian's secret storage. The settings file holds only each secret's name, never the key.

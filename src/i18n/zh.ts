@@ -173,6 +173,17 @@ export const zh = {
   "settings.resetDefault": "恢复默认",
   "preset.anthropic": "Anthropic（OpenAI 兼容接口）",
   "preset.gemini": "Gemini（OpenAI 兼容接口）",
+  "preset.qwen": "通义千问（中国内地）",
+  "preset.qwenIntl": "通义千问（国际）",
+  "preset.kimi": "Kimi（中国内地）",
+  "preset.kimiIntl": "Kimi（国际）",
+  "preset.glm": "智谱 GLM（中国内地）",
+  "preset.glmIntl": "智谱 GLM（国际 Z.ai）",
+  "preset.ark": "火山方舟 豆包",
+  "preset.siliconflow": "硅基流动（中国内地）",
+  "preset.siliconflowIntl": "硅基流动（国际）",
+  "preset.minimax": "MiniMax（中国内地）",
+  "preset.minimaxIntl": "MiniMax（国际）",
   "preset.custom": "自定义",
 
   // ---- provider settings

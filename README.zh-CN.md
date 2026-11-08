@@ -48,6 +48,9 @@
 | :-- | :-- |
 | DeepSeek、OpenAI、OpenRouter | API Key。 |
 | Anthropic 和 Gemini（它们的 OpenAI 兼容接口） | API Key。 |
+| 通义千问、Kimi、智谱 GLM、硅基流动、MiniMax（每个地域一个预设：中国内地或国际） | 在对应地域的平台创建的 API Key。不同地域的 Key 不通用，所以选哪个预设就决定了地址。 |
+| 火山方舟（豆包） | 方舟控制台的 API Key；模型已预填，需要先在你的账号里开通（也可以填接入点 ID `ep-…`）。 |
+| xAI Grok、Mistral | API Key。xAI 把 Chat Completions 列为旧接口，目前仍可用，没有公布下线日期。 |
 | Azure OpenAI | 你的资源地址，部署名称（填在模型一栏），API Key，需要时再加额外请求头。 |
 | Ollama、LM Studio | 你运行的模型名称；Key 可选。把输入上限设为模型实际的上下文长度。 |
 | 自定义 | 其他任意 OpenAI 兼容服务的地址、模型和 Key，可加额外请求头。 |
@@ -74,7 +77,7 @@
 | :-- | :-- | :-- |
 | 实时转写 | 你的音频，录音时实时上传 | 实时识别服务的主机（火山引擎 `openspeech.bytedance.com`；阿里云百炼 `dashscope.aliyuncs.com` 或 `dashscope-intl.aliyuncs.com`；AssemblyAI `streaming.assemblyai.com` 或 `streaming.eu.assemblyai.com`；Deepgram `api.deepgram.com`），或你设置的地址 |
 | 录音文件 | 你选的音频文件，上传一次 | 火山引擎 `openspeech.bytedance.com`；阿里云百炼 `dashscope.aliyuncs.com` 或 `dashscope-intl.aliyuncs.com`（文件还会经过阿里云的临时存储，转写结果从阿里云存储上的签名地址取回）；AssemblyAI `api.assemblyai.com` 或 `api.eu.assemblyai.com`；Deepgram `api.deepgram.com`；或你的 OpenAI 兼容 API 地址所在主机 |
-| 摘要与纪要 | 转写文本、阶段摘要，生成纪要时还有你选择的笔记 | 你的大模型 API 地址所在主机 |
+| 摘要与纪要 | 转写文本、阶段摘要，生成纪要时还有你选择的笔记 | 你的大模型 API 地址所在主机（选预设时就是该服务自己的主机，如 `api.moonshot.cn`、`api.x.ai`） |
 
 - **按去向确认。** 发送任何数据之前，会有对话框列出去向和各自收到的内容。同意按环节和主机记录，所以把服务或地址换成你没同意过的主机会再次询问。对已经结束的会议生成纪要和摘要也一样：如果模型的主机在录音之后换了，确认之前不会发送任何内容。
 - **密钥。** API Key 保存在 Obsidian 的密钥存储中，设置文件里只记录密钥名称，不含密钥本身。

@@ -173,6 +173,17 @@ export const en: Dictionary = {
   "settings.resetDefault": "Restore default",
   "preset.anthropic": "Anthropic (OpenAI-compatible)",
   "preset.gemini": "Gemini (OpenAI-compatible)",
+  "preset.qwen": "Alibaba Qwen (China)",
+  "preset.qwenIntl": "Alibaba Qwen (International)",
+  "preset.kimi": "Moonshot Kimi (China)",
+  "preset.kimiIntl": "Moonshot Kimi (International)",
+  "preset.glm": "Zhipu GLM (China)",
+  "preset.glmIntl": "Z.ai GLM (International)",
+  "preset.ark": "Volcengine Ark (Doubao)",
+  "preset.siliconflow": "SiliconFlow (China)",
+  "preset.siliconflowIntl": "SiliconFlow (International)",
+  "preset.minimax": "MiniMax (China)",
+  "preset.minimaxIntl": "MiniMax (International)",
   "preset.custom": "Custom",
 
   // ---- provider settings
