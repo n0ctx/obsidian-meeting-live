@@ -1,14 +1,19 @@
 import { Notice, PluginSettingTab, Setting, type App } from "obsidian"
-import { ASR_LANGUAGES, type AsrLanguage } from "./asr/language.ts"
+import { ASR_LANGUAGES, asrLanguageName, type AsrLanguage } from "./asr/language.ts"
 import { asrProvider, fileProviders, liveProviders } from "./asr/providers/registry.ts"
 import type { AsrProvider } from "./asr/providers/types.ts"
 import { listInputDevices } from "./audio/capture.ts"
+import { t } from "./i18n/index.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { LLM_PRESETS, presetById } from "./llm/presets.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import type MeetingLivePlugin from "./main.ts"
 import type { MeetingLiveSettings } from "./settings.ts"
+import { platformText } from "./platform.ts"
 import { secretField, textField } from "./ui/settingFields.ts"
+
+/** A reply to this proves the endpoint, the key and the model work together; it is English so that it asks the same of every model. */
+const LLM_TEST_PROMPT = "Reply with only the two letters: OK"
 
 export class MeetingLiveSettingTab extends PluginSettingTab {
   private readonly plugin: MeetingLivePlugin
@@ -32,18 +37,18 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     containerEl.addClass("ml-settings")
 
     const privacy = containerEl.createDiv({ cls: "ml-settings-privacy" })
-    privacy.createEl("strong", { text: "数据去向" })
-    privacy.createSpan({ text: `：原始录音和转写只保存在本库。录音时音频实时上传至${asrProvider(this.s.liveProvider)?.name ?? this.s.liveProvider}识别；摘要和纪要会把转写文本发送到下方配置的 LLM 服务。凭证保存在 Obsidian 的密钥存储中，不写入笔记、会议文件或插件配置。` })
+    privacy.createEl("strong", { text: t("settings.privacy.title") })
+    privacy.createSpan({ text: t("settings.privacy.body", asrProvider(this.s.liveProvider)?.name ?? this.s.liveProvider) })
 
-    new Setting(containerEl).setName("录音").setHeading()
-    textField(new Setting(containerEl).setName("会议数据目录").setDesc("每场会议一个子文件夹，包含录音、原始转写、AI 摘要与元数据。"), this.s, "folder", () => this.save(), "Meetings")
+    new Setting(containerEl).setName(t("settings.recording")).setHeading()
+    textField(new Setting(containerEl).setName(t("settings.folder.name")).setDesc(t("settings.folder.desc")), this.s, "folder", () => this.save(), "Meetings")
     new Setting(containerEl)
-      .setName("录音格式")
-      .setDesc("Opus：48 kHz 高码率压缩，约 45 MB/小时，适合长会议。WAV：无损 PCM，约 330 MB/小时。")
+      .setName(t("settings.format.name"))
+      .setDesc(t("settings.format.desc"))
       .addDropdown((d) =>
         d
-          .addOption("ogg", "Opus（推荐）")
-          .addOption("wav", "WAV 无损")
+          .addOption("ogg", t("settings.format.opus"))
+          .addOption("wav", t("settings.format.wav"))
           .setValue(this.s.audioFormat)
           .onChange((v) => {
             this.s.audioFormat = v as MeetingLiveSettings["audioFormat"]
@@ -51,12 +56,12 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           }),
       )
     const device = new Setting(containerEl)
-      .setName("输入设备")
-      .setDesc("普通麦克风只能录到现场声音。线上会议的远端声音需要通过 BlackHole 等虚拟声卡或聚合设备接入后在此选择。")
+      .setName(t("settings.device.name"))
+      .setDesc(platformText("systemAudio"))
     device.addDropdown(async (d) => {
-      d.addOption("", "系统默认麦克风")
+      d.addOption("", t("settings.device.default"))
       try {
-        for (const dev of await listInputDevices()) d.addOption(dev.deviceId, dev.label || "未命名设备")
+        for (const dev of await listInputDevices()) d.addOption(dev.deviceId, dev.label || t("settings.device.unnamed"))
       } catch {
         // Device labels need microphone permission; the default option still works.
       }
@@ -66,8 +71,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
       })
     })
     new Setting(containerEl)
-      .setName("语音增强")
-      .setDesc("开启浏览器的回声消除、降噪和自动增益。关闭时保存未经处理的原始声音（推荐）。")
+      .setName(t("settings.voice.name"))
+      .setDesc(t("settings.voice.desc"))
       .addToggle((t) =>
         t.setValue(this.s.voiceProcessing).onChange((v) => {
           this.s.voiceProcessing = v
@@ -77,20 +82,20 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
 
     this.asrSettings(containerEl)
 
-    new Setting(containerEl).setName("LLM").setHeading()
+    new Setting(containerEl).setName(t("settings.llm")).setHeading()
     this.compatibleSettings(containerEl)
-    new Setting(containerEl).setName("测试 LLM").addButton((b) => b.setButtonText("测试").onClick(() => void this.testLlm(b.buttonEl)))
+    new Setting(containerEl).setName(t("settings.llm.test")).addButton((b) => b.setButtonText(t("settings.test")).onClick(() => void this.testLlm(b.buttonEl)))
 
-    new Setting(containerEl).setName("阶段摘要").setHeading()
-    new Setting(containerEl).setName("自动生成").addToggle((t) =>
+    new Setting(containerEl).setName(t("settings.summary")).setHeading()
+    new Setting(containerEl).setName(t("settings.auto.name")).addToggle((t) =>
       t.setValue(this.s.autoSummary).onChange((v) => {
         this.s.autoSummary = v
         this.save()
       }),
     )
     new Setting(containerEl)
-      .setName("间隔（分钟）")
-      .setDesc("按累计会议时长计算，暂停期间不计时。")
+      .setName(t("settings.interval.name"))
+      .setDesc(t("settings.interval.desc"))
       .addSlider((s) =>
         s
           .setLimits(1, 30, 1)
@@ -100,21 +105,21 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
             this.save()
           }),
       )
-    this.promptSetting("关注重点", "附加在固定的准确性规则之后，用于说明会议场景与需要重点提炼的信息。", "summaryFocus", DEFAULT_SUMMARY_FOCUS, 5)
+    this.promptSetting(t("settings.focus.name"), t("settings.focus.desc"), "summaryFocus", DEFAULT_SUMMARY_FOCUS, 5)
 
-    new Setting(containerEl).setName("正式纪要").setHeading()
-    this.promptSetting("纪要 Prompt", "生成正式纪要时使用的系统提示词，每次生成前也可以临时修改。", "minutesPrompt", DEFAULT_MINUTES_PROMPT, 12)
+    new Setting(containerEl).setName(t("settings.minutes")).setHeading()
+    this.promptSetting(t("settings.minutesPrompt.name"), t("settings.minutesPrompt.desc"), "minutesPrompt", DEFAULT_MINUTES_PROMPT, 12)
   }
 
   private asrSettings(containerEl: HTMLElement): void {
     const s = this.s
-    new Setting(containerEl).setName("语音识别").setHeading()
-    this.providerChoice(containerEl, "实时识别服务", "录音时实时转写。", liveProviders(), "liveProvider")
-    this.providerChoice(containerEl, "录音文件识别服务", "命令「录音生成访谈记录」使用。", fileProviders(), "fileProvider")
+    new Setting(containerEl).setName(t("settings.asr")).setHeading()
+    this.providerChoice(containerEl, t("settings.liveProvider.name"), t("settings.liveProvider.desc"), liveProviders(), "liveProvider")
+    this.providerChoice(containerEl, t("settings.fileProvider.name"), t("settings.fileProvider.desc"), fileProviders(), "fileProvider")
     if (asrProvider(s.liveProvider)?.live?.capabilities(s).hotwords) {
       new Setting(containerEl)
-        .setName("热词")
-        .setDesc("公司名、人名、产品名等，一行一个，最多 100 个，提升专有名词识别准确率。")
+        .setName(t("settings.hotwords.name"))
+        .setDesc(t("settings.hotwords.desc"))
         .addTextArea((t) => {
           t.inputEl.rows = 4
           t.setValue(s.hotwords).onChange((v) => {
@@ -123,13 +128,13 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           })
         })
     }
-    const languageFor = [asrProvider(s.liveProvider)?.live?.capabilities(s).language && "实时识别", asrProvider(s.fileProvider)?.file?.capabilities(s).language && "录音文件识别"].filter(Boolean)
+    const languageFor = [asrProvider(s.liveProvider)?.live?.capabilities(s).language && t("asr.role.live"), asrProvider(s.fileProvider)?.file?.capabilities(s).language && t("asr.role.file")].filter(Boolean)
     if (languageFor.length) {
       new Setting(containerEl)
-        .setName("识别语言")
-        .setDesc(`对${languageFor.join("和")}生效。自动检测适合多语言混用，已知会议语言时指定语言更准确。`)
+        .setName(t("settings.language.name"))
+        .setDesc(t("settings.language.desc", languageFor.join(t("settings.language.and"))))
         .addDropdown((d) => {
-          for (const l of ASR_LANGUAGES) d.addOption(l.id, l.name)
+          for (const id of ASR_LANGUAGES) d.addOption(id, asrLanguageName(id))
           d.setValue(s.asrLanguage).onChange((v) => {
             s.asrLanguage = v as AsrLanguage
             this.save()
@@ -139,7 +144,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     for (const id of new Set([s.liveProvider, s.fileProvider])) {
       const provider = asrProvider(id)
       if (provider) provider.renderSettings({ app: this.app, containerEl, settings: s, save: () => this.save(), roles: { live: id === s.liveProvider && !!provider.live, file: id === s.fileProvider && !!provider.file } })
-      else containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: `未知的语音识别服务「${id}」。` })
+      else containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("settings.unknownProvider", id) })
     }
   }
 
@@ -150,7 +155,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
       .setDesc(desc)
       .addDropdown((d) => {
         for (const p of providers) d.addOption(p.id, p.name)
-        if (!providers.some((p) => p.id === this.s[key])) d.addOption(this.s[key], `${this.s[key]}（不可用）`)
+        if (!providers.some((p) => p.id === this.s[key])) d.addOption(this.s[key], t("settings.providerUnavailable", this.s[key]))
         d.setValue(this.s[key]).onChange((v) => {
           this.s[key] = v
           this.save()
@@ -162,8 +167,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
   private compatibleSettings(containerEl: HTMLElement): void {
     const s = this.s
     const preset = presetById(s.llmPreset)
-    containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: "选择模型服务；预设会填入地址和建议的模型，并按该服务的文档决定请求里带哪些参数。没有列出的 OpenAI 兼容服务选「自定义」。" })
-    new Setting(containerEl).setName("服务").addDropdown((d) => {
+    containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("settings.llm.intro") })
+    new Setting(containerEl).setName(t("settings.llm.service")).addDropdown((d) => {
       for (const p of LLM_PRESETS) d.addOption(p.id, p.name)
       d.setValue(preset.id).onChange((id) => {
         const next = presetById(id)
@@ -176,13 +181,13 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
         this.display()
       })
     })
-    textField(new Setting(containerEl).setName("API 地址").setDesc("填到 /v1 或完整的 /chat/completions 地址。"), s, "llmBaseUrl", () => this.save(), preset.baseUrl || "https://api.example.com/v1")
-    textField(new Setting(containerEl).setName("模型").setDesc(preset.id === "azure" ? "填写 Azure 中的部署名称。" : ""), s, "llmModel", () => this.save(), preset.model || "模型名称")
-    secretField(this.app, new Setting(containerEl).setName(preset.keyRequired ? "API Key" : "API Key（可选）").setDesc(preset.keyRequired ? "" : "本地服务通常不需要；填写后会随请求发送。"), s, "llmApiKeySecret", () => this.save())
+    textField(new Setting(containerEl).setName(t("settings.llm.url.name")).setDesc(t("settings.llm.url.desc")), s, "llmBaseUrl", () => this.save(), preset.baseUrl || t("settings.llm.url.placeholder"))
+    textField(new Setting(containerEl).setName(t("settings.llm.model.name")).setDesc(preset.id === "azure" ? t("settings.llm.model.azure") : ""), s, "llmModel", () => this.save(), preset.model || t("settings.llm.model.placeholder"))
+    secretField(this.app, new Setting(containerEl).setName(preset.keyRequired ? t("settings.llm.key.required") : t("settings.llm.key.optional")).setDesc(preset.keyRequired ? "" : t("settings.llm.key.optionalDesc")), s, "llmApiKeySecret", () => this.save())
     if (preset.customHeaders) {
       new Setting(containerEl)
-        .setName("额外请求头")
-        .setDesc("每行一个，格式「名称: 值」。保存在插件配置里，不要填写密钥。")
+        .setName(t("settings.llm.headers.name"))
+        .setDesc(t("settings.llm.headers.desc"))
         .addTextArea((t) => {
           t.inputEl.rows = 3
           t.setValue(s.llmHeaders).onChange((v) => {
@@ -193,14 +198,14 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     }
     if (preset.effort !== "none") {
       new Setting(containerEl)
-        .setName("推理强度")
-        .setDesc(preset.effort === "deepseek" ? "发送 reasoning_effort 并开关 DeepSeek 的思考模式。模型不支持推理时选关闭。" : "发送 reasoning_effort；选关闭则不发送。模型不支持推理时选关闭。")
+        .setName(t("settings.llm.effort.name"))
+        .setDesc(preset.effort === "deepseek" ? t("settings.llm.effort.deepseek") : t("settings.llm.effort.plain"))
         .addDropdown((d) =>
           d
-            .addOption("off", "关闭")
-            .addOption("low", "低")
-            .addOption("medium", "中")
-            .addOption("high", "高")
+            .addOption("off", t("settings.llm.effort.off"))
+            .addOption("low", t("settings.llm.effort.low"))
+            .addOption("medium", t("settings.llm.effort.medium"))
+            .addOption("high", t("settings.llm.effort.high"))
             .setValue(s.llmEffort)
             .onChange((v) => {
               s.llmEffort = v as MeetingLiveSettings["llmEffort"]
@@ -210,8 +215,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     }
     if (preset.temperature) {
       new Setting(containerEl)
-        .setName("温度")
-        .setDesc("越低越保守，事实性任务建议 0–0.3。开启推理后多数模型会忽略此项。")
+        .setName(t("settings.llm.temperature.name"))
+        .setDesc(t("settings.llm.temperature.desc"))
         .addSlider((slider) =>
           slider
             .setLimits(0, 1, 0.05)
@@ -223,8 +228,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
         )
     }
     new Setting(containerEl)
-      .setName("输入上限（tokens）")
-      .setDesc(`一次请求最多带多少内容的估算值。生成纪要时超过它，会先分段压缩转写再整理。留空使用「${preset.name}」的默认值 ${preset.inputTokens.toLocaleString()}；本地模型请按实际上下文长度填写。`)
+      .setName(t("settings.llm.limit.name"))
+      .setDesc(t("settings.llm.limit.desc", preset.name, preset.inputTokens.toLocaleString()))
       .addText((t) =>
         t
           .setPlaceholder(String(preset.inputTokens))
@@ -244,7 +249,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     setting.addExtraButton((b) =>
       b
         .setIcon("rotate-ccw")
-        .setTooltip("恢复默认")
+        .setTooltip(t("settings.resetDefault"))
         .onClick(() => {
           this.s[key] = fallback
           area.value = fallback
@@ -266,8 +271,8 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     if (llm.problem) return void new Notice(llm.problem)
     button.disabled = true
     try {
-      const reply = await llm.complete([{ role: "user", content: "只回复两个字母：OK" }])
-      new Notice(`LLM 连接成功：${reply.slice(0, 40)}`)
+      const reply = await llm.complete([{ role: "user", content: LLM_TEST_PROMPT }])
+      new Notice(t("settings.llm.testOk", reply.slice(0, 40)))
     } catch (error) {
       new Notice((error as Error).message, 10000)
     } finally {

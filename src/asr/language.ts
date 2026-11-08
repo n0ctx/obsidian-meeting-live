@@ -1,19 +1,17 @@
 // The recognition language the user picks once; each provider maps it to what its own service takes.
 
-export const ASR_LANGUAGES = [
-  { id: "auto", name: "自动检测" },
-  { id: "zh", name: "中文" },
-  { id: "en", name: "英语" },
-  { id: "ja", name: "日语" },
-  { id: "ko", name: "韩语" },
-  { id: "es", name: "西班牙语" },
-  { id: "fr", name: "法语" },
-  { id: "de", name: "德语" },
-] as const
+import { t, type Key } from "../i18n/index.ts"
 
-export type AsrLanguage = (typeof ASR_LANGUAGES)[number]["id"]
+export const ASR_LANGUAGES = ["auto", "zh", "en", "ja", "ko", "es", "fr", "de"] as const
 
-export const isAsrLanguage = (value: unknown): value is AsrLanguage => ASR_LANGUAGES.some((l) => l.id === value)
+export type AsrLanguage = (typeof ASR_LANGUAGES)[number]
+
+export const isAsrLanguage = (value: unknown): value is AsrLanguage => (ASR_LANGUAGES as readonly unknown[]).includes(value)
+
+const NAME_KEYS = { auto: "asrLang.auto", zh: "asrLang.zh", en: "asrLang.en", ja: "asrLang.ja", ko: "asrLang.ko", es: "asrLang.es", fr: "asrLang.fr", de: "asrLang.de" } as const satisfies Record<AsrLanguage, Key>
+
+/** The language's name in the interface language, for the settings dropdown. */
+export const asrLanguageName = (language: AsrLanguage): string => t(NAME_KEYS[language])
 
 /** The ISO 639-1 code to send, or undefined to let the service detect the language. */
 export function languageHint(language: AsrLanguage): string | undefined {

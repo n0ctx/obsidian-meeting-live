@@ -1,3 +1,6 @@
+import { t } from "../i18n/index.ts"
+import { platformText } from "../platform.ts"
+
 const WORKLET_NAME = "meeting-live-capture"
 const WORKLET_SOURCE = `
 class MeetingLiveCapture extends AudioWorkletProcessor {
@@ -60,7 +63,7 @@ export class AudioCapture {
   }
 
   static async open(options: CaptureOptions, onFrames: (channels: Float32Array[]) => void, onEnded: () => void): Promise<AudioCapture> {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("当前环境无法访问麦克风")
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error(t("capture.noMic"))
     const processing = options.voiceProcessing
     let stream: MediaStream
     try {
@@ -75,8 +78,8 @@ export class AudioCapture {
       })
     } catch (error) {
       const name = (error as DOMException)?.name
-      if (name === "NotAllowedError") throw new Error("麦克风权限被拒绝。请在 系统设置 → 隐私与安全性 → 麦克风 中允许 Obsidian")
-      if (name === "NotFoundError" || name === "OverconstrainedError") throw new Error("找不到所选麦克风，请在插件设置中重新选择输入设备")
+      if (name === "NotAllowedError") throw new Error(platformText("micDenied"))
+      if (name === "NotFoundError" || name === "OverconstrainedError") throw new Error(t("capture.notFound"))
       throw error
     }
     const track = stream.getAudioTracks()[0]

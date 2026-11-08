@@ -2,6 +2,8 @@
 // provider's own documentation (URLs on the lines); where the documentation says nothing, the safe choice is made: omit the
 // parameter (temperature), skip the feature (JSON response format) or leave the field to the user.
 
+import { t } from "../i18n/index.ts"
+
 /** How reasoning effort is expressed in the request. */
 export type EffortStyle =
   /** Not sent: the service ignores it or does not document it. */
@@ -16,7 +18,8 @@ export type JsonMode = "always" | "effort-off" | "never"
 
 export interface LlmPreset {
   id: string
-  name: string
+  /** Display name in the language of the interface; a getter on the presets whose name is worded in words. */
+  readonly name: string
   baseUrl: string
   /** Suggested model; empty where the choice is the user's own (local models, deployment names). */
   model: string
@@ -78,7 +81,9 @@ export const LLM_PRESETS: readonly LlmPreset[] = [
     // temperature below 1 is a 400 on current models, reasoning_effort is ignored, and response_format accepts only
     // json_schema (json_object returns 400), so none of the three is sent.
     id: "anthropic",
-    name: "Anthropic（OpenAI 兼容接口）",
+    get name() {
+      return t("preset.anthropic")
+    },
     baseUrl: "https://api.anthropic.com/v1",
     model: "claude-sonnet-5-5",
     matches: (url) => url.hostname === "api.anthropic.com",
@@ -94,7 +99,9 @@ export const LLM_PRESETS: readonly LlmPreset[] = [
     // https://aistudio.google.com/docs/openai (base URL, Bearer key, reasoning_effort)
     // The page does not mention temperature or json_object, so neither is sent.
     id: "gemini",
-    name: "Gemini（OpenAI 兼容接口）",
+    get name() {
+      return t("preset.gemini")
+    },
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     model: "gemini-3.8-flash",
     matches: (url) => url.hostname === "generativelanguage.googleapis.com",
@@ -173,7 +180,9 @@ export const LLM_PRESETS: readonly LlmPreset[] = [
   {
     // Any other OpenAI-compatible endpoint, treated as the plugin always has: temperature and reasoning_effort are sent.
     id: "custom",
-    name: "自定义",
+    get name() {
+      return t("preset.custom")
+    },
     baseUrl: "",
     model: "",
     matches: () => true,
