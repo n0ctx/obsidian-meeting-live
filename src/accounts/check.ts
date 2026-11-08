@@ -122,12 +122,12 @@ export async function freeCheck(account: Account, key: string, deps: CheckDeps):
   return { state: "manual" }
 }
 
-/** Whether the service has a documented check that costs nothing, which decides if the account's button says Check or Test. */
+/** Whether the service has a check that costs nothing (Custom is tried, as most servers list their models), which decides if the account's button says Check or Test. */
 export const hasFreeCheck = (account: Account): boolean => {
   const def = serviceDef(account.service)
   if (!def) return false
   const llm = accountLlmConfig(account, "", "")
-  return !!def.keyless || ["volc", "deepgram", "assemblyai"].includes(def.id) || (!!llm && llm.preset.id !== "custom" && hasListing(llm.preset.id))
+  return !!def.keyless || ["volc", "deepgram", "assemblyai"].includes(def.id) || (!!llm && hasListing(llm.preset.id))
 }
 
 /** The check the user asks for when there is no free one: one tiny request to the language model, which may count as usage. */

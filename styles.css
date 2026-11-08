@@ -1206,6 +1206,17 @@
 }
 
 .ml-settings-note { margin: -4px 0 8px; }
+/* Accounts: the line that says whether an account works, and the form that adds one. */
+.ml-account-status { margin-top: 2px; font-size: 12.5px; }
+.ml-account-status.is-ok { color: var(--text-success); }
+.ml-account-status.is-failed { color: var(--text-error); }
+.ml-account-status.is-checking, .ml-account-status.is-manual, .ml-account-status.is-unchecked { color: var(--text-muted); }
+.ml-add-form { margin: 4px 0 8px; padding: 0 0 4px; border-left: 2px solid var(--interactive-accent); padding-left: 12px; }
+.ml-add-message { margin: 4px 0 6px; font-size: 13px; color: var(--text-muted); }
+.ml-add-message.is-failed { color: var(--text-error); }
+.ml-add-message:empty { display: none; }
+.ml-advanced { margin: 0 0 8px; padding-left: 12px; border-left: 2px solid var(--background-modifier-border); }
+
 .ml-prompt-setting { flex-wrap: wrap; }
 .ml-prompt-setting .setting-item-control { flex: 1 1 100%; flex-direction: row-reverse; align-items: flex-start; margin-top: 8px; }
 .ml-prompt-setting textarea { flex: 1; width: 100%; font-size: 12.5px; line-height: 1.6; }

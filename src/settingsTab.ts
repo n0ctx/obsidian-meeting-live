@@ -31,7 +31,7 @@ export interface SettingsHost {
 
 const OTHER_MODEL = "\u0000other"
 
-type Status = { kind: "ok" | "failed" | "checking" | "manual"; text: string }
+type Status = { kind: "ok" | "failed" | "checking" | "manual" | "unchecked"; text: string }
 
 /** What the add form holds before anything is stored. */
 interface Draft {
@@ -210,8 +210,10 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     const roles = this.roleNames(account)
     const setting = new Setting(parent).setName(accountLabel(this.s.accounts, account))
     setting.descEl.createDiv({ text: roles ? t("settings.account.serves", roles) : t("settings.account.servesNothing") })
-    setting.descEl.createDiv({ cls: `ml-account-status is-${status?.kind ?? "unchecked"}`, text: status?.text ?? t("settings.status.unchecked") })
     const paid = this.needsTest.has(account.id) || !hasFreeCheck(account)
+    // A service with no free check says so at once, rather than offering a Check that cannot tell anything.
+    const shown: Status = status ?? (paid ? { kind: "manual", text: t("settings.status.manual") } : { kind: "unchecked", text: t("settings.status.unchecked") })
+    setting.descEl.createDiv({ cls: `ml-account-status is-${shown.kind}`, text: shown.text })
     setting
       .addButton((b) =>
         b
@@ -296,9 +298,14 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
   private renderDraft(parent: HTMLElement, draft: Draft): void {
     const def = serviceDef(draft.service)!
     const box = parent.createDiv({ cls: "ml-add-form" })
+    let submit: { setButtonText(text: string): unknown } | undefined
+    let message: HTMLElement | undefined
+    // Any edit makes the last check stale: the button goes back to Add and the old message goes away, without drawing the form again under the cursor.
     const changed = () => {
       draft.failed = false
       draft.message = ""
+      submit?.setButtonText(t("settings.add.submit"))
+      message?.setText("")
     }
     new Setting(box).setName(t("settings.add.service")).addDropdown((d) => {
       for (const service of SERVICES) d.addOption(service.id, service.name)
@@ -337,9 +344,13 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
         })
       })
     } else box.createDiv({ cls: "setting-item-description ml-settings-note", text: t("settings.add.key.none") })
-    const message = box.createDiv({ cls: `ml-add-message${draft.failed ? " is-failed" : ""}`, text: draft.message })
+    message = box.createDiv({ cls: `ml-add-message${draft.failed ? " is-failed" : ""}`, text: draft.message })
+    const messageEl = message
     new Setting(box)
-      .addButton((b) => b.setButtonText(draft.failed ? t("settings.add.anyway") : t("settings.add.submit")).setCta().onClick(() => inBackground(this.submitDraft(draft, message))))
+      .addButton((b) => {
+        submit = b
+        b.setButtonText(draft.failed ? t("settings.add.anyway") : t("settings.add.submit")).setCta().onClick(() => inBackground(this.submitDraft(draft, messageEl)))
+      })
       .addButton((b) =>
         b.setButtonText(t("settings.add.cancel")).onClick(() => {
           this.draft = undefined
@@ -384,8 +395,10 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     const forced = draft.failed
     const result: CheckResult = forced ? { state: "manual" } : await freeCheck(account, draft.key, this.deps())
     if (result.state === "failed") {
+      // Drawn again so the button now reads "Add anyway" and the message stays with the form.
       draft.failed = true
-      return this.say(draft, message, result.message)
+      draft.message = result.message
+      return this.renderAccounts()
     }
     if (draft.key || !def.keyless) {
       account.apiKeySecret = secretIdFor(account.id)
@@ -528,7 +541,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
     const chosen = roleAccount(this.s, role)
     const setting = new Setting(el).setName(t(`settings.roles.${role}.name`)).setDesc(candidates.length ? t(`settings.roles.${role}.desc`) : t("settings.roles.noneAvailable"))
     setting.addDropdown((d) => {
-      d.addOption("", candidates.length ? t("settings.roles.none") : t("settings.roles.noneAvailable"))
+      d.addOption("", t("settings.roles.none"))
       for (const account of candidates) d.addOption(account.id, accountLabel(this.s.accounts, account))
       d.setValue(chosen?.id ?? "").onChange((id) => {
         const account = candidates.find((a) => a.id === id)
