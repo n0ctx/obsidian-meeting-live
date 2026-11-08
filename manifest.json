@@ -1,7 +1,7 @@
 {
   "id": "meeting-live",
   "name": "Meeting Live",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minAppVersion": "1.11.4",
   "description": "Record meetings in a note with live transcription, speaker labels, AI stage summaries and minutes. Bring your own speech and language-model services, or run recognition on your own computer.",
   "author": "n0ctx",
