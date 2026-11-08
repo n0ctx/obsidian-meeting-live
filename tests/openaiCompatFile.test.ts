@@ -210,3 +210,18 @@ test("old settings gain the new provider's defaults, and its stored values are r
   const stored = loadSettings({ version: 2, providers: { openaiCompat: { baseUrl: "http://localhost:8000/v1", model: "large-v3", fileSizeLimitMb: 200, apiKeySecret: 5 } } }).settings.providers.openaiCompat
   assert.deepEqual(stored, { baseUrl: "http://localhost:8000/v1", model: "large-v3", apiKeySecret: "", fileSizeLimitMb: 200 })
 })
+
+test("whisper-1 stays the default while its documented successor returns no times, and the settings page says it is being shut down", async () => {
+  const { DEFAULT_OPENAI_COMPAT } = await import("../src/asr/providers/openaiCompat/settings.ts")
+  const { DICTIONARIES } = await import("../src/i18n/index.ts")
+  assert.equal(DEFAULT_OPENAI_COMPAT.model, "whisper-1")
+  assert.equal(responseFormatFor("whisper-1"), "verbose_json")
+  // gpt-transcribe, the replacement named at https://developers.openai.com/api/docs/deprecations, is shown without timestamps in the guide.
+  assert.equal(responseFormatFor("gpt-transcribe"), "json")
+  for (const lang of ["zh", "en"] as const) {
+    const hint = DICTIONARIES[lang]["openai.settings.deprecated"]
+    assert.match(hint, /2027-02-26/)
+    assert.match(hint, /gpt-transcribe/)
+    assert.match(hint, /whisper-1/)
+  }
+})

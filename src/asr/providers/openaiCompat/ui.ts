@@ -3,6 +3,7 @@ import { t } from "../../../i18n/index.ts"
 import { secretField, textField } from "../../../ui/settingFields.ts"
 import type { ProviderSettingsContext } from "../types.ts"
 import { OPENAI_FILE_LIMIT } from "./info.ts"
+import { DEFAULT_OPENAI_COMPAT } from "./settings.ts"
 
 export function renderOpenAiCompatSettings({ app, containerEl, settings, save }: ProviderSettingsContext): void {
   const openai = settings.providers.openaiCompat
@@ -13,6 +14,8 @@ export function renderOpenAiCompatSettings({ app, containerEl, settings, save }:
   })
   textField(new Setting(containerEl).setName(t("openai.settings.url")), openai, "baseUrl", save, "https://api.openai.com/v1")
   textField(new Setting(containerEl).setName(t("openai.settings.model")), openai, "model", save, "whisper-1")
+  // https://developers.openai.com/api/docs/deprecations (whisper-1 shuts down 2027-02-26; replacement gpt-transcribe, which the guide shows without timestamps)
+  if (openai.model.trim() === DEFAULT_OPENAI_COMPAT.model) containerEl.createDiv({ cls: "setting-item-description ml-settings-note", text: t("openai.settings.deprecated") })
   secretField(app, new Setting(containerEl).setName("API Key"), openai, "apiKeySecret", save)
   new Setting(containerEl)
     .setName(t("openai.settings.limit.name"))

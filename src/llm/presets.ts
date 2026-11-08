@@ -114,6 +114,8 @@ export const LLM_PRESETS: readonly LlmPreset[] = [
     inputTokens: 200_000,
   },
   {
+    // https://openrouter.ai/docs/quickstart (base URL https://openrouter.ai/api/v1 for the OpenAI SDK; `Authorization: Bearer <key>`)
+    // https://openrouter.ai/docs/api-reference/overview (chat completions at https://openrouter.ai/api/v1/chat/completions)
     // https://openrouter.ai/docs/api-reference/parameters (temperature, reasoning_effort, response_format; support depends on the model)
     id: "openrouter",
     name: "OpenRouter",
@@ -146,8 +148,9 @@ export const LLM_PRESETS: readonly LlmPreset[] = [
   },
   {
     // https://lmstudio.ai/docs/developer/openai-compat (base URL on port 1234 in the examples, temperature accepted)
-    // Structured output and reasoning_effort are not covered there, so neither is sent. The docs do not say whether a key is needed;
-    // a key that is set is still sent.
+    // https://lmstudio.ai/docs/developer/core/authentication ("By default, LM Studio does not require authentication for API requests";
+    // once the server setting is on, requests carry `Authorization: Bearer <token>`), so no key is required, and one that is set is sent as Bearer.
+    // Structured output and reasoning_effort are not covered there, so neither is sent.
     id: "lmstudio",
     name: "LM Studio",
     baseUrl: "http://localhost:1234/v1",
@@ -162,7 +165,10 @@ export const LLM_PRESETS: readonly LlmPreset[] = [
     inputTokens: 4096,
   },
   {
-    // https://learn.microsoft.com/en-us/azure/ai-foundry/openai/api-version-lifecycle (v1 base URL, `api-key` header, model = deployment name)
+    // https://learn.microsoft.com/en-us/azure/ai-foundry/openai/api-version-lifecycle (v1 base URL `https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/`,
+    // `api-key: <key>` in the REST example, model = deployment name)
+    // https://learn.microsoft.com/en-us/azure/ai-foundry/openai/reference#authentication ("all API requests must include the API Key in the `api-key`
+    // HTTP header"; a Microsoft Entra token goes in `Authorization: Bearer`, which this preset does not do: add it as an extra header instead)
     // reasoning_effort is documented for reasoning models; temperature and JSON mode are not covered, so they are not sent.
     id: "azure",
     name: "Azure OpenAI",

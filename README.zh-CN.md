@@ -31,7 +31,7 @@
 | 服务 | 需要填写 | 说明 |
 | :-- | :-- | :-- |
 | 火山引擎 | 与上面相同的凭证；再填录音文件服务的 Resource ID，如 `volc.seedasr.auc` | 区分说话人。 |
-| OpenAI 兼容接口 | 填到 `/v1` 的 API 地址、模型和 API Key | OpenAI 填 `https://api.openai.com/v1`，模型 `whisper-1`；Groq 填 `https://api.groq.com/openai/v1`，模型 `whisper-large-v3`；本地 Whisper 服务填它自己的地址，Key 可以留空。`gpt-4o-transcribe-diarize` 可区分说话人；`gpt-*-transcribe` 只返回文本，没有时间点。服务的文件大小上限与 OpenAI 的 25 MB 不同时，可以在设置里改。 |
+| OpenAI 兼容接口 | 填到 `/v1` 的 API 地址、模型和 API Key | OpenAI 填 `https://api.openai.com/v1`，模型 `whisper-1`（已弃用，将于 2027-02-26 停止服务；替代品 `gpt-transcribe` 不返回时间点）；Groq 填 `https://api.groq.com/openai/v1`，模型 `whisper-large-v3`；本地 Whisper 服务填它自己的地址，Key 可以留空。`gpt-4o-transcribe-diarize` 可区分说话人；`gpt-*-transcribe` 只返回文本，没有时间点。服务的文件大小上限与 OpenAI 的 25 MB 不同时，可以在设置里改。 |
 
 超过大小上限的录音会先在本地压缩，仍然过大则按时间切成几段依次上传。
 

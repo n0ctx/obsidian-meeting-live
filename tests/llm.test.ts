@@ -341,3 +341,17 @@ test("the default prompts are in English, say to answer in the transcript's lang
   assert.match(stage, /under about 150 Chinese characters or 100 words/)
   assert.match(overview, /at most 50 Chinese characters or 30 words/)
 })
+
+test("the presets carry what each provider's documentation says: addresses, credential header and whether a key is needed", () => {
+  const preset = (id: string) => presetById(id)
+  // https://openrouter.ai/docs/api-reference/overview: chat completions at https://openrouter.ai/api/v1/chat/completions, Bearer key.
+  assert.equal(chatCompletionsUrl(preset("openrouter").baseUrl), "https://openrouter.ai/api/v1/chat/completions")
+  assert.equal(preset("openrouter").auth, "bearer")
+  // https://learn.microsoft.com/en-us/azure/ai-foundry/openai/api-version-lifecycle: v1 base URL on the resource, `api-key` for a key.
+  assert.equal(chatCompletionsUrl(preset("azure").baseUrl.replace("YOUR-RESOURCE-NAME", "mine")), "https://mine.openai.azure.com/openai/v1/chat/completions")
+  assert.equal(preset("azure").auth, "api-key")
+  // https://lmstudio.ai/docs/developer/core/authentication: no authentication unless the user turns it on, then a Bearer token.
+  assert.equal(preset("lmstudio").keyRequired, false)
+  assert.equal(preset("lmstudio").auth, "bearer")
+  assert.deepEqual(LLM_PRESETS.filter((p) => !p.keyRequired).map((p) => p.id), ["ollama", "lmstudio"])
+})

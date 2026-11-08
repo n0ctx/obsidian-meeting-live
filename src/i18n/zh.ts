@@ -198,6 +198,7 @@ export const zh = {
   "deepgram.settings.diarize.desc": "识别时给说话人编号。目前只记录在识别结果里，卡片暂不显示。",
   "openai.settings.heading": (name: string) => `${name}录音文件识别`,
   "openai.settings.note": "OpenAI、Groq 或本地 Whisper 服务，只要提供 /audio/transcriptions 接口即可。OpenAI 填 https://api.openai.com/v1，Groq 填 https://api.groq.com/openai/v1。whisper-1、Groq 的 whisper-large-v3 返回带时间的分段；gpt-*-transcribe 只返回文本，转写没有时间点；gpt-4o-transcribe-diarize 可区分说话人。",
+  "openai.settings.deprecated": "OpenAI 已将 whisper-1 列为弃用，将于 2027-02-26 停止服务。官方建议的替代 gpt-transcribe 目前只返回文本，没有时间点，而这里需要带时间的分段，所以暂时仍默认 whisper-1。到期前请换成同样返回分段时间的服务（例如 Groq 的 whisper-large-v3）或本地 Whisper 服务。",
   "openai.settings.url": "API 地址",
   "openai.settings.model": "模型",
   "openai.settings.limit.name": "文件大小上限（MB）",

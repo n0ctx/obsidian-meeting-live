@@ -198,6 +198,7 @@ export const en: Dictionary = {
   "deepgram.settings.diarize.desc": "Numbers the speakers during recognition. For now they are only kept in the recognition result; the card does not show them.",
   "openai.settings.heading": (name) => `${name} recorded-file transcription`,
   "openai.settings.note": "OpenAI, Groq or a local Whisper server, as long as it offers /audio/transcriptions. For OpenAI use https://api.openai.com/v1, for Groq https://api.groq.com/openai/v1. whisper-1 and Groq's whisper-large-v3 return timed segments; gpt-*-transcribe returns text only, without times; gpt-4o-transcribe-diarize can separate speakers.",
+  "openai.settings.deprecated": "OpenAI has deprecated whisper-1 and will shut it down on 2027-02-26. Its recommended replacement, gpt-transcribe, returns text without times, while this plugin needs timed segments, so whisper-1 stays the default for now. Before then, switch to a service that also returns timed segments (for example Groq's whisper-large-v3) or a local Whisper server.",
   "openai.settings.url": "API address",
   "openai.settings.model": "Model",
   "openai.settings.limit.name": "File size limit (MB)",

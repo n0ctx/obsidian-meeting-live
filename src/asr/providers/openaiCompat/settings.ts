@@ -14,6 +14,9 @@ export interface OpenAiCompatSettings {
   fileSizeLimitMb: number
 }
 
+// whisper-1 is deprecated (shutdown 2027-02-26, https://developers.openai.com/api/docs/deprecations) but stays the default: its documented
+// replacement gpt-transcribe is shown returning text only (https://developers.openai.com/api/docs/guides/speech-to-text), and a timed
+// transcript needs segments. The settings page says so; revisit once the API reference documents timestamps for a successor.
 export const DEFAULT_OPENAI_COMPAT: OpenAiCompatSettings = {
   baseUrl: "https://api.openai.com/v1",
   model: "whisper-1",
