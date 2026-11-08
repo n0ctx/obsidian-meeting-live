@@ -3,8 +3,8 @@ import { test } from "node:test"
 import { chat, chatCompletionsUrl, chatRequestBody, compatibleClient, extractCompletionText, llmConfigProblem, type ChatMessage, type LlmConfig } from "../src/llm/client.ts"
 import { LLM_PRESETS, parseHeaders, presetById, presetForUrl } from "../src/llm/presets.ts"
 import { DEFAULT_SETTINGS, llmConfig, loadSettings } from "../src/settings.ts"
-import { buildMinutesMessages, stripMeetingBlocks } from "../src/llm/minutes.ts"
-import { buildOverviewMessages, buildSummaryMessages, overviewMarkdown, parseSummary, splitFigures, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
+import { DEFAULT_MINUTES_PROMPT, buildMinutesMessages, stripMeetingBlocks } from "../src/llm/minutes.ts"
+import { DEFAULT_SUMMARY_FOCUS, buildOverviewMessages, buildSummaryMessages, overviewMarkdown, parseSummary, splitFigures, summaryMarkdown, unverifiedNumbers, upgradeSummaries } from "../src/llm/summary.ts"
 import { dueCutoff, uncovered } from "../src/meeting/schedule.ts"
 import type { MeetingMeta, SummaryRecord, Utterance } from "../src/meeting/types.ts"
 
@@ -330,4 +330,14 @@ test("a figure with a currency symbol is flagged by the number in it, in either 
 test("a highlighted figure lands in the note with the whole figure inside the highlight", () => {
   const record = { index: 1, startMs: 0, endMs: 1000, trigger: "auto" as const, status: "done" as const, attempts: 1, utterances: [], content: { title: "", paragraphs: [{ topic: "", text: "Revenue $1.5 billion.", unverified: ["1.5"] }], todos: [], open: [] } }
   assert.match(summaryMarkdown(record, String, "##", undefined, "en"), /Revenue ==\$1\.5 billion==\./)
+})
+
+test("the default prompts are in English, say to answer in the transcript's language, and give every limit in characters and in words", () => {
+  const han = new RegExp("[\\u3400-\\u9fff]")
+  const stage = buildSummaryMessages("t", "", { startMs: 0, endMs: 1000 }, [], [], undefined)[0].content
+  const overview = buildOverviewMessages("t", "", undefined, [])[0].content
+  for (const prompt of [stage, overview, DEFAULT_MINUTES_PROMPT, DEFAULT_SUMMARY_FOCUS]) assert.doesNotMatch(prompt, han)
+  for (const prompt of [stage, overview, DEFAULT_MINUTES_PROMPT]) assert.match(prompt, /same language as the (transcript|summaries)/)
+  assert.match(stage, /under about 150 Chinese characters or 100 words/)
+  assert.match(overview, /at most 50 Chinese characters or 30 words/)
 })
