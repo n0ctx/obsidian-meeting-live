@@ -32,8 +32,10 @@ export function markSummarySection(el: HTMLElement, ctx: MarkdownPostProcessorCo
   if (!info) return
   if (info.lineStart === info.lineEnd && el.firstElementChild?.tagName === "H3") {
     const lines = info.text.split("\n")
-    if (isCardHeading(lines[info.lineStart], lines[info.lineStart + 1])) el.addClass("ml-card-heading")
-    return
+    if (isCardHeading(lines[info.lineStart], lines[info.lineStart + 1])) {
+      el.addClass("ml-card-heading")
+      return
+    }
   }
   const span = regionsIn(info.text).find((s) => info.lineStart >= s.start && info.lineEnd <= s.end)
   if (!span) return

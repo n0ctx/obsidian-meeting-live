@@ -33,8 +33,6 @@ export interface MeetingLiveSettings extends AccountSettings {
   minutesPrompt: string
   /** Destinations the user agreed to send data to, as "live:host", "file:host" or "llm:host". */
   consent: string[]
-  /** Meeting notes from before blocks carried a heading have been given one (see addCardHeadings in main.ts). */
-  cardHeadingsAdded: boolean
 }
 
 export const DEFAULT_SETTINGS: MeetingLiveSettings = {
@@ -53,7 +51,6 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   summaryFocus: DEFAULT_SUMMARY_FOCUS,
   minutesPrompt: DEFAULT_MINUTES_PROMPT,
   consent: [],
-  cardHeadingsAdded: false,
 }
 
 /**

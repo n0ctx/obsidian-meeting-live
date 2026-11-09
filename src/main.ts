@@ -120,17 +120,17 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     })
   }
 
-  /** Once per vault: meeting notes written before blocks carried a heading get one, so heading navigation leads to their cards. */
+  /**
+   * Meeting notes without a heading above their block (written before blocks carried one, or synced in from another machine) get
+   * one, so heading navigation leads to their cards. On every load and on each machine: a note that already has it is not written.
+   */
   private async addCardHeadings(): Promise<void> {
-    if (this.settings.cardHeadingsAdded) return
     const label = tr(noteLang(this.settings), "note.cardHeading")
     for (const file of this.app.vault.getMarkdownFiles()) {
       const content = await this.app.vault.cachedRead(file)
       if (!content.includes("meeting-live") || withCardHeadings(content, label) === content) continue
       await this.app.vault.process(file, (content) => withCardHeadings(content, label))
     }
-    this.settings.cardHeadingsAdded = true
-    await this.saveSettings()
   }
 
   override onunload(): void {

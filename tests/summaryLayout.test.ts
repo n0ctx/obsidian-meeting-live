@@ -159,20 +159,24 @@ test("lines of a region say where they sit: markers and the blanks next to them 
 
 test("reading view marks each section by its lines, so a section rendered later or again gets the same classes", () => {
   const text = ["前", "", `%% meeting-live-summary ${ID} %%`, "", "头", "", "- 条目", "", "### 阶段 · 00:00–00:30", "", "脚", "", `%% /meeting-live-summary ${ID} %%`, "", "后"].join("\n")
-  const classesOf = (lineStart: number, lineEnd = lineStart) => {
-    const el = { classes: [] as string[], addClass(c: string) { this.classes.push(c) } }
-    markSummarySection(el as unknown as HTMLElement, { getSectionInfo: () => ({ text, lineStart, lineEnd }) } as never)
+  const classesOf = (lineStart: number, lineEnd = lineStart, source = text) => {
+    const tagName = source.split("\n")[lineStart].startsWith("### ") ? "H3" : "P"
+    const el = { classes: [] as string[], firstElementChild: { tagName }, addClass(c: string) { this.classes.push(c) } }
+    markSummarySection(el as unknown as HTMLElement, { getSectionInfo: () => ({ text: source, lineStart, lineEnd }) } as never)
     return el.classes
   }
   assert.deepEqual(classesOf(0), [], "before the region")
   assert.deepEqual(classesOf(2), ["ml-sum-marker"])
   assert.deepEqual(classesOf(4), ["ml-sum", "ml-sum-first"])
   assert.deepEqual(classesOf(6), ["ml-sum"])
-  assert.deepEqual(classesOf(8), ["ml-sum"])
+  assert.deepEqual(classesOf(8), ["ml-sum"], "a stage heading stays in the panel")
   assert.deepEqual(classesOf(10), ["ml-sum", "ml-sum-last"])
   assert.deepEqual(classesOf(12), ["ml-sum-marker"])
   assert.deepEqual(classesOf(14), [], "after the region")
   assert.deepEqual(classesOf(4), classesOf(4), "again, the same")
+  const card = ["### 录音", "```meeting-live", `id: ${ID}`, "```", "", "### 我的标题", "```meeting-live", "id: m-2", "```"].join("\n")
+  assert.deepEqual(classesOf(0, 0, card), ["ml-card-heading"], "the plugin's heading above a block folds away")
+  assert.deepEqual(classesOf(5, 5, card), [], "a user's heading above a block stays")
   // Embeds and previews give no section info.
   const el = { classes: [] as string[], addClass(c: string) { this.classes.push(c) } }
   markSummarySection(el as unknown as HTMLElement, { getSectionInfo: () => null } as never)
