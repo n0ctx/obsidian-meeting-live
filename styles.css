@@ -499,7 +499,6 @@
 
 .ml-text {
   min-width: 0;
-  max-width: 46em;
   color: var(--ml-ink);
   font-size: 14.5px;
   line-height: 1.75;
@@ -1287,13 +1286,11 @@
   margin: 0;
   padding: 0;
   border-inline: var(--ml-sum-pad) solid transparent;
-  /* The sides are two hairlines of background, so no seam shows where two blocks meet; the first and last block draw them
-     as a shadow instead, which follows their round corners. */
-  --ml-sum-edges:
-    linear-gradient(var(--ml-line), var(--ml-line)) left / 1px 100% no-repeat border-box,
-    linear-gradient(var(--ml-line), var(--ml-line)) right / 1px 100% no-repeat border-box;
+  /* Every block draws its sides as a 1px shadow just outside its box, so the straight sides of the middle blocks line up with
+     the round corners of the first and last block. */
   --ml-sum-rule: linear-gradient(var(--ml-line), var(--ml-line)) top center / calc(100% - 2 * var(--ml-sum-pad)) 1px no-repeat border-box;
-  background: var(--ml-sum-edges), var(--ml-ground);
+  background: var(--ml-ground);
+  box-shadow: -1px 0 0 var(--ml-line), 1px 0 0 var(--ml-line);
   color: var(--ml-ink);
   font-family: var(--ml-sans);
   font-size: 14px;
@@ -1311,7 +1308,6 @@
   padding-top: 12px;
   border-top-left-radius: var(--ml-radius);
   border-top-right-radius: var(--ml-radius);
-  background: var(--ml-ground);
   box-shadow: 0 0 0 1px var(--ml-line);
 }
 
@@ -1320,11 +1316,10 @@
   padding-bottom: 12px;
   border-bottom-left-radius: var(--ml-radius);
   border-bottom-right-radius: var(--ml-radius);
-  background: var(--ml-ground);
   box-shadow: -1px 0 0 var(--ml-line), 1px 0 0 var(--ml-line), 0 1px 0 var(--ml-line);
 }
 
-.ml-sum.ml-sum-first.ml-sum-last { background: var(--ml-ground); box-shadow: 0 0 0 1px var(--ml-line); }
+.ml-sum.ml-sum-first.ml-sum-last { box-shadow: 0 0 0 1px var(--ml-line); }
 
 /* The header line above and the foot line below: small and quiet. */
 .ml-sum.ml-sum-first,
@@ -1341,7 +1336,7 @@
 
 /* A stage starts under a hairline, the way the card's sections do. */
 .ml-sum:is(.HyperMD-header-3, .el-h3) {
-  background: var(--ml-sum-rule), var(--ml-sum-edges), var(--ml-ground);
+  background: var(--ml-sum-rule), var(--ml-ground);
   padding-top: 14px;
   font-size: 15px;
   font-weight: 600;

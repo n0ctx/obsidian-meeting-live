@@ -240,7 +240,7 @@ Both stacks are scoped as `--ml-sans` / `--ml-mono` on the card host, plugin mod
 
 ### Hierarchy
 - **Title** (600, 15px, 1.35): the meeting title, an inline-editable field in the header; 14px in the capsule. Ready and missing headings use 600 at 14px / 13.5px.
-- **Body** (400, 14.5px, 1.75, max 46em): transcript text, the only long-reading text in the card. The capsule caption uses 13.5px / 1.65.
+- **Body** (400, 14.5px, 1.75, full width of the pane): transcript text, the only long-reading text in the card. The capsule caption uses 13.5px / 1.65.
 - **UI** (400, 13px, 1.5): the card's base size: ready-state copy and check titles.
 - **Control** (500, 12.5px): button and alert text. Pane titles, counts and details sit at 12px.
 - **Label** (500, 11.5px, line-height 1): the status pill and the foot status line; the privacy note uses 11.5px at 1.65.
