@@ -7,7 +7,7 @@ import type { ResolvedLive } from "../asr/providers/registry.ts"
 import { AsrStreamer, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { writeMinutes } from "../llm/contextGuard.ts"
-import { buildOverviewMessages, buildSummaryMessages, hasUnverified, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown, type LineAnchor } from "../llm/summary.ts"
+import { buildOverviewMessages, buildSummaryMessages, capOverview, hasUnverified, isEmptySummary, overviewMarkdown, overviewProblems, overviewRetryMessage, parseSummary, summaryMarkdown, type LineAnchor } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
 import { placeCardHeading, placeSummary } from "./noteSummary.ts"
@@ -484,10 +484,17 @@ export class MeetingSession extends Events {
         }
         this.trigger("summary")
         try {
-          const text = await llm.complete(buildOverviewMessages(this.meta.title, this.env.settings().summaryFocus, overview.content, substantive), { json: true })
-          const content = parseSummary(text, this.utterances)
+          const messages = buildOverviewMessages(this.meta.title, this.env.settings().summaryFocus, overview.content, substantive)
+          const text = await llm.complete(messages, { json: true })
+          let content = parseSummary(text, this.utterances)
           if (!content) throw new Error(t("session.overviewUnreadable"))
-          this.meta.overview = { stages: merged, content, createdAt: new Date().toISOString(), model: llm.model }
+          // An overview past its limits gets one chance to fix itself; what is still over is cut to the lists' limits.
+          const problems = overviewProblems(content)
+          if (problems.length) {
+            const retry = await llm.complete([...messages, { role: "assistant", content: text }, overviewRetryMessage(problems)], { json: true }).catch(() => "")
+            content = parseSummary(retry, this.utterances) ?? content
+          }
+          this.meta.overview = { stages: merged, content: capOverview(content), createdAt: new Date().toISOString(), model: llm.model }
         } catch (error) {
           this.meta.overview = { ...overview, error: (error as Error).message }
           return

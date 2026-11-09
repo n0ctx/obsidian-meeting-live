@@ -247,3 +247,22 @@ test("resuming does not wait for a paused run to send its backlog: the unsent au
   await session.pause()
   await session.stop()
 })
+
+test("an overview past its limits is asked to fix itself once, and its to-dos and open questions never exceed five", async () => {
+  const items = (n: number, word: string) => Array.from({ length: n }, (_, i) => ({ text: `${word}${i + 1}`, t: "00:00:01" }))
+  const overview = (todos: number, open: number) => JSON.stringify({ title: "", paragraphs: [{ topic: "融资", text: "额度待定", t: "00:00:01" }], todos: items(todos, "待办"), open: items(open, "问题") })
+  const replies = [overview(8, 7), overview(6, 3)]
+  const asked: unknown[][] = []
+  const session = setup(() => ({ id: "x", name: "x", connect: null, pacing: PACING, problem: "无" }), {
+    llm: () => ({ model: "m", target: "t", complete: async (messages: unknown[]) => (asked.push(messages), replies.shift() ?? "") }),
+    store: { saveMeta: async () => undefined, editNote: async () => undefined, readTranscript: async () => "", write: async () => undefined },
+  } as unknown as Partial<SessionEnv>)
+  const stage = { index: 1, startMs: 0, endMs: 60_000, trigger: "auto", status: "done", attempts: 1, utterances: [], content: { title: "融资", paragraphs: [{ topic: "融资", text: "额度待定", unverified: [] }], todos: [], open: [] } }
+  session.meta.summaries.push(stage as never)
+  await session.updateOverview()
+  assert.equal(asked.length, 2, "one retry")
+  assert.match(JSON.stringify(asked[1].at(-1)), /8 to-dos; keep at most 5.*7 open questions/)
+  const content = session.meta.overview!.content!
+  assert.deepEqual(content.todos.map((p) => p.text), ["待办1", "待办2", "待办3", "待办4", "待办5"], "still over after the retry: the first five are kept")
+  assert.equal(content.open.length, 3)
+})

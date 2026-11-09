@@ -14,8 +14,8 @@ Summarize only the "Current stage" transcript. The overview and previous stage a
 Write one paragraph per topic, in the order discussed; usually one to three. A paragraph explains what was discussed and how it fits together: the situation and figures reported, the judgments, forecasts and reasons given, and any decision or conclusion reached. Write connected prose, not a string of fragments. Make clear by wording which parts were reported as fact and which are someone's judgment, forecast or decision. Keep each paragraph under about 150 Chinese characters or 100 words; if a topic needs more, split it into sub-topics.
 
 Then list separately:
-- todos: actions someone will take; include the owner and deadline only if stated
-- open: disagreements, and questions raised and left unanswered
+- todos: commitments made in this stage: a concrete action that someone said they, or a named party, will take (follow up, send, visit, prepare, decide). The company's ongoing plans, strategies and directions ("keep pushing", "explore", "invest more") are not to-dos: report them in the paragraph. Include the owner and deadline only if stated.
+- open: questions raised and left unanswered that someone would need to follow up on, and real disagreements; a point the speaker simply did not elaborate on is not one
 
 Rules:
 - Use only what the transcript says. Do not invent names, numbers or conclusions, and do not add your own suggestions.
@@ -31,12 +31,15 @@ Rules:
 Output one JSON object only, no code fences:
 ${SHAPE}`
 
+/** How long the overview may grow: it is an index above the stage summaries, so it stays short however long the meeting runs. */
+export const OVERVIEW_LIMITS = { topics: 10, todos: 5, open: 5, lineChars: 45, lineWords: 30 }
+
 const OVERVIEW_CONTRACT = `You keep a running overview of a meeting in progress. You get the current overview and the summaries of new stages; return the updated overview of the whole meeting so far.
 
-- Organize by topic, not by time. Fold each new point into the topic it belongs to, or add a topic. Merge topics that turn out to be the same.
+- Organize by topic, not by time. Fold each new point into the topic it belongs to, or add a topic. Merge topics that turn out to be the same. At most ${OVERVIEW_LIMITS.topics} topics: merge related ones until they fit.
 - Each paragraph is an index entry, not a summary: one line of at most 30 Chinese characters or 20 words that says what the topic is about and where it stands now (decided, pending, blocked, in progress). Give at most one key figure. Never list features, examples, reasons or sub-points, never copy or shorten the stage paragraphs: the stage summaries keep all of that and sit right below the overview. When a later stage revises, decides or answers something, state the latest position.
-- "todos": every action item of every stage. This list is the only place the meeting's to-dos are shown, so keep each one; merge only items that are the same action.
-- "open": disagreements and questions still unresolved; drop those settled later and put the answer in the topic's line.
+- "todos": at most ${OVERVIEW_LIMITS.todos}, the meeting's follow-up commitments, most important first. Keep only concrete actions someone committed to; plans, strategies and directions belong in the topic's line. Merge related actions, and drop those done during the meeting, superseded later, or no longer among the ${OVERVIEW_LIMITS.todos} most important.
+- "open": at most ${OVERVIEW_LIMITS.open}, most important first: unresolved questions someone would need to follow up on, and real disagreements. Drop those settled later and put the answer in the topic's line.
 - Use only what the overview and summaries say. Do not invent names, numbers or conclusions.
 - Keep plans, forecasts and estimates marked as such, and numbers and units exactly as given.
 - "t": copy the [timestamp] where the topic first came up, or of the to-do or question.
@@ -124,6 +127,35 @@ export function buildOverviewMessages(title: string, focus: string, overview: Su
     { role: "system", content: withFocus(OVERVIEW_CONTRACT, focus) },
     { role: "user", content: user },
   ]
+}
+
+const HAN = /[\u3400-\u9fff]/
+
+/** A topic line past the index length, with some slack over the limit the prompt states. */
+function tooLong(text: string): boolean {
+  return HAN.test(text) ? [...text.replace(/\s/g, "")].length > OVERVIEW_LIMITS.lineChars : text.split(/\s+/).filter(Boolean).length > OVERVIEW_LIMITS.lineWords
+}
+
+/** Where an overview breaks its limits, worded for the model that is asked to fix it; empty when it keeps them. */
+export function overviewProblems(content: SummaryContent): string[] {
+  const problems: string[] = []
+  const { topics, todos, open } = OVERVIEW_LIMITS
+  if (content.paragraphs.length > topics) problems.push(`There are ${content.paragraphs.length} topics; merge them into at most ${topics}.`)
+  const long = content.paragraphs.filter((p) => tooLong(p.text)).map((p) => p.topic || p.text.slice(0, 12))
+  if (long.length) problems.push(`These topic lines are longer than one index line (at most 30 Chinese characters or 20 words): ${long.join("; ")}.`)
+  if (content.todos.length > todos) problems.push(`There are ${content.todos.length} to-dos; keep at most ${todos}, the most important commitments.`)
+  if (content.open.length > open) problems.push(`There are ${content.open.length} open questions; keep at most ${open}, the most important.`)
+  return problems
+}
+
+/** The follow-up turn that asks the model to bring its overview within the limits. */
+export function overviewRetryMessage(problems: string[]): ChatMessage {
+  return { role: "user", content: ["Your overview breaks the rules:", ...problems.map((p) => `- ${p}`), "", "Return the corrected overview, same JSON shape."].join("\n") }
+}
+
+/** The overview with its lists cut to their limits; the model was asked to rank them, so the first ones are the ones to keep. */
+export function capOverview(content: SummaryContent): SummaryContent {
+  return { ...content, todos: content.todos.slice(0, OVERVIEW_LIMITS.todos), open: content.open.slice(0, OVERVIEW_LIMITS.open) }
 }
 
 const NUMBER = /\d+(?:[.,]\d+)*/g

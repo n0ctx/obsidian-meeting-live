@@ -455,7 +455,8 @@ test("the default prompts are in English, say to answer in the transcript's lang
   for (const prompt of [stage, overview, DEFAULT_MINUTES_PROMPT]) assert.match(prompt, /same language as the (transcript|summaries)/)
   assert.match(stage, /under about 150 Chinese characters or 100 words/)
   assert.match(overview, /at most 30 Chinese characters or 20 words/)
-  assert.match(overview, /keep each one; merge only items that are the same action/, "the overview's to-dos are the only list, so none may be dropped")
+  assert.match(overview, /"todos": at most 5, the meeting's follow-up commitments/)
+  assert.match(overview, /"open": at most 5/)
 })
 
 test("the presets carry what each provider's documentation says: addresses, credential header and whether a key is needed", () => {
