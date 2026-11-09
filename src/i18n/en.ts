@@ -492,6 +492,7 @@ export const en: Dictionary = {
   // ---- text written into notes and files (worded in the note language)
   "note.summaryHead": (clock) => `AI stage summary · up to ${clock} · maintained by Meeting Live, edits inside this region are overwritten`,
   "note.summaryFoot": (unverified) => `AI-generated: it may miss or misread things. The raw transcript and the recording are authoritative.${unverified ? " ==Highlighted== figures were not found in the transcript; please check them." : ""}`,
+  "note.cardHeading": "Recording",
   "note.todo": "To-do",
   "note.open": "Open questions",
   "note.stage": (n) => `Stage ${n}`,

@@ -1,13 +1,14 @@
 import { MarkdownView, Notice, Plugin, TFile, normalizePath, requestUrl, type Editor } from "obsidian"
 import { inBackground } from "./background.ts"
 import { ensureConsentFor, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
-import { t } from "./i18n/index.ts"
+import { t, tr } from "./i18n/index.ts"
 import { resolveFile, resolveLive, type ResolveEnv } from "./asr/providers/registry.ts"
 import { compatibleClient, type HttpGet, type HttpPost, type LlmClient } from "./llm/client.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import { MeetingManager } from "./meeting/manager.ts"
 import type { MeetingSession } from "./meeting/session.ts"
 import { noteLang, transcriptFolder } from "./meeting/labels.ts"
+import { cardHeadingBefore, withCardHeadings } from "./meeting/noteSummary.ts"
 import { MeetingStore } from "./meeting/store.ts"
 import { formatClock } from "./meeting/types.ts"
 import { DEFAULT_SETTINGS, llmConfig, loadSettings, storedSettings, type MeetingLiveSettings } from "./settings.ts"
@@ -113,7 +114,23 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
         )
       }),
     )
-    this.app.workspace.onLayoutReady(() => inBackground(this.manager.load()))
+    this.app.workspace.onLayoutReady(() => {
+      inBackground(this.manager.load())
+      inBackground(this.addCardHeadings())
+    })
+  }
+
+  /** Once per vault: meeting notes written before blocks carried a heading get one, so heading navigation leads to their cards. */
+  private async addCardHeadings(): Promise<void> {
+    if (this.settings.cardHeadingsAdded) return
+    const label = tr(noteLang(this.settings), "note.cardHeading")
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      const content = await this.app.vault.cachedRead(file)
+      if (!content.includes("meeting-live") || withCardHeadings(content, label) === content) continue
+      await this.app.vault.process(file, (content) => withCardHeadings(content, label))
+    }
+    this.settings.cardHeadingsAdded = true
+    await this.saveSettings()
   }
 
   override onunload(): void {
@@ -287,8 +304,10 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       const line = editor.getLine(cursor.line)
       const prefix = line.trim() ? "\n\n" : ""
       const at = line.trim() ? { line: cursor.line, ch: line.length } : { line: cursor.line, ch: 0 }
-      editor.replaceRange(`${prefix}\`\`\`meeting-live\nid: ${session.id}\n\`\`\`\n`, at)
-      const after = at.line + (prefix ? 2 : 0) + 3
+      const before = editor.getRange({ line: 0, ch: 0 }, at) + prefix
+      const heading = cardHeadingBefore(before, before.length, tr(noteLang(this.settings), "note.cardHeading"))
+      editor.replaceRange(`${prefix}${heading}\`\`\`meeting-live\nid: ${session.id}\n\`\`\`\n`, at)
+      const after = at.line + (prefix ? 2 : 0) + (heading ? 1 : 0) + 3
       editor.setCursor({ line: Math.min(after, editor.lastLine()), ch: 0 })
     } catch (error) {
       new Notice(t("notice.createFailed", (error as Error).message))

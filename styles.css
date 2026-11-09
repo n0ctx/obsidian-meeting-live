@@ -1419,3 +1419,17 @@
 /* Live Preview: lists and tasks keep their own indent, the panel's inset comes from the border. */
 .cm-line.ml-sum.HyperMD-list-line { font-size: 14px; }
 .cm-line.ml-sum :is(.cm-formatting-list, .list-bullet) { color: var(--ml-ink-3); }
+
+/* The heading the plugin writes above a meeting block is there for heading navigation; the card shows the title, so the heading
+   takes no room. It keeps a box (never display: none) so navigation can still scroll to it; with the cursor on it it shows as written. */
+.markdown-source-view.mod-cm6 .cm-line.ml-card-heading:not(.cm-active),
+.markdown-preview-view .ml-card-heading.ml-card-heading,
+.markdown-preview-view .ml-card-heading > h3 {
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  font-size: 0;
+  line-height: 0;
+}

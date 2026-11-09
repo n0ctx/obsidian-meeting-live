@@ -10,7 +10,7 @@ import { writeMinutes } from "../llm/contextGuard.ts"
 import { buildOverviewMessages, buildSummaryMessages, hasUnverified, isEmptySummary, overviewMarkdown, parseSummary, summaryMarkdown, type LineAnchor } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
-import { placeSummary } from "./noteSummary.ts"
+import { placeCardHeading, placeSummary } from "./noteSummary.ts"
 import { noteLang } from "./labels.ts"
 import { meetingFile, movedPath, noteName, transcriptFileName, type MeetingStore } from "./store.ts"
 import { audioLine, blockId, gapLine, linkTranscript, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
@@ -554,6 +554,7 @@ export class MeetingSession extends Events {
     const { markdown, anchors } = this.noteSummary()
     const note = this.noteLink
     return this.writeIo(async () => {
+      await this.env.store.editNote(this.meta.notePath, (content) => placeCardHeading(content, this.id, tr(this.noteLang, "note.cardHeading")))
       await this.env.store.editNote(this.meta.notePath, (content) => placeSummary(content, this.id, markdown))
       const path = this.transcriptPath
       const current = await this.env.store.readTranscript(path)

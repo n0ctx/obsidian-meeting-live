@@ -492,6 +492,7 @@ export const zh = {
   // ---- text written into notes and files (worded in the note language)
   "note.summaryHead": (clock: string) => `AI 阶段摘要 · 截至 ${clock} · 由 Meeting Live 自动更新，区域内的修改会被覆盖`,
   "note.summaryFoot": (unverified: boolean) => `AI 生成，可能有遗漏或误读，以原始转写和录音为准。${unverified ? "==高亮==的数字在转写里没有找到，请核对。" : ""}`,
+  "note.cardHeading": "录音",
   "note.todo": "待办",
   "note.open": "未决",
   "note.stage": (n: number) => `阶段 ${n}`,

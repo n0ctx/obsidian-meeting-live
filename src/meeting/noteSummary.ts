@@ -1,3 +1,5 @@
+import { DICTIONARIES } from "../i18n/index.ts"
+
 // Stage summaries live in the meeting's own note, in a region right below its `meeting-live` block.
 // The region is fenced by Obsidian comments so it can be found and rewritten as stages come in.
 
@@ -122,4 +124,46 @@ export function placeSummary(content: string, id: string, body: string): TextEdi
 
 export function applyEdit(content: string, edit: TextEdit): string {
   return content.slice(0, edit.from) + edit.text + content.slice(edit.to)
+}
+
+// A meeting block carries a heading of its own right above it, so heading navigation (the outline, a heading rail) has an entry
+// that leads back to the card. Both views fold the heading away (summaryMarkers.ts, summaryPanel.ts): the card shows the title.
+
+/** The words the plugin writes as a block's heading, in every note language. */
+const CARD_HEADING_LABELS: readonly string[] = Object.values(DICTIONARIES).map((d) => d["note.cardHeading"])
+
+const FENCE_LINE = /^(`{3,}|~{3,})meeting-live[ \t]*$/
+const HEADING_LINE = /^#{1,6}[ \t]/
+
+/** Whether `line` is the heading the plugin wrote for the meeting block that opens on `next`; a user's own heading never is. */
+export function isCardHeading(line: string, next: string | undefined): boolean {
+  if (next === undefined || !FENCE_LINE.test(next)) return false
+  const m = /^### (.+?)[ \t]*$/.exec(line)
+  return !!m && CARD_HEADING_LABELS.includes(m[1])
+}
+
+/** The heading line to put above a block at `at`, or "" when the nearest line with text above it is already a heading. */
+export function cardHeadingBefore(content: string, at: number, label: string): string {
+  const above = content.slice(0, at).trimEnd()
+  return HEADING_LINE.test(above.slice(above.lastIndexOf("\n") + 1)) ? "" : `### ${label}\n`
+}
+
+/** The edit that puts a heading above the meeting's block, or undefined when it has one or the block is gone. */
+export function placeCardHeading(content: string, id: string, label: string): TextEdit | undefined {
+  const block = blockPattern(id).exec(content)
+  if (!block) return undefined
+  const text = cardHeadingBefore(content, block.index, label)
+  return text ? { from: block.index, to: block.index, text } : undefined
+}
+
+/** The note with a heading above every meeting block that lacks one. */
+export function withCardHeadings(content: string, label: string): string {
+  const out: string[] = []
+  let previous = ""
+  for (const line of content.split("\n")) {
+    if (FENCE_LINE.test(line) && !HEADING_LINE.test(previous)) out.push(`### ${label}`)
+    out.push(line)
+    if (line.trim()) previous = line
+  }
+  return out.join("\n")
 }

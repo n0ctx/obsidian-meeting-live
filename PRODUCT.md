@@ -20,7 +20,7 @@ The meeting lives inside the note as an embedded card, not in a separate app or 
 
 ## Operating Context
 
-- The card is a `meeting-live` code block rendered in Live Preview and Reading view, with the user's own writing above and below it.
+- The card is a `meeting-live` code block rendered in Live Preview and Reading view, with the user's own writing above and below it. A `### 录音` / `### Recording` heading right above the block is folded away in both views; it exists so heading navigation reaches the card.
 - During a meeting the card is often folded into a one-line capsule with a two-line caption, so the note stays the main surface.
 - Obsidian runs with the user's own theme (currently Typewriter) in light or dark mode; the plugin must sit well in any theme.
 - Background jobs (recording → notes) show as a bar inside the note; the status bar shows an active recording when the note is not visible.

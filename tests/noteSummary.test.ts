@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { applyEdit, placeSummary, summaryRegion } from "../src/meeting/noteSummary.ts"
+import { applyEdit, isCardHeading, placeCardHeading, placeSummary, summaryRegion, withCardHeadings } from "../src/meeting/noteSummary.ts"
 
 const note = (after: string) => `# 周会\n\n\`\`\`meeting-live\nid: m-1\n\`\`\`${after}`
 const place = (content: string, body: string, id = "m-1") => {
@@ -36,4 +36,29 @@ test("to-dos ticked in the note stay ticked after a rewrite", () => {
   const ticked = first.replace("- [ ] 交方案", "- [x] 交方案")
   const next = place(ticked, "- [ ] 交方案\n- [ ] 补数据\n- [ ] 约下次")!
   assert.match(next, /- \[x\] 交方案\n- \[ \] 补数据\n- \[ \] 约下次/)
+})
+
+test("a meeting block gets a heading of its own for heading navigation, unless a heading already sits above it", () => {
+  const block = "```meeting-live\nid: m-1\n```"
+  const add = (content: string) => {
+    const edit = placeCardHeading(content, "m-1", "录音")
+    return edit ? applyEdit(content, edit) : content
+  }
+  assert.equal(add(`速记\n\n${block}\n`), `速记\n\n### 录音\n${block}\n`)
+  assert.equal(add(`${block}\n`), `### 录音\n${block}\n`)
+  assert.equal(add(`## 我的标题\n\n${block}\n`), `## 我的标题\n\n${block}\n`)
+  assert.equal(add(add(`速记\n\n${block}\n`)), `速记\n\n### 录音\n${block}\n`)
+  assert.equal(placeCardHeading("正文\n", "m-1", "录音"), undefined)
+  const old = `# 周会\n\n${block}\n\n正文\n\n\`\`\`meeting-live\nid: m-2\n\`\`\`\n`
+  assert.equal(withCardHeadings(old, "录音"), `# 周会\n\n${block}\n\n正文\n\n### 录音\n\`\`\`meeting-live\nid: m-2\n\`\`\`\n`)
+  assert.equal(withCardHeadings(withCardHeadings(old, "录音"), "录音"), withCardHeadings(old, "录音"))
+})
+
+test("only the plugin's own heading right above a block is folded away, in either note language", () => {
+  assert.equal(isCardHeading("### 录音", "```meeting-live"), true)
+  assert.equal(isCardHeading("### Recording", "~~~meeting-live"), true)
+  assert.equal(isCardHeading("### 录音", ""), false)
+  assert.equal(isCardHeading("### 我的录音", "```meeting-live"), false)
+  assert.equal(isCardHeading("## 录音", "```meeting-live"), false)
+  assert.equal(isCardHeading("### 录音", "```meeting-live-job"), false)
 })

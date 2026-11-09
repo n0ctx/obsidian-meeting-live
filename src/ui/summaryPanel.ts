@@ -1,5 +1,5 @@
 import type { MarkdownPostProcessorContext } from "obsidian"
-import { summaryRegions, type RegionSpan } from "../meeting/noteSummary.ts"
+import { isCardHeading, summaryRegions, type RegionSpan } from "../meeting/noteSummary.ts"
 
 // The AI summary in a note is plain Markdown between two comment markers. Both views dress it as a panel in the card's own
 // look with classes only (the "Summary panel" section of styles.css): a section or line inside a region gets `ml-sum`,
@@ -26,10 +26,15 @@ function regionsIn(text: string): RegionSpan[] {
   return cached.spans
 }
 
-/** Reading view: marks the section `el` when it lies inside a summary region. Embeds and previews give no section info and stay as they are. */
+/** Reading view: marks the section `el` when it lies inside a summary region, or is the heading the plugin wrote above a block. Embeds and previews give no section info and stay as they are. */
 export function markSummarySection(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
   const info = ctx.getSectionInfo(el)
   if (!info) return
+  if (info.lineStart === info.lineEnd && el.firstElementChild?.tagName === "H3") {
+    const lines = info.text.split("\n")
+    if (isCardHeading(lines[info.lineStart], lines[info.lineStart + 1])) el.addClass("ml-card-heading")
+    return
+  }
   const span = regionsIn(info.text).find((s) => info.lineStart >= s.start && info.lineEnd <= s.end)
   if (!span) return
   if (info.lineEnd <= span.start || info.lineStart >= span.end) {
