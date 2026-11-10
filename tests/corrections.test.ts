@@ -59,7 +59,7 @@ function liveSession(t: TestContext, note: { text: string }, settings = DEFAULT_
   }
   const watchers: ((path: string) => void)[] = []
   const contexts: (AsrContext | undefined)[] = []
-  const consent = { asked: 0, answer: true }
+  const consent = { asked: 0, answer: true, given: false }
   const env = {
     store: {
       path: (folder: string, name: string) => `${folder}/${name}`,
@@ -77,7 +77,8 @@ function liveSession(t: TestContext, note: { text: string }, settings = DEFAULT_
       contexts.push(context?.())
       return { id: "volc", name: "火山引擎", connect, pacing: { maxRate: 6 } }
     },
-    asrContextConsent: async () => (consent.asked++, consent.answer),
+    asrContextConsent: async () => (consent.asked++, (consent.given = consent.answer)),
+    asrContextConsented: () => consent.given,
     llmConsented: () => true,
     llm: () => ({ problem: "未配置", model: "", target: "", complete: async () => "" }),
     claim: () => undefined,
@@ -136,7 +137,19 @@ test("the note's names go to the recognizer only once the user agreed; declined,
   const agreed = liveSession(t, note, settings)
   await agreed.session.start()
   assert.deepEqual(agreed.contexts, [{ hotwords: ["甲乙资本", "青柠科技", "孟星澜"] }])
+  // A retry through a host the user has not agreed to (the address changed meanwhile) sends the typed hotwords only.
+  agreed.consent.given = false
+  agreed.session.retryAsr()
+  assert.deepEqual(agreed.contexts.at(-1), { hotwords: ["甲乙资本"] })
   await agreed.session.stop()
+
+  // Agreed before, and the note had nothing new when recording began: a name linked meanwhile still reaches the next resolve.
+  const later = liveSession(t, { text: "" }, settings)
+  later.consent.given = true
+  await later.session.start()
+  assert.equal(later.consent.asked, 0)
+  assert.deepEqual(later.contexts, [{ hotwords: ["甲乙资本", "青柠科技"] }])
+  await later.session.stop()
 
   // With nothing beyond the typed hotwords there is nothing to ask about.
   const plain = liveSession(t, { text: "" }, { ...settings, hotwords: "青柠科技" })

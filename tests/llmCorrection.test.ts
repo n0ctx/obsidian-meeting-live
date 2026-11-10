@@ -84,6 +84,8 @@ test("a fix that changes a number, aims outside the known terms or replaces text
     { from: "白箭", to: "蓝箭" },
     { from: "张帆", to: "章帆" },
     { from: "兰箭", to: "蓝箭" },
+    { from: "在", to: "蓝箭" },
+    { from: "张帆说", to: "帆" },
   ]
   assert.deepEqual(acceptFixes(proposed, lines, terms), [
     { from: "张帆", to: "章帆" },

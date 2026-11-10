@@ -93,6 +93,12 @@ export function contextDestination(settings: MeetingLiveSettings, role: "live" |
   return host ? { kind: "asr-context", name: accountLabel(settings.accounts, account), host, role } : undefined
 }
 
+/** Whether the user has agreed to the speech context going to the role's recognizer as it is configured now. */
+export function contextConsented(settings: MeetingLiveSettings, role: "live" | "file"): boolean {
+  const destination = contextDestination(settings, role)
+  return !!destination && settings.consent.includes(destinationKey(destination))
+}
+
 /**
  * Whether the speech context of a role may go with its audio, asking the user if they have not said. Declining is not an error: the
  * recording or upload goes ahead with the typed hotwords alone, and the refusal is kept in `declined` (for as long as the plugin runs),

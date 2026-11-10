@@ -77,6 +77,13 @@ test("pairs inside the summary region or the card are not the user's", () => {
   assert.deepEqual(extractVocabulary(note, "x").corrections, [])
 })
 
+test("a note saved with CRLF line ends keeps its summary region out; brackets, comments and occasion links give nothing", () => {
+  const note = "---\r\npeople: [[[夏远]], [[王允执]]]\r\n---\r\n%% meeting-live-summary m-1 %%\r\n[[关羽]] 《坏书名》 ESOP\r\n%% /meeting-live-summary m-1 %%\r\n[[会议]] [[J.Smith]] ![[图.png]]\r\n%% 兰箭→蓝箭 %%\r\n```\r\n甲→乙\r\n```\r\n"
+  const v = extractVocabulary(note, "11月9日 青柠科技")
+  assert.deepEqual(v.hotwords, ["青柠科技", "夏远", "王允执", "J.Smith"])
+  assert.deepEqual(v.corrections, [])
+})
+
 test("the note gives at most 40 words", () => {
   const links = Array.from({ length: 60 }, (_, i) => `[[名字${i}]]`).join(" ")
   const v = extractVocabulary(links, "标题甲")

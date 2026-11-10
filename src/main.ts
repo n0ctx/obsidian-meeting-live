@@ -1,6 +1,6 @@
 import { MarkdownView, Notice, Plugin, TFile, normalizePath, requestUrl, type Editor } from "obsidian"
 import { inBackground } from "./background.ts"
-import { ensureConsentFor, ensureContextConsent, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
+import { contextConsented, ensureConsentFor, ensureContextConsent, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
 import { t, tr } from "./i18n/index.ts"
 import { addsToTyped, asrContextFor, type AsrContext } from "./asr/context.ts"
 import { correctionTables } from "./asr/corrections.ts"
@@ -73,6 +73,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
       settings: () => this.settings,
       asr: (context) => resolveLive({ ...this.providerEnv(), context }),
       asrContextConsent: () => this.ensureContextConsent("live"),
+      asrContextConsented: () => contextConsented(this.settings, "live"),
       llm: () => this.llm(),
       llmConsented: () => !needsConsent(this.settings, ["llm"]),
     })
@@ -179,7 +180,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   private async fileContext(note: TFile): Promise<{ context: AsrContext; corrections: ReturnType<typeof correctionTables> }> {
     const text = await this.app.vault.cachedRead(note).catch((error: Error) => (console.warn("[meeting-live] could not read the target note", error), undefined))
     const vocabulary = text === undefined ? undefined : extractVocabulary(text, note.basename, { ignoreLinksUnder: [this.settings.folder] })
-    const withNote = addsToTyped(this.settings, vocabulary) && (await this.ensureContextConsent("file"))
+    // Declining, or failing to save the agreement, sends the typed hotwords: the transcription goes on either way.
+    const withNote = addsToTyped(this.settings, vocabulary) && (await this.ensureContextConsent("file").catch(() => contextConsented(this.settings, "file")))
     return { context: asrContextFor(this.settings, vocabulary, withNote), corrections: correctionTables(this.settings.corrections, vocabulary?.corrections ?? []) }
   }
 

@@ -74,7 +74,7 @@ const numerals = (text: string) => (text.match(NUMERALS) ?? []).join("|")
 
 /**
  * The proposed fixes that may be applied, longest first: `from` stands in the window as it is, `to` is a known term (or appears in the
- * scene), both are short words, and no number changes. Everything else is dropped, whatever the model said.
+ * scene), both are words of 2 to 12 characters, and no number changes. Everything else is dropped, whatever the model said.
  */
 export function acceptFixes(fixes: Correction[], utterances: Utterance[], terms: CorrectionTerms): Correction[] {
   const window = utterances.map((u) => u.text).join("\n")
@@ -82,8 +82,9 @@ export function acceptFixes(fixes: Correction[], utterances: Utterance[], terms:
   const seen = new Set<string>()
   const accepted: Correction[] = []
   for (const { from, to } of fixes) {
-    const short = [...from].length <= 12 && [...to].length <= 12
-    if (!from || !to || from === to || !short || seen.has(from)) continue
+    // A one-character `from` would replace that character everywhere in the window.
+    const words = [...from].length >= 2 && [...to].length >= 2 && [...from].length <= 12 && [...to].length <= 12
+    if (from === to || !words || seen.has(from)) continue
     if (!window.includes(from)) continue
     if (!known.has(to) && !terms.scene.includes(to)) continue
     if (numerals(from) !== numerals(to)) continue

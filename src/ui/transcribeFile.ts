@@ -127,10 +127,10 @@ export class TranscribeFileModal extends Modal {
       const llmProblem = writeUp.checked ? this.deps.llm().problem : undefined
       if (llmProblem) return void new Notice(t("transcribe.llmProblem", llmProblem))
       start.disabled = true
-      // The recognizer fixes its context when it is resolved, so the note is read and the user asked before it is.
-      const { context, corrections } = await this.deps.fileContext(this.target)
-      const job = new TranscribeJob(this.app, this.deps, this.target, source, this.deps.fileAsr(context), { speakers: speakers.checked, writeUp: writeUp.checked, corrections })
       try {
+        // The recognizer fixes its context when it is resolved, so the note is read and the user asked before it is.
+        const { context, corrections } = await this.deps.fileContext(this.target)
+        const job = new TranscribeJob(this.app, this.deps, this.target, source, this.deps.fileAsr(context), { speakers: speakers.checked, writeUp: writeUp.checked, corrections })
         if (await job.launch(this.jobs)) return this.close()
       } catch (error) {
         start.disabled = false

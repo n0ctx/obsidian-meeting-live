@@ -28,10 +28,12 @@ export const MAX_NOTE_WORDS = 40
 const OCCASIONS = new Set(["会议", "访谈", "投后访谈", "投前访谈", "会谈", "座谈", "调研", "尽调", "路演", "例会", "周会", "meeting", "interview", "call"])
 /** Properties Obsidian and publishing tools use for dates, classification and layout, which never name anyone. */
 const SKIP_KEYS = new Set(["date", "tags", "tag", "cssclasses", "cssclass", "created", "updated", "modified", "publish", "permalink"])
-const LEADING_DATE = /^(?:\d{4}年\d{1,2}月\d{1,2}日|\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{8})[\s_\-—–·.]*/
-/** Sentence punctuation, or the arrow of a pair: a value with it is a sentence or a correction, not a name. */
-const SENTENCE_MARK = /[。，,？?；;！!→]/
-const LINK = /(!?)\[\[([^\]\n]+?)\]\]/g
+const LEADING_DATE = /^(?:\d{4}年\d{1,2}月\d{1,2}日|\d{1,2}月\d{1,2}日|\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{8})[\s_\-—–·.]*/
+/** Sentence punctuation, the arrow of a pair or a bracket: a value with one is a sentence, a correction or markup, not a name. */
+const SENTENCE_MARK = /[。，,？?；;！!→[\]]/
+const LINK = /(!?)\[\[([^[\]\n]+?)\]\]/g
+/** Extensions of attachments Obsidian links to, which are files, not notes named after someone. */
+const ATTACHMENT = /\.(?:png|jpe?g|gif|webp|svg|bmp|avif|heic|pdf|mp3|m4a|wav|ogg|opus|flac|webm|mp4|mov|mkv|canvas|base|excalidraw|docx?|xlsx?|pptx?|csv|zip|txt)$/i
 const BOOK_TITLE = /《([^《》\n]{2,12})》/g
 const ACRONYM = /(?<![A-Za-z0-9_])[A-Z]{3,8}(?![A-Za-z0-9_])/g
 const RAW_TRANSCRIPT = /原始转写|raw transcript/i
@@ -75,11 +77,11 @@ function linkName(inner: string, embed: boolean, options: VocabularyOptions): st
   if (embed) return undefined
   const [target, alias] = inner.split("|", 2).map((s) => s.trim())
   const path = target.split("#")[0].trim()
-  if (/\.(?!md$)[A-Za-z0-9]{1,5}$/.test(path) || RAW_TRANSCRIPT.test(path)) return undefined
+  if (ATTACHMENT.test(path) || RAW_TRANSCRIPT.test(path)) return undefined
   const folders = (options.ignoreLinksUnder ?? []).map((f) => f.replace(/^\/+|\/+$/g, "")).filter(Boolean)
   if (folders.some((folder) => path === folder || path.startsWith(`${folder}/`))) return undefined
   const name = alias || path.split("/").pop()!.replace(/\.md$/, "")
-  return isTerm(name) ? name : undefined
+  return isTerm(name) && !isOccasion(name) ? name : undefined
 }
 
 function linkNames(text: string, options: VocabularyOptions): string[] {
@@ -96,12 +98,17 @@ export function userText(body: string): string {
   return stripMeetingBlocks(lines.filter((_, n) => !dropped.has(n)).join("\n"))
 }
 
-/** Text a reader sees as prose: without code, comments, links, addresses, highlights and tags, where 《》 and acronyms are looked for. */
-function prose(text: string): string {
+/** The text without code blocks, inline code and comments, which hold neither names nor pairs the user means. */
+function withoutCode(text: string): string {
   return text
     .replace(/^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1[ \t]*$/gm, "")
     .replace(/%%[\s\S]*?%%|<!--[\s\S]*?-->/g, "")
     .replace(/`[^`\n]*`/g, "")
+}
+
+/** Text a reader sees as prose: without links, addresses, highlights and tags, where 《》 and acronyms are looked for. */
+function prose(text: string): string {
+  return text
     .replace(LINK, "")
     .replace(/\]\([^)\n]*\)/g, "]")
     .replace(/https?:\/\/\S+|www\.\S+/g, "")
@@ -110,7 +117,8 @@ function prose(text: string): string {
 }
 
 export function extractVocabulary(note: string, title: string, options: VocabularyOptions = {}): NoteVocabulary {
-  const { yaml, body } = frontmatter(note)
+  // A note written on Windows ends its lines with CRLF, which the summary markers' patterns would not match.
+  const { yaml, body } = frontmatter(note.replace(/\r\n?/g, "\n"))
   const words: string[] = []
   const scene: string[] = []
 
@@ -128,7 +136,7 @@ export function extractVocabulary(note: string, title: string, options: Vocabula
     }
   }
 
-  const text = userText(body)
+  const text = withoutCode(userText(body))
   words.push(...linkNames(text, options))
   const plain = prose(text)
   words.push(...[...plain.matchAll(BOOK_TITLE)].map((m) => m[1].trim()).filter(isTerm))

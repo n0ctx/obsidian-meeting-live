@@ -43,6 +43,7 @@ function setup(resolve: () => ResolvedLive, override: Partial<SessionEnv> = {}) 
     },
     settings: () => ({ ...DEFAULT_SETTINGS, audioFormat: "wav" as const }),
     asrContextConsent: async () => false,
+    asrContextConsented: () => false,
     asr: resolve,
     llmConsented: () => true,
     llm: () => ({ problem: "未配置", model: "", target: "", complete: async () => "" }),

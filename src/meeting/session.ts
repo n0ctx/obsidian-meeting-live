@@ -30,6 +30,11 @@ export interface SessionEnv {
    * have not said. False when declined, which still records: the typed hotwords go, as always.
    */
   asrContextConsent: () => Promise<boolean>
+  /**
+   * Whether the speech context may go to the live recognizer as it is configured now, without asking. Read whenever the recognizer
+   * is resolved, so a retry through another host sends only the typed hotwords until that host is agreed to.
+   */
+  asrContextConsented: () => boolean
   llm: () => LlmClient
   /**
    * Whether the user has agreed to send text to the model service as it is configured now. The host may have changed since the
@@ -91,8 +96,6 @@ export class MeetingSession extends Events {
   private transition: Promise<void> | undefined
   /** What the note marked as names and the pairs it holds, read before each run and again after the note is edited. */
   private vocabulary: NoteVocabulary | undefined
-  /** The user agreed to the speech context going with this run's audio. */
-  private contextAllowed = false
   private unwatchNote: (() => void) | undefined
   private noteTimer: number | undefined
   /** The note's pairs the transcript was last corrected with, so an edit that leaves them as they were rewrites nothing. */
@@ -209,7 +212,8 @@ export class MeetingSession extends Events {
     const settings = this.env.settings()
     // Read before resolving: the recognizer fixes its context when it connects, and a pause and resume reads the note again.
     this.vocabulary = await this.readVocabulary()
-    this.contextAllowed = addsToTyped(settings, this.vocabulary) && (await this.env.asrContextConsent().catch(() => false))
+    // Asked only when there is more than the typed hotwords; the answer is read back through asrContextConsented when resolving.
+    if (addsToTyped(settings, this.vocabulary) && !this.env.asrContextConsented()) await this.env.asrContextConsent().catch(() => false)
     const asr = this.env.asr(() => this.asrContext())
     this.asrRun = asr
     this.error = undefined
@@ -379,7 +383,7 @@ export class MeetingSession extends Events {
 
   /** What the recognizer is told for this meeting: the typed hotwords, and the note's names and the scene when the user agreed. */
   asrContext(): AsrContext {
-    return asrContextFor(this.env.settings(), this.vocabulary, this.contextAllowed)
+    return asrContextFor(this.env.settings(), this.vocabulary, this.env.asrContextConsented())
   }
 
   /** The note's names and pairs. A note that cannot be read leaves what was read before (none at first): recording goes on regardless. */
@@ -781,6 +785,8 @@ export class MeetingSession extends Events {
   setNotePath(path: string): Promise<unknown> {
     if (this.meta.title === basename(this.meta.notePath)) this.meta.title = basename(path)
     this.meta.notePath = path
+    // The title is one of the names: a live meeting reads its note again under the new name.
+    if (this.isLive) void this.noteEdited()
     void this.saveNow()
     this.emitChange()
     return this.syncName()
