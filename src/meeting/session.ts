@@ -10,6 +10,7 @@ import { extractVocabulary, type NoteVocabulary } from "../asr/vocabulary.ts"
 import { AsrStreamer, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { writeMinutes } from "../llm/contextGuard.ts"
+import { acceptFixes, buildCorrectionMessages, correctionTerms, noTerms, parseFixes } from "../llm/correction.ts"
 import { buildOverviewMessages, buildSummaryMessages, capOverview, hasUnverified, isEmptySummary, overviewMarkdown, overviewProblems, overviewRetryMessage, parseSummary, summaryMarkdown, type LineAnchor } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
@@ -96,6 +97,8 @@ export class MeetingSession extends Events {
   private noteTimer: number | undefined
   /** The note's pairs the transcript was last corrected with, so an edit that leaves them as they were rewrites nothing. */
   private appliedPairs = ""
+  /** Stages whose window the model has already checked for misheard names, so a retried summary does not ask again. */
+  private readonly checkedStages = new Set<number>()
 
   constructor(env: SessionEnv, folder: string, meta: MeetingMeta, transcript: string) {
     super()
@@ -553,6 +556,7 @@ export class MeetingSession extends Events {
     record.attempts++
     this.trigger("summary")
     try {
+      await this.correctWindow(record, items, llm)
       const messages = buildSummaryMessages(this.meta.title, this.env.settings().summaryFocus, record, items, previous, this.meta.overview?.content, this.noteLang)
       const text = await llm.complete(messages, { json: true })
       const content = parseSummary(text, items)
@@ -573,6 +577,28 @@ export class MeetingSession extends Events {
     this.trigger("summary")
     await this.saveNow()
     if (record.status === "done") void this.publishSummary()
+  }
+
+  /**
+   * Asks the summary's model which words of the stage's window are misheard known terms, and applies the fixes that pass the checks
+   * (acceptFixes) before the summary reads the window. Once per stage. A failure or a reply with nothing usable leaves the text as it
+   * was and the summary goes on; with no known terms nothing is asked.
+   */
+  private async correctWindow(record: SummaryRecord, items: Utterance[], llm: LlmClient): Promise<void> {
+    if (this.checkedStages.has(record.index) || items.length === 0) return
+    this.checkedStages.add(record.index)
+    this.vocabulary ??= await this.readVocabulary()
+    const terms = correctionTerms(asrContextFor(this.env.settings(), this.vocabulary, true), this.correctionTables())
+    if (noTerms(terms)) return
+    try {
+      const reply = await llm.complete(buildCorrectionMessages(items, terms, this.noteLang), { json: true })
+      const fixes = acceptFixes(parseFixes(reply), items, terms)
+      if (fixes.length === 0) return
+      const window = new Set(items)
+      await this.retext((text, u) => (window.has(u) ? applyCorrections(text, [fixes]) : text))
+    } catch (error) {
+      console.warn("[meeting-live] checking the transcript for misheard names failed; the summary reads it as it is", error)
+    }
   }
 
   /** Completed stage summaries not yet merged into the overview. */
