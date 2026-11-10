@@ -3,7 +3,10 @@ import { t, tr, type Lang } from "../i18n/index.ts"
 import { AudioCapture } from "../audio/capture.ts"
 import { AsrResampler } from "../audio/pcm.ts"
 import { SegmentRecorder, opusSupported, repairSegment } from "../audio/recorder.ts"
+import { addsToTyped, asrContextFor, type AsrContext } from "../asr/context.ts"
+import { applyCorrections, correctionTables, type Correction } from "../asr/corrections.ts"
 import type { ResolvedLive } from "../asr/providers/registry.ts"
+import { extractVocabulary, type NoteVocabulary } from "../asr/vocabulary.ts"
 import { AsrStreamer, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { writeMinutes } from "../llm/contextGuard.ts"
@@ -13,14 +16,19 @@ import { dueCutoff, uncovered } from "./schedule.ts"
 import { placeCardHeading, placeSummary } from "./noteSummary.ts"
 import { noteLang } from "./labels.ts"
 import { meetingFile, movedPath, noteName, transcriptFileName, type MeetingStore } from "./store.ts"
-import { audioLine, blockId, gapLine, linkTranscript, parseTranscript, utteranceLine } from "./transcriptFormat.ts"
+import { audioLine, blockId, gapLine, linkTranscript, parseTranscript, retextTranscript, utteranceLine } from "./transcriptFormat.ts"
 import { formatClock, formatDate, formatDateTime, totalDuration, type AudioFormat, type AudioSegment, type MeetingMeta, type SummaryRecord, type TranscriptGap, type Utterance } from "./types.ts"
 
 export interface SessionEnv {
   store: MeetingStore
   settings: () => MeetingLiveSettings
-  /** The live recognizer under the current settings; asked afresh for every recording run. */
-  asr: () => ResolvedLive
+  /** The live recognizer under the current settings; asked afresh for every recording run. `context` is read when it resolves. */
+  asr: (context?: () => AsrContext | undefined) => ResolvedLive
+  /**
+   * Whether the meeting's speech context (the background and the note's names) may go to the live recognizer, asking the user if they
+   * have not said. False when declined, which still records: the typed hotwords go, as always.
+   */
+  asrContextConsent: () => Promise<boolean>
   llm: () => LlmClient
   /**
    * Whether the user has agreed to send text to the model service as it is configured now. The host may have changed since the
@@ -39,6 +47,8 @@ const LEVEL_HISTORY = 256
 const SUMMARY_RETRY_MS = [5000, 20000]
 const MAX_SUMMARY_ATTEMPTS = 3
 const SAVE_DEBOUNCE_MS = 2000
+/** How long the note must stay unchanged before its names and pairs are read again, so typing does not re-read on every key. */
+const NOTE_SETTLE_MS = 1500
 
 const basename = (path: string) => path.split("/").pop()!.replace(/\.md$/, "")
 
@@ -78,6 +88,14 @@ export class MeetingSession extends Events {
   private queueRunning = false
   private runGapStart = 0
   private transition: Promise<void> | undefined
+  /** What the note marked as names and the pairs it holds, read before each run and again after the note is edited. */
+  private vocabulary: NoteVocabulary | undefined
+  /** The user agreed to the speech context going with this run's audio. */
+  private contextAllowed = false
+  private unwatchNote: (() => void) | undefined
+  private noteTimer: number | undefined
+  /** The note's pairs the transcript was last corrected with, so an edit that leaves them as they were rewrites nothing. */
+  private appliedPairs = ""
 
   constructor(env: SessionEnv, folder: string, meta: MeetingMeta, transcript: string) {
     super()
@@ -166,6 +184,7 @@ export class MeetingSession extends Events {
       if (this.meta.status === "recording") await this.endRun("stopping")
       else if (!["paused", "interrupted", "stopping"].includes(this.meta.status)) return
       this.env.release(this)
+      this.stopWatchingNote()
       this.enqueueSummary(this.durationMs, "final")
       this.meta.status = "ended"
       await this.saveNow()
@@ -185,7 +204,10 @@ export class MeetingSession extends Events {
     const blocked = this.env.claim(this)
     if (blocked) throw new Error(blocked)
     const settings = this.env.settings()
-    const asr = this.env.asr()
+    // Read before resolving: the recognizer fixes its context when it connects, and a pause and resume reads the note again.
+    this.vocabulary = await this.readVocabulary()
+    this.contextAllowed = addsToTyped(settings, this.vocabulary) && (await this.env.asrContextConsent().catch(() => false))
+    const asr = this.env.asr(() => this.asrContext())
     this.asrRun = asr
     this.error = undefined
     let capture: AudioCapture | undefined
@@ -210,6 +232,8 @@ export class MeetingSession extends Events {
     this.startAsr(asr)
     this.meta.status = "recording"
     this.ticker = window.setInterval(() => this.onTick(), 1000)
+    this.watchNote()
+    void this.applyNotePairs()
     await this.saveNow()
     this.emitChange()
   }
@@ -336,7 +360,7 @@ export class MeetingSession extends Events {
    */
   retryAsr(): void {
     if (!this.asr) return
-    const resolved = this.env.asr()
+    const resolved = this.env.asr(() => this.asrContext())
     if (!resolved.connect) {
       this.asrDetail = resolved.problem
       this.emitChange()
@@ -348,9 +372,99 @@ export class MeetingSession extends Events {
     if (this.liveSegment) this.liveSegment.asrProvider = resolved.id
   }
 
+  // ---------------------------------------------------------------- speech context and corrections
+
+  /** What the recognizer is told for this meeting: the typed hotwords, and the note's names and the scene when the user agreed. */
+  asrContext(): AsrContext {
+    return asrContextFor(this.env.settings(), this.vocabulary, this.contextAllowed)
+  }
+
+  /** The note's names and pairs. A note that cannot be read leaves what was read before (none at first): recording goes on regardless. */
+  private async readVocabulary(): Promise<NoteVocabulary | undefined> {
+    try {
+      const note = await this.env.store.readNote(this.meta.notePath)
+      return extractVocabulary(note, basename(this.meta.notePath), { ignoreLinksUnder: [this.env.settings().folder] })
+    } catch (error) {
+      console.warn("[meeting-live] could not read the meeting note for its names", error)
+      return this.vocabulary
+    }
+  }
+
+  /** The settings' table, then this meeting's own pairs. */
+  private correctionTables(): Correction[][] {
+    return correctionTables(this.env.settings().corrections, this.vocabulary?.corrections ?? [])
+  }
+
+  /** While the meeting is live, an edit of its note is read once the typing settles: new names for the next run, new pairs at once. */
+  private watchNote(): void {
+    if (this.unwatchNote) return
+    this.unwatchNote = this.env.store.onNoteModified((path) => {
+      if (path !== this.meta.notePath) return
+      if (this.noteTimer) window.clearTimeout(this.noteTimer)
+      this.noteTimer = window.setTimeout(() => void this.noteEdited(), NOTE_SETTLE_MS)
+    })
+  }
+
+  private stopWatchingNote(): void {
+    this.unwatchNote?.()
+    this.unwatchNote = undefined
+    if (this.noteTimer) window.clearTimeout(this.noteTimer)
+    this.noteTimer = undefined
+  }
+
+  /**
+   * Reads the note again. The plugin's own writes into the note (the summary region, the card heading) are outside what is read, so
+   * they leave the names and pairs as they were, and nothing is rewritten for them.
+   */
+  private async noteEdited(): Promise<void> {
+    this.noteTimer = undefined
+    this.vocabulary = await this.readVocabulary()
+    await this.applyNotePairs()
+  }
+
+  /** When the note's pairs changed, the transcript written so far is corrected with them. */
+  private async applyNotePairs(): Promise<void> {
+    const pairs = JSON.stringify(this.vocabulary?.corrections ?? [])
+    if (pairs === this.appliedPairs) return
+    this.appliedPairs = pairs
+    await this.retext((text) => applyCorrections(text, this.correctionTables()))
+  }
+
+  /** Reads the note and corrects the whole transcript with the settings' table and the note's pairs; the number of sentences changed. */
+  async correctTranscript(): Promise<number> {
+    this.vocabulary = await this.readVocabulary()
+    this.appliedPairs = JSON.stringify(this.vocabulary?.corrections ?? [])
+    return this.retext((text) => applyCorrections(text, this.correctionTables()))
+  }
+
+  /**
+   * Gives sentences new text and rewrites their transcript lines in place: only the text changes, the time link (which may point at a
+   * summary anchor by now), the speaker and the block id stay. The number of sentences changed.
+   */
+  private async retext(edit: (text: string, u: Utterance) => string): Promise<number> {
+    const changed = new Map<string, string>()
+    for (const u of this.utterances) {
+      const text = edit(u.text, u)
+      if (text === u.text) continue
+      u.text = text
+      changed.set(blockId(u), text)
+    }
+    if (changed.size === 0) return 0
+    this.trigger("retext")
+    await this.writeIo(async () => {
+      const path = this.transcriptPath
+      const current = await this.env.store.readTranscript(path)
+      const next = retextTranscript(current, changed)
+      if (next !== current) await this.env.store.write(path, next)
+    })
+    return changed.size
+  }
+
   // ---------------------------------------------------------------- transcript
 
-  private onFinal(u: Utterance): void {
+  /** A final is corrected before it is kept or written, so neither the transcript nor what the summaries read has the misheard word. */
+  private onFinal(final: Utterance): void {
+    const u = { ...final, text: applyCorrections(final.text, this.correctionTables()) }
     const index = this.utterances.findIndex((x) => x.startMs > u.startMs)
     if (index < 0) this.utterances.push(u)
     else this.utterances.splice(index, 0, u)
@@ -700,6 +814,7 @@ export class MeetingSession extends Events {
   /** Called on plugin unload. Closes files promptly; anything unfinished is repaired on next launch. */
   shutdown(): void {
     if (this.ticker) window.clearInterval(this.ticker)
+    this.stopWatchingNote()
     this.capture?.close().catch(() => undefined)
     this.recorder?.close().catch(() => undefined)
     this.asr?.dispose()

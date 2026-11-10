@@ -674,6 +674,31 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           })
         })
     }
+    const contextFor = (live && liveProvider?.capabilities(live).context) || (file && fileProvider?.capabilities(file).context)
+    if (contextFor) {
+      new Setting(el)
+        .setName(t("settings.meetingContext.name"))
+        .setDesc(t("settings.meetingContext.desc"))
+        .addTextArea((field) => {
+          field.inputEl.rows = 3
+          field.setPlaceholder(t("settings.meetingContext.placeholder"))
+          field.setValue(s.meetingContext).onChange((v) => {
+            s.meetingContext = v
+            this.save()
+          })
+        })
+    }
+    new Setting(el)
+      .setName(t("settings.corrections.name"))
+      .setDesc(t("settings.corrections.desc"))
+      .addTextArea((field) => {
+        field.inputEl.rows = 4
+        field.setPlaceholder("兰箭→蓝箭")
+        field.setValue(s.corrections).onChange((v) => {
+          s.corrections = v
+          this.save()
+        })
+      })
     const languageFor = [live && liveProvider?.capabilities(live).language && t("asr.role.live"), file && fileProvider?.capabilities(file).language && t("asr.role.file")].filter(Boolean)
     if (languageFor.length) {
       new Setting(el)

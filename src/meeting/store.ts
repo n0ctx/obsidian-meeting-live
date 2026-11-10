@@ -220,6 +220,18 @@ export class MeetingStore {
     })
   }
 
+  /** A note's text as Obsidian has it cached; empty when there is no such note. */
+  async readNote(path: string): Promise<string> {
+    const file = this.app.vault.getFileByPath(normalizePath(path))
+    return file ? this.app.vault.cachedRead(file) : ""
+  }
+
+  /** Calls `listener` with the path of every note that is modified; the returned function stops it. */
+  onNoteModified(listener: (path: string) => void): () => void {
+    const ref = this.app.vault.on("modify", (file) => listener(file.path))
+    return () => this.app.vault.offref(ref)
+  }
+
   async write(path: string, content: string): Promise<void> {
     await this.adapter.write(normalizePath(path), content)
   }

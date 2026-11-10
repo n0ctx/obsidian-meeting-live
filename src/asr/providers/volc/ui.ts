@@ -27,6 +27,8 @@ export function renderVolcAdvanced({ app, containerEl, account, save }: Advanced
         save()
       }),
     )
+  textField(new Setting(containerEl).setName(t("volc.settings.boostingTable.name")).setDesc(t("volc.settings.boostingTable.desc")), volc, "boostingTableId", save)
+  textField(new Setting(containerEl).setName(t("volc.settings.correctTable.name")).setDesc(t("volc.settings.correctTable.desc")), volc, "correctTableId", save)
   if (VOLC_LIVE_CAPABILITIES.endWindow) {
     new Setting(containerEl)
       .setName(t("volc.settings.endWindow.name"))

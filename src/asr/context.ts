@@ -1,5 +1,6 @@
 // What a recognizer is told about a meeting before it hears it: terms to favour and a sentence on what the meeting is about.
 // Only Volcengine reads the scene and the note's terms (see LiveCapabilities.context); the others take the typed hotwords alone.
+import type { NoteVocabulary } from "./vocabulary.ts"
 
 export interface AsrContext {
   /** Most important first: the streaming pass keeps only the front of the list. */
@@ -85,4 +86,27 @@ export function buildCorpus(ctx: AsrContext | undefined, budget: CorpusBudget): 
   if (ctx.correctTableId?.trim()) corpus.correct_table_id = ctx.correctTableId.trim()
   if (Object.keys(inner).length) corpus.context = JSON.stringify(inner)
   return Object.keys(corpus).length ? corpus : undefined
+}
+
+/** The settings a meeting's context is made from. */
+export interface ContextSettings {
+  hotwords: string
+  meetingContext: string
+}
+
+/**
+ * What a meeting tells the recognizer: the typed hotwords first, then the note's names; the scene from the settings' background and
+ * the note's occasion words. With `withNote` off (the user declined to send them) only the typed hotwords go, as before.
+ */
+export function asrContextFor(settings: ContextSettings, vocabulary: NoteVocabulary | undefined, withNote: boolean): AsrContext {
+  const typed = splitHotwords(settings.hotwords)
+  if (!withNote) return { hotwords: typed }
+  const scene = dedupe([settings.meetingContext, ...(vocabulary?.scene ?? [])]).join("；")
+  return { hotwords: dedupe([...typed, ...(vocabulary?.hotwords ?? [])]), ...(scene ? { scene } : {}) }
+}
+
+/** Whether the context would send anything beyond the typed hotwords; only then is the user asked about sending it. */
+export function addsToTyped(settings: ContextSettings, vocabulary: NoteVocabulary | undefined): boolean {
+  const typed = new Set(splitHotwords(settings.hotwords))
+  return !!settings.meetingContext.trim() || !!vocabulary?.scene.length || !!vocabulary?.hotwords.some((w) => !typed.has(w))
 }

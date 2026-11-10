@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { destinations, ensureConsentFor, liveIsLocal, needsConsent, type Destination } from "../src/consent.ts"
+import { contextDestination, destinations, ensureConsentFor, ensureContextConsent, liveIsLocal, needsConsent, seedConsent, type Destination } from "../src/consent.ts"
 import { tr } from "../src/i18n/index.ts"
 import { isLoopbackHost } from "../src/url.ts"
 import { loadSettings, storedSettings } from "../src/settings.ts"
@@ -205,4 +205,36 @@ test("the privacy texts say audio stays on this machine for a local recognizer a
     assert.match(tr(lang, "settings.privacy.bodyLocal", "X"), lang === "zh" ? /不会离开这台电脑/ : /does not leave this computer/)
     assert.match(tr(lang, "consent.live.localText", "X", "127.0.0.1:6006"), /127\.0\.0\.1:6006/)
   }
+})
+
+test("agreeing to the audio does not agree to the speech context: it has its own key per host, never seeded from 1.0.x", async () => {
+  const { settings } = loadSettings(authorData())
+  assert.ok(settings.consent.includes("live:openspeech.bytedance.com"))
+  assert.ok(seedConsent(settings).every((key) => !key.startsWith("asr-context:")))
+  assert.deepEqual(contextDestination(settings, "live"), { kind: "asr-context", name: "火山引擎", host: "openspeech.bytedance.com", role: "live" })
+  const yes = asker()
+  assert.equal(await ensureContextConsent(settings, "live", (d) => yes.ask([d]), noSave, new Set()), true)
+  assert.equal(yes.asked.length, 1)
+  assert.ok(settings.consent.includes("asr-context:openspeech.bytedance.com"))
+  // The file recognizer is on the same host, so its context is agreed to as well; asking about everything never lists it.
+  assert.equal(await ensureContextConsent(settings, "file", never, noSave, new Set()), true)
+  assert.ok(destinations(settings).every((d) => d.kind !== "asr-context"))
+})
+
+test("declining the speech context saves nothing and is not asked again while the plugin runs", async () => {
+  const settings = volcAndDeepseek()
+  settings.consent = ["live:openspeech.bytedance.com", "file:openspeech.bytedance.com", "llm:api.deepseek.com"]
+  const declined = new Set<string>()
+  const no = asker(false)
+  let saved = 0
+  assert.equal(await ensureContextConsent(settings, "live", (d) => no.ask([d]), async () => void saved++, declined), false)
+  assert.equal(await ensureContextConsent(settings, "live", never, noSave, declined), false)
+  assert.equal(no.asked.length, 1)
+  assert.equal(saved, 0)
+  assert.ok(!settings.consent.some((key) => key.startsWith("asr-context:")))
+  // A recognizer that reads no context has nothing to ask about.
+  const deepgram = withAccount(settings, "deepgram")
+  settings.roles.live = deepgram.id
+  assert.equal(contextDestination(settings, "live"), undefined)
+  assert.equal(await ensureContextConsent(settings, "live", never, noSave, new Set()), false)
 })

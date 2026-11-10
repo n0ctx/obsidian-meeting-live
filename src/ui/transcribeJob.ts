@@ -3,6 +3,8 @@ import { t, tr, type Key, type Lang } from "../i18n/index.ts"
 import { transcribeChunks, type ChunkResults } from "../asr/chunked.ts"
 import { renderInterviewRecord, speakerUtterances, type FileAsrGet, type FileAsrPost, type FileAsrProvider, type FileAsrResult } from "../asr/fileAsr.ts"
 import { appendJobBlock, hasJobBlock, newJobId, placeJobResult, removeJobBlock } from "../asr/jobBlock.ts"
+import type { AsrContext } from "../asr/context.ts"
+import { applyCorrections, type Correction } from "../asr/corrections.ts"
 import { providerNameIn } from "../asr/providers/registry.ts"
 import type { Destination } from "../consent.ts"
 import { prepareChunks, type AudioChunk } from "../audio/transcode.ts"
@@ -24,8 +26,8 @@ export interface AudioSource {
 export interface TranscribeDeps {
   /** Asks the user to agree to the destinations of these kinds, if they have not; false when declined. */
   ensureConsent: (kinds: Destination["kind"][]) => Promise<boolean>
-  /** The recorded-file recognizer, resolved from the current settings. */
-  fileAsr: () => FileAsrProvider
+  /** The recorded-file recognizer, resolved from the current settings; with a context, the recognizer sends it with every file. */
+  fileAsr: (context?: AsrContext) => FileAsrProvider
   post: FileAsrPost
   get?: FileAsrGet
   llm: () => LlmClient
@@ -57,6 +59,8 @@ export class TranscribeJob {
   private readonly deps: TranscribeDeps
   private readonly file: FileAsrProvider
   private readonly speakers: boolean
+  /** Applied to the recognized text before anything is written, as a live meeting applies them to each final. */
+  private readonly corrections: Correction[][]
   /** Kept after a failed write-up so a retry does not re-run (and re-bill) recognition. */
   private transcribed: { result: FileAsrResult; rawPath: string } | undefined
   /** A recording cut into pieces and what was recognized of them so far, so a retry continues instead of paying for the first pieces again. */
@@ -65,7 +69,7 @@ export class TranscribeJob {
   part: { index: number; total: number } | undefined
   onChange: (() => void) | undefined
 
-  constructor(app: App, deps: TranscribeDeps, target: TFile, source: AudioSource, file: FileAsrProvider, options: { speakers: boolean; writeUp: boolean }) {
+  constructor(app: App, deps: TranscribeDeps, target: TFile, source: AudioSource, file: FileAsrProvider, options: { speakers: boolean; writeUp: boolean; corrections?: Correction[][] }) {
     this.app = app
     this.deps = deps
     this.target = target
@@ -73,6 +77,7 @@ export class TranscribeJob {
     this.file = file
     this.speakers = options.speakers
     this.writeUp = options.writeUp
+    this.corrections = options.corrections ?? []
   }
 
   /**
@@ -116,7 +121,7 @@ export class TranscribeJob {
       if (!this.transcribed) {
         this.setStage("reading")
         this.pieces ??= { chunks: await prepareChunks(await this.source.read(), this.source.extension, { directFormats: this.file.directFormats, maxBytes: this.file.capabilities.fileSizeLimit }), done: [] }
-        const result = await transcribeChunks(
+        const recognized = await transcribeChunks(
           this.file,
           this.pieces.chunks,
           {
@@ -132,6 +137,7 @@ export class TranscribeJob {
           this.pieces.done,
         )
         this.pieces = undefined
+        const result = this.corrected(recognized)
         const rawPath = this.writeUp ? await this.saveRawTranscript(result) : ""
         this.transcribed = { result, rawPath }
       }
@@ -143,6 +149,11 @@ export class TranscribeJob {
       this.failedAt = this.stage
       this.setStage("failed")
     }
+  }
+
+  private corrected(result: FileAsrResult): FileAsrResult {
+    const fix = (text: string) => applyCorrections(text, this.corrections)
+    return { ...result, text: fix(result.text), utterances: result.utterances.map((u) => ({ ...u, text: fix(u.text) })) }
   }
 
   private async saveRawTranscript(result: FileAsrResult): Promise<string> {

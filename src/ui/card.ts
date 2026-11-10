@@ -119,6 +119,10 @@ export class MeetingCard extends MarkdownRenderChild {
       this.transcript?.append(u as Utterance)
       this.renderCaption()
     })
+    on("retext", () => {
+      this.transcript?.renderAll()
+      this.renderCaption()
+    })
     on("interim", () => {
       this.transcript?.renderInterim()
       this.renderCaption()

@@ -17,6 +17,8 @@ export interface LiveCapabilities {
   language: boolean
   /** Can separate speakers while streaming. */
   diarization: boolean
+  /** Reads ProviderEnv.context: the note's names and the meeting's scene beyond the typed hotwords. Absent where only those are taken. */
+  context?: true
 }
 
 /** What a recorded-file recognizer can do. */
@@ -27,6 +29,8 @@ export interface FileCapabilities {
   diarization: boolean
   /** Largest recording uploaded as it is, in bytes; larger ones are recompressed first, then split. */
   fileSizeLimit: number
+  /** Reads ProviderEnv.context, as LiveCapabilities.context. */
+  context?: true
 }
 
 export interface ProviderEnv {

@@ -38,8 +38,11 @@ function setup(resolve: () => ResolvedLive, override: Partial<SessionEnv> = {}) 
       fullPath: (path: string) => `/vault/${path}`,
       appendTranscript: async () => undefined,
       saveMeta: async () => undefined,
+      readNote: async () => "",
+      onNoteModified: () => () => undefined,
     },
     settings: () => ({ ...DEFAULT_SETTINGS, audioFormat: "wav" as const }),
+    asrContextConsent: async () => false,
     asr: resolve,
     llmConsented: () => true,
     llm: () => ({ problem: "未配置", model: "", target: "", complete: async () => "" }),
@@ -255,7 +258,7 @@ test("an overview past its limits is asked to fix itself once, and its to-dos an
   const asked: unknown[][] = []
   const session = setup(() => ({ id: "x", name: "x", connect: null, pacing: PACING, problem: "无" }), {
     llm: () => ({ model: "m", target: "t", complete: async (messages: unknown[]) => (asked.push(messages), replies.shift() ?? "") }),
-    store: { saveMeta: async () => undefined, editNote: async () => undefined, readTranscript: async () => "", write: async () => undefined },
+    store: { saveMeta: async () => undefined, editNote: async () => undefined, readTranscript: async () => "", write: async () => undefined, readNote: async () => "", onNoteModified: () => () => undefined },
   } as unknown as Partial<SessionEnv>)
   const stage = { index: 1, startMs: 0, endMs: 60_000, trigger: "auto", status: "done", attempts: 1, utterances: [], content: { title: "融资", paragraphs: [{ topic: "融资", text: "额度待定", unverified: [] }], todos: [], open: [] } }
   session.meta.summaries.push(stage as never)

@@ -27,6 +27,10 @@ export interface MeetingLiveSettings extends AccountSettings {
   /** Language of what the plugin writes into notes; auto follows the interface language. */
   noteLanguage: NoteLanguage
   hotwords: string
+  /** A sentence or two on the meeting's field and people, sent to recognizers that take a scene (LiveCapabilities.context). */
+  meetingContext: string
+  /** `错→对` lines applied to every meeting's recognized text before it is saved (src/asr/corrections.ts). Never leaves the machine. */
+  corrections: string
   autoSummary: boolean
   summaryIntervalMin: number
   summaryFocus: string
@@ -46,6 +50,8 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   asrLanguage: "auto",
   noteLanguage: "auto",
   hotwords: "",
+  meetingContext: "",
+  corrections: "",
   autoSummary: true,
   summaryIntervalMin: 5,
   summaryFocus: DEFAULT_SUMMARY_FOCUS,

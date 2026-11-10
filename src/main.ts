@@ -1,8 +1,11 @@
 import { MarkdownView, Notice, Plugin, TFile, normalizePath, requestUrl, type Editor } from "obsidian"
 import { inBackground } from "./background.ts"
-import { ensureConsentFor, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
+import { ensureConsentFor, ensureContextConsent, needsConsent, withLlmConsent, type Destination } from "./consent.ts"
 import { t, tr } from "./i18n/index.ts"
+import { addsToTyped, asrContextFor, type AsrContext } from "./asr/context.ts"
+import { correctionTables } from "./asr/corrections.ts"
 import { resolveFile, resolveLive, type ResolveEnv } from "./asr/providers/registry.ts"
+import { extractVocabulary } from "./asr/vocabulary.ts"
 import { compatibleClient, type HttpGet, type HttpPost, type LlmClient } from "./llm/client.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
 import { MeetingManager } from "./meeting/manager.ts"
@@ -33,6 +36,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   private jobs!: TranscribeJobs
   private statusEl!: HTMLElement
   private settingTab!: MeetingLiveSettingTab
+  /** Speech-context destinations the user declined since the plugin loaded, so a resumed meeting does not ask again. */
+  private readonly declinedContext = new Set<string>()
 
   readonly post: HttpPost = async (url, headers, body) => {
     const response = await requestUrl({ url, method: "POST", headers, body, throw: false })
@@ -66,7 +71,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     const store = new MeetingStore(this.app, () => this.settings.folder)
     this.manager = new MeetingManager(store, {
       settings: () => this.settings,
-      asr: () => resolveLive(this.providerEnv()),
+      asr: (context) => resolveLive({ ...this.providerEnv(), context }),
+      asrContextConsent: () => this.ensureContextConsent("live"),
       llm: () => this.llm(),
       llmConsented: () => !needsConsent(this.settings, ["llm"]),
     })
@@ -159,6 +165,22 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
   /** Asks about the destinations of the given kinds, all of them by default. */
   ensureConsent(kinds?: Destination["kind"][]): Promise<boolean> {
     return ensureConsentFor(this.settings, (destinations) => new ConsentModal(this.app, destinations).ask(), () => this.saveSettings(), kinds)
+  }
+
+  /** Whether the speech context of a role may go to its recognizer, asking once if the user has not said; see ensureContextConsent. */
+  ensureContextConsent(role: "live" | "file"): Promise<boolean> {
+    return ensureContextConsent(this.settings, role, (destination) => new ConsentModal(this.app, [destination]).ask(), () => this.saveSettings(), this.declinedContext)
+  }
+
+  /**
+   * The speech context and the corrections of a file transcribed into `note`: its names when the user agrees to send them, else the
+   * typed hotwords. A note that cannot be read gives the typed hotwords and the settings' table; the transcription goes on.
+   */
+  private async fileContext(note: TFile): Promise<{ context: AsrContext; corrections: ReturnType<typeof correctionTables> }> {
+    const text = await this.app.vault.cachedRead(note).catch((error: Error) => (console.warn("[meeting-live] could not read the target note", error), undefined))
+    const vocabulary = text === undefined ? undefined : extractVocabulary(text, note.basename, { ignoreLinksUnder: [this.settings.folder] })
+    const withNote = addsToTyped(this.settings, vocabulary) && (await this.ensureContextConsent("file"))
+    return { context: asrContextFor(this.settings, vocabulary, withNote), corrections: correctionTables(this.settings.corrections, vocabulary?.corrections ?? []) }
   }
 
   /** Opens the minutes dialog once the user has agreed to where the model service is, which may have changed since the recording. */
@@ -261,6 +283,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     withSession("stop", t("cmd.stop"), "square", (s) => s.stop(), (s) => ["recording", "paused", "interrupted"].includes(s.status))
     withSession("summarize", t("cmd.summarize"), "list", (s) => this.summarize(s), () => true)
     withSession("minutes", t("cmd.minutes"), "file-pen-line", (s) => this.openMinutes(s), (s) => s.utterances.length > 0)
+    withSession("apply-corrections", t("cmd.applyCorrections"), "replace", async (s) => new Notice(t("notice.corrected", await s.correctTranscript())), (s) => s.utterances.length > 0)
   }
 
   /** Where raw transcripts of recordings go: an existing folder keeps its name whatever the note language. */
@@ -272,7 +295,8 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     new TranscribeFileModal(
       this.app,
       {
-        fileAsr: () => resolveFile(this.providerEnv()),
+        fileAsr: (context) => resolveFile({ ...this.providerEnv(), context: context && (() => context) }),
+        fileContext: (note) => this.fileContext(note),
         post: this.filePost,
         get: this.fileGet,
         ensureConsent: (kinds) => this.ensureConsent(kinds),

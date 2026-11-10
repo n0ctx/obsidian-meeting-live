@@ -178,3 +178,10 @@ test("auto leaves the language to the service, anything else is passed on as its
   assert.equal(languageHint("auto"), undefined)
   assert.equal(languageHint("zh"), "zh")
 })
+
+test("settings saved before the meeting background and the corrections existed load with both empty, and keep them once set", () => {
+  const { settings } = loadSettings(authorData())
+  assert.deepEqual([settings.meetingContext, settings.corrections], ["", ""])
+  const saved = JSON.parse(JSON.stringify({ ...settings, meetingContext: "投后访谈", corrections: "兰箭→蓝箭" }))
+  assert.deepEqual([loadSettings(saved).settings.meetingContext, loadSettings(saved).settings.corrections], ["投后访谈", "兰箭→蓝箭"])
+})

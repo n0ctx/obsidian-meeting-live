@@ -7,13 +7,18 @@ import type { MeetingLiveSettings } from "./settings.ts"
 import { hostOf, isLoopbackHost } from "./url.ts"
 
 export interface Destination {
-  /** What is sent: live audio, recorded files, or meeting text. */
-  kind: "live" | "file" | "llm"
+  /**
+   * What is sent: live audio, recorded files, meeting text, or the speech context (the settings' meeting background and the names
+   * taken from the note) that goes with the audio. The last is asked about on its own, after the others: see contextDestination.
+   */
+  kind: "live" | "file" | "llm" | "asr-context"
   /** Display name of the provider; for the LLM, its host. */
   name: string
   host: string
   /** For the LLM, the model that reads the text. */
   detail?: string
+  /** For the speech context, which recognizer it goes with. */
+  role?: "live" | "file"
   /** The host is this machine (loopback): the data is still listed and agreed to, but it does not leave the computer. */
   local?: true
 }
@@ -69,6 +74,47 @@ export async function ensureConsentFor(settings: MeetingLiveSettings, ask: (dest
   const current = relevant(settings, kinds)
   if (!(await ask(current))) return false
   settings.consent = [...new Set([...settings.consent, ...current.map(destinationKey)])]
+  await save()
+  return true
+}
+
+/**
+ * Where the speech context of a role would go: the host of its recognizer, when that recognizer reads a context at all. Agreeing to
+ * the audio going there ("live:host") does not cover it: the note's names and the background are text the user wrote, so they have
+ * their own key, "asr-context:host", one per host whichever role sends there. Not among `destinations`, so asking about everything
+ * at the start of a recording never asks about it, and the agreement of 1.0.x never seeds it.
+ */
+export function contextDestination(settings: MeetingLiveSettings, role: "live" | "file"): Destination | undefined {
+  const account = roleAccount(settings, role)
+  const provider = account && providerOf(account)
+  const service = role === "live" ? provider?.live : provider?.file
+  if (!account || !service?.capabilities(account).context) return undefined
+  const host = service.host(account)
+  return host ? { kind: "asr-context", name: accountLabel(settings.accounts, account), host, role } : undefined
+}
+
+/**
+ * Whether the speech context of a role may go with its audio, asking the user if they have not said. Declining is not an error: the
+ * recording or upload goes ahead with the typed hotwords alone, and the refusal is kept in `declined` (for as long as the plugin runs),
+ * so a paused meeting resumes without asking again.
+ */
+export async function ensureContextConsent(
+  settings: MeetingLiveSettings,
+  role: "live" | "file",
+  ask: (destination: Destination) => Promise<boolean>,
+  save: () => Promise<void>,
+  declined: Set<string>,
+): Promise<boolean> {
+  const destination = contextDestination(settings, role)
+  if (!destination) return false
+  const key = destinationKey(destination)
+  if (settings.consent.includes(key)) return true
+  if (declined.has(key)) return false
+  if (!(await ask(destination))) {
+    declined.add(key)
+    return false
+  }
+  settings.consent = [...settings.consent, key]
   await save()
   return true
 }

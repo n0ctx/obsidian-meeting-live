@@ -45,6 +45,17 @@ export function linkTranscript(markdown: string, target: (startMs: number) => st
   return markdown.replace(new RegExp(UTTERANCE, "gm"), (_line, plain: string | undefined, linked: string | undefined, text: string, start: string, end: string) => `[[${target(Number(start))}|${plain ?? linked}]] ${text} ^t${start}-${end}`)
 }
 
+// The same line split into what stays (the time, the speaker) and the text, for rewriting the text alone.
+const RETEXT_LINE = /^((?:\[\d{2}:\d{2}:\d{2}\]|\[\[[^\]|\n]*\|\d{2}:\d{2}:\d{2}\]\]) (?:\*\*S[A-Za-z0-9]{1,8}\*\* )?)(.*)( \^(t\d+-\d+)[ \t]*)$/gm
+
+/** Replaces the text of the lines whose block id is in `texts`, keeping each line's time link, speaker and block id as they are. */
+export function retextTranscript(markdown: string, texts: Map<string, string>): string {
+  return markdown.replace(RETEXT_LINE, (line, head: string, _text: string, tail: string, id: string) => {
+    const text = texts.get(id)
+    return text === undefined ? line : `${head}${text.replace(/\s*\n\s*/g, " ").trim()}${tail}`
+  })
+}
+
 /** Marks where an audio segment starts in the transcript, playable in place. */
 export function audioLine(path: string): string {
   return `![[${path}]]\n\n`

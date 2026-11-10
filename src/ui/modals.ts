@@ -23,7 +23,9 @@ export class ConsentModal extends Modal {
 
   override onOpen(): void {
     this.modalEl.addClass("ml-modal")
-    this.setTitle(t("consent.title"))
+    // The speech context is asked about on its own, once the audio's destination is agreed to; declining it does not stop anything.
+    const context = this.destinations.every((d) => d.kind === "asr-context")
+    this.setTitle(t(context ? "consent.context.heading" : "consent.title"))
     const list = this.contentEl.createDiv({ cls: "ml-consent" })
     const item = (icon: string, title: string, text: string) => {
       const row = list.createDiv({ cls: "ml-consent-row" })
@@ -32,16 +34,17 @@ export class ConsentModal extends Modal {
       body.createDiv({ cls: "ml-consent-title", text: title })
       body.createDiv({ cls: "ml-consent-text", text })
     }
-    item("hard-drive", t("consent.local.title"), t("consent.local.text"))
+    if (!context) item("hard-drive", t("consent.local.title"), t("consent.local.text"))
     for (const d of this.destinations) {
       if (d.kind === "live") d.local ? item("captions", t("consent.live.localTitle", d.name), t("consent.live.localText", d.name, d.host)) : item("captions", t("consent.live.title", d.name), t("consent.live.text", d.name, d.host))
       else if (d.kind === "file") d.local ? item("file-audio", t("consent.file.localTitle", d.name), t("consent.file.localText", d.name, d.host)) : item("file-audio", t("consent.file.title", d.name), t("consent.file.text", d.name, d.host))
+      else if (d.kind === "asr-context") item("tags", t("consent.context.title", d.name), t(d.role === "file" ? "consent.context.fileText" : "consent.context.liveText", d.name, d.host))
       else d.local ? item("send", t("consent.llm.localTitle"), t("consent.llm.localText", d.host, d.detail ?? "")) : item("send", t("consent.llm.title"), t("consent.llm.text", d.host, d.detail ?? ""))
     }
-    list.createDiv({ cls: "ml-consent-note", text: t("consent.note") })
+    list.createDiv({ cls: "ml-consent-note", text: t(context ? "consent.context.note" : "consent.note") })
     const buttons = this.contentEl.createDiv({ cls: "modal-button-container" })
-    buttons.createEl("button", { text: t("common.cancel") }).addEventListener("click", () => this.close())
-    const ok = buttons.createEl("button", { cls: "mod-cta", text: t("consent.accept") })
+    buttons.createEl("button", { text: t(context ? "consent.context.decline" : "common.cancel") }).addEventListener("click", () => this.close())
+    const ok = buttons.createEl("button", { cls: "mod-cta", text: t(context ? "consent.context.accept" : "consent.accept") })
     ok.addEventListener("click", () => {
       this.resolve(true)
       this.resolve = () => undefined

@@ -3,7 +3,14 @@ import { inBackground } from "../background.ts"
 import { DECODABLE_EXTENSIONS } from "../audio/transcode.ts"
 import { t } from "../i18n/index.ts"
 import { isLoopbackHost } from "../url.ts"
+import type { AsrContext } from "../asr/context.ts"
+import type { Correction } from "../asr/corrections.ts"
 import { TranscribeJob, type AudioSource, type TranscribeDeps, type TranscribeJobs } from "./transcribeJob.ts"
+
+export interface TranscribeModalDeps extends TranscribeDeps {
+  /** The speech context and corrections for a file transcribed into `note`, asking about sending the note's names if needed. */
+  fileContext: (note: TFile) => Promise<{ context: AsrContext; corrections: Correction[][] }>
+}
 
 class AudioPicker extends FuzzySuggestModal<TFile> {
   private readonly extensions: string[]
@@ -36,12 +43,12 @@ const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
 /** Picks a recording and hands it to a background job that writes the result into the note. */
 export class TranscribeFileModal extends Modal {
-  private readonly deps: TranscribeDeps
+  private readonly deps: TranscribeModalDeps
   private readonly jobs: TranscribeJobs
   private readonly target: TFile
   private source: AudioSource | undefined
 
-  constructor(app: App, deps: TranscribeDeps, jobs: TranscribeJobs, target: TFile) {
+  constructor(app: App, deps: TranscribeModalDeps, jobs: TranscribeJobs, target: TFile) {
     super(app)
     this.deps = deps
     this.jobs = jobs
@@ -119,8 +126,10 @@ export class TranscribeFileModal extends Modal {
       if (current.problem) return void new Notice(current.problem)
       const llmProblem = writeUp.checked ? this.deps.llm().problem : undefined
       if (llmProblem) return void new Notice(t("transcribe.llmProblem", llmProblem))
-      const job = new TranscribeJob(this.app, this.deps, this.target, source, current, { speakers: speakers.checked, writeUp: writeUp.checked })
       start.disabled = true
+      // The recognizer fixes its context when it is resolved, so the note is read and the user asked before it is.
+      const { context, corrections } = await this.deps.fileContext(this.target)
+      const job = new TranscribeJob(this.app, this.deps, this.target, source, this.deps.fileAsr(context), { speakers: speakers.checked, writeUp: writeUp.checked, corrections })
       try {
         if (await job.launch(this.jobs)) return this.close()
       } catch (error) {
