@@ -93,7 +93,7 @@ test("the speaker of an utterance is read from speaker_id, from additions and as
 })
 
 test("the streaming request asks for speakers only when they are turned on, and the provider reports it", () => {
-  const base = { endpoint: "wss://example/api/v3/sauc/bigmodel_async", resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, hotwords: [] }
+  const base = { endpoint: "wss://example/api/v3/sauc/bigmodel_async", resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800 }
   const request = (config: object) => (buildVolcRequest({ ...base, ...config }).request as Record<string, unknown>)
   assert.equal("enable_speaker_info" in request({}), false)
   assert.equal("enable_speaker_info" in request({ speakers: false }), false)

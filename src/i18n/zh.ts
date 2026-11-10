@@ -114,7 +114,7 @@ export const zh = {
   "settings.voice.name": "语音增强",
   "settings.voice.desc": "开启浏览器的回声消除、降噪和自动增益。关闭时保存未经处理的原始声音（推荐）。",
   "settings.hotwords.name": "热词",
-  "settings.hotwords.desc": "公司名、人名、产品名等，一行一个，最多 100 个，提升专有名词识别准确率。",
+  "settings.hotwords.desc": "公司名、人名、产品名等，一行一个，靠前的优先。实时上屏大约只用到前面约 100 tokens，写进转写的定稿可能用到更后面的词。",
   "settings.language.name": "识别语言",
   "settings.language.desc": (roles: string) => `对${roles}生效。自动检测适合多语言混用，已知会议语言时指定语言更准确。`,
   "settings.language.and": "和",

@@ -303,9 +303,9 @@ test("the DashScope file flow against the mock: temporary upload, task, polling 
 })
 
 test("the Volcengine and LLM routes still answer", async () => {
-  const connected = await volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, hotwords: [] })({ onResult: () => undefined, onClose: () => undefined })
+  const connected = await volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800 })({ onResult: () => undefined, onClose: () => undefined })
   connected.connection.close()
-  const refused = (await volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "bad", appId: "", accessToken: "", endWindowMs: 800, hotwords: [] })({ onResult: () => undefined, onClose: () => undefined }).catch((e: unknown) => e)) as AsrError
+  const refused = (await volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "bad", appId: "", accessToken: "", endWindowMs: 800 })({ onResult: () => undefined, onClose: () => undefined }).catch((e: unknown) => e)) as AsrError
   assert.equal(refused.fatal, true)
 
   const text = await chat(
@@ -345,7 +345,7 @@ test("speaker labels travel from Deepgram's words to the finals, the transcript 
 })
 
 test("Volcengine speakers: the request asks for them only when turned on, and speaker_id reaches the finals and the transcript", async () => {
-  const volc = (speakers: boolean) => volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, hotwords: [], speakers })
+  const volc = (speakers: boolean) => volcConnector({ endpoint: `${wsBase()}/asr`, resourceId: "r", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, speakers })
   const finalsOf = async (speakers: boolean) => {
     const rec = recorder()
     const asr = new AsrStreamer(rec.events, { manualTicks: true, pacing: { maxRate: 1000 }, finalTimeoutMs: 3000 })

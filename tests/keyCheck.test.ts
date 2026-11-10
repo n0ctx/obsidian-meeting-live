@@ -151,7 +151,7 @@ test("Volcengine: a refused key, a missing credential and an unreachable server 
 
 test("the detection tries the account's own resource first, then the known ones in order, and stops at the first that is accepted", async () => {
   const tried: string[] = []
-  const config = { endpoint: "ws://x", resourceId: "custom.resource", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800, hotwords: [] }
+  const config = { endpoint: "ws://x", resourceId: "custom.resource", apiKey: "k", appId: "", accessToken: "", endWindowMs: 800 }
   const refuse = (status: number, body = ""): HandshakeResult => ({ ok: false, status, body })
   const only = (accepted: string) => async (c: { resourceId: string }) => (tried.push(c.resourceId), c.resourceId === accepted ? ({ ok: true } as HandshakeResult) : refuse(403, "requested resource not granted"))
   assert.deepEqual(await detectVolcResource(config, only("volc.bigasr.sauc.duration")), { state: "ok", resourceId: "volc.bigasr.sauc.duration", changed: true })

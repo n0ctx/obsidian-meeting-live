@@ -13,7 +13,8 @@ export interface VolcConfig {
   appId: string
   accessToken: string
   endWindowMs: number
-  hotwords: string[]
+  /** request.corpus (hotwords, scene, table ids), fixed when the recognizer is resolved: the protocol takes it in the first frame only. */
+  corpus?: Record<string, unknown>
   /** Label speakers: the request asks for enable_speaker_info, and utterances then carry the speaker. */
   speakers?: boolean
 }
@@ -41,8 +42,7 @@ export function buildVolcRequest(config: VolcConfig): Record<string, unknown> {
   //   https://www.volcengine.com/docs/6561/2699972  (大模型ASR-说话人分离最佳实践: 流式大模型 SSD)
   if (config.speakers) request.enable_speaker_info = true
   if (/bigmodel_async\/?$/.test(config.endpoint.trim())) request.enable_nonstream = true
-  const hotwords = config.hotwords.map((w) => w.trim()).filter(Boolean).slice(0, 100)
-  if (hotwords.length) request.corpus = { context: JSON.stringify({ hotwords: hotwords.map((word) => ({ word })) }) }
+  if (config.corpus) request.corpus = config.corpus
   return {
     user: { uid: "obsidian-meeting-live" },
     audio: { format: "pcm", codec: "raw", rate: 16000, bits: 16, channel: 1 },

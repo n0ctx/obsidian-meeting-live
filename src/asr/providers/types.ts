@@ -3,6 +3,7 @@ import type { Account } from "../../accounts/account.ts"
 import type { Lang } from "../../i18n/index.ts"
 import type { SecretReader } from "../../secrets.ts"
 import type { MeetingLiveSettings } from "../../settings.ts"
+import type { AsrContext } from "../context.ts"
 import type { AsrConnect, LivePacing } from "../contract.ts"
 import type { FileAsrProvider } from "../fileAsr.ts"
 
@@ -33,6 +34,12 @@ export interface ProviderEnv {
   settings: MeetingLiveSettings
   /** The account the service runs for: its key and the service's own settings. */
   account: Account
+  /**
+   * The meeting's speech context, read when the recognizer is resolved and fixed for the run. Only services with the `context`
+   * capability read it. Absent for checks that run outside a meeting (the settings page, key checks); such a resolve uses the typed
+   * hotwords. A caller passes the typed hotwords alone when the user declined to send the note's words and the scene.
+   */
+  context?: () => AsrContext | undefined
 }
 
 /** The live recognizer for one run: a connector, or why there is none. */

@@ -114,7 +114,7 @@ export const en: Dictionary = {
   "settings.voice.name": "Voice processing",
   "settings.voice.desc": "Turns on the browser's echo cancellation, noise suppression and automatic gain. Off saves the unprocessed sound (recommended).",
   "settings.hotwords.name": "Hotwords",
-  "settings.hotwords.desc": "Company, people and product names and the like, one per line, up to 100, to improve recognition of proper nouns.",
+  "settings.hotwords.desc": "Company, people and product names and the like, one per line, the most important first. The live captions use only about the first 100 tokens; the final text saved to the transcript may use words further down.",
   "settings.language.name": "Recognition language",
   "settings.language.desc": (roles) => `Applies to ${roles}. Auto-detect suits meetings that mix languages; naming the language is more accurate when you know it.`,
   "settings.language.and": " and ",

@@ -50,6 +50,8 @@ test("the author's 1.0.1 settings become a Volcengine account and a DeepSeek acc
     endWindowMs: 600,
     fileResourceId: "volc.seedasr.auc",
     speakers: false,
+    boostingTableId: "",
+    correctTableId: "",
   })
   assert.deepEqual(deepseek.options, { baseUrl: "https://api.deepseek.com" })
   assert.deepEqual(deepseek.llm, { temperature: 0.2, effort: "low", inputLimit: 0, headers: "" })

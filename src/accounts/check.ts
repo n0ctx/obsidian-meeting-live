@@ -79,7 +79,7 @@ async function checkVolc(account: Account, key: string, deps: CheckDeps): Promis
   // The typed key stands for the account's own; any other secret (the old console's access token) is read from storage.
   const secrets: SecretReader = { getSecret: (id) => (id === TYPED_KEY ? key : deps.secrets.getSecret(id)) }
   const settings = volcSettingsOf(account)
-  const config = volcConfig(secrets, { ...settings, apiKeySecret: key ? TYPED_KEY : "" }, "")
+  const config = volcConfig(secrets, { ...settings, apiKeySecret: key ? TYPED_KEY : "" })
   if (!key && !(config.appId && config.accessToken)) return { state: "failed", message: t("volc.noCredentials") }
   const found = await detectVolcResource(config, deps.volcHandshake)
   if (found.state === "unreachable") return unreachable(found.message)

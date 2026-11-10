@@ -24,6 +24,8 @@ export interface FileAsrAuth {
   appId: string
   accessToken: string
   resourceId: string
+  /** request.corpus for every file this provider submits; absent when there is nothing to bias towards. */
+  corpus?: Record<string, unknown>
 }
 
 function headers(auth: FileAsrAuth, requestId: string): Record<string, string> {
@@ -79,19 +81,17 @@ function fail(code: string, message: string): never {
   throw new Error(code === "45000001" ? t("volc.badParams", detail) : t("volc.fileFailed", detail))
 }
 
-export function buildFileRequest(base64: string, format: string, speakers: boolean): Record<string, unknown> {
-  return {
-    user: { uid: "obsidian-meeting-live" },
-    audio: { data: base64, format },
-    request: {
-      model_name: "bigmodel",
-      enable_itn: true,
-      enable_punc: true,
-      enable_ddc: true,
-      enable_speaker_info: speakers,
-      show_utterances: true,
-    },
+export function buildFileRequest(base64: string, format: string, speakers: boolean, corpus?: Record<string, unknown>): Record<string, unknown> {
+  const request: Record<string, unknown> = {
+    model_name: "bigmodel",
+    enable_itn: true,
+    enable_punc: true,
+    enable_ddc: true,
+    enable_speaker_info: speakers,
+    show_utterances: true,
   }
+  if (corpus) request.corpus = corpus
+  return { user: { uid: "obsidian-meeting-live" }, audio: { data: base64, format }, request }
 }
 
 export function parseFileResult(body: Record<string, unknown>): FileAsrResult {
@@ -118,7 +118,7 @@ export async function volcTranscribeFile(auth: FileAsrAuth, audio: PreparedAudio
   options.onStage?.({ stage: "uploading" })
   // The view may cover only part of the buffer behind it, so encode exactly its bytes.
   const base64 = Buffer.from(audio.data.buffer, audio.data.byteOffset, audio.data.byteLength).toString("base64")
-  const submitted = statusOf(await options.post(FILE_ASR_BASE + SUBMIT_PATH, headers(auth, requestId), JSON.stringify(buildFileRequest(base64, audio.format, options.speakers))))
+  const submitted = statusOf(await options.post(FILE_ASR_BASE + SUBMIT_PATH, headers(auth, requestId), JSON.stringify(buildFileRequest(base64, audio.format, options.speakers, auth.corpus))))
   if (submitted.code !== STATUS_OK) fail(submitted.code, submitted.message)
 
   let waited = 0

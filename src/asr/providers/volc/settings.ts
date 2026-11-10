@@ -13,6 +13,10 @@ export interface VolcSettings {
   fileResourceId: string
   /** Ask the live stream to label speakers (enable_speaker_info). Off unless chosen: it adds delay at the end of the stream. */
   speakers: boolean
+  /** Hotword table made in the console (自学习平台). Its words are joined to the inline hotwords before the server cuts the list. */
+  boostingTableId: string
+  /** Replacement table made in the console: the server swaps the recognized words it lists for their targets. */
+  correctTableId: string
 }
 
 export const DEFAULT_VOLC: VolcSettings = {
@@ -24,11 +28,13 @@ export const DEFAULT_VOLC: VolcSettings = {
   endWindowMs: 800,
   fileResourceId: "volc.seedasr.auc",
   speakers: false,
+  boostingTableId: "",
+  correctTableId: "",
 }
 
 /** Where each setting lived in the flat settings of 1.0.x. */
-/** `speakers` is newer than 1.0.x and has no flat key. */
-const FLAT_KEYS: Record<Exclude<keyof VolcSettings, "speakers">, string> = {
+/** `speakers` and the table ids are newer than 1.0.x and have no flat key. */
+const FLAT_KEYS: Record<Exclude<keyof VolcSettings, "speakers" | "boostingTableId" | "correctTableId">, string> = {
   endpoint: "volcEndpoint",
   resourceId: "volcResourceId",
   appId: "volcAppId",
@@ -54,7 +60,8 @@ export function readVolcSettings(source: unknown, flat: boolean): VolcSettings {
   return result
 }
 
-export function volcConfig(secrets: SecretReader, volc: VolcSettings, hotwords: string): VolcConfig {
+/** The stream's settings; `corpus` is request.corpus as buildCorpus makes it, absent when there is nothing to bias towards. */
+export function volcConfig(secrets: SecretReader, volc: VolcSettings, corpus?: Record<string, unknown>): VolcConfig {
   return {
     endpoint: volc.endpoint,
     resourceId: volc.resourceId,
@@ -62,7 +69,7 @@ export function volcConfig(secrets: SecretReader, volc: VolcSettings, hotwords: 
     appId: volc.appId.trim(),
     accessToken: readSecret(secrets, volc.accessTokenSecret),
     endWindowMs: volc.endWindowMs,
-    hotwords: hotwords.split(/\n|,|，/),
+    corpus,
     speakers: volc.speakers,
   }
 }
