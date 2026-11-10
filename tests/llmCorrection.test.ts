@@ -76,6 +76,14 @@ test("the window is corrected first and summarized after, with the same model; t
   assert.equal(session.meta.summaries[0].status, "done")
 })
 
+test("the check reads the note when it runs, so a name written just before counts even if the note watcher has not fired yet", async () => {
+  const { session, prompts, files } = setup(() => '{"fixes":[]}', "蓝箭")
+  await session.correctTranscript()
+  files["访谈.md"] += "\n参会：[[章帆]]\n"
+  await session.runQueue()
+  assert.match(prompts[0][1].content, /Known terms:\n- 蓝箭\n- 章帆/)
+})
+
 test("a fix that changes a number, aims outside the known terms or replaces text the window does not have is dropped", () => {
   const terms = correctionTerms({ hotwords: ["蓝箭", "四亿"], scene: "参会人章帆" }, [[{ from: "甲木", to: "甲沐" }]])
   const proposed = [

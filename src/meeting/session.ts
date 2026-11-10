@@ -591,7 +591,9 @@ export class MeetingSession extends Events {
   private async correctWindow(record: SummaryRecord, items: Utterance[], llm: LlmClient): Promise<void> {
     if (this.checkedStages.has(record.index) || items.length === 0) return
     this.checkedStages.add(record.index)
-    this.vocabulary ??= await this.readVocabulary()
+    // Read afresh rather than trust the watcher: Obsidian in the background throttles its timers, so a name written a moment ago
+    // may not have been picked up yet.
+    this.vocabulary = await this.readVocabulary()
     const terms = correctionTerms(asrContextFor(this.env.settings(), this.vocabulary, true), this.correctionTables())
     if (noTerms(terms)) return
     try {
