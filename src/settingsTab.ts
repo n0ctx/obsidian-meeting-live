@@ -694,7 +694,7 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
       .setDesc(t("settings.corrections.desc"))
       .addTextArea((field) => {
         field.inputEl.rows = 4
-        field.setPlaceholder("兰箭→蓝箭")
+        field.setPlaceholder(t("settings.corrections.placeholder"))
         field.setValue(s.corrections).onChange((v) => {
           s.corrections = v
           this.save()
