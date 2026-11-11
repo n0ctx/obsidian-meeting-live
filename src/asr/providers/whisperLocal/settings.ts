@@ -1,4 +1,5 @@
 import { languageHint, type AsrLanguage } from "../../language.ts"
+import { hostOf, isLocalHost } from "../../../url.ts"
 import type { OpenAiFileConfig } from "../openaiCompat/file.ts"
 import { readSection } from "../readSection.ts"
 import { WHISPER_LOCAL_DEFAULT_MODEL, WHISPER_LOCAL_DEFAULT_URL, WHISPER_LOCAL_FILE_LIMIT } from "./info.ts"
@@ -19,11 +20,12 @@ export const readWhisperLocalSettings = (source: unknown): WhisperLocalSettings 
  */
 const SIMPLIFIED_PROMPT = "以下是普通话的句子。"
 
-/** The OpenAI-compatible adapter's configuration for a local server: no key, and a size limit that a local server does not need to keep small. */
+/** A server on this machine needs no key. One elsewhere still does: this account has no key field, so a remote address is not configured. */
 export const whisperLocalConfig = (settings: WhisperLocalSettings, language: AsrLanguage): OpenAiFileConfig => ({
   baseUrl: settings.baseUrl.trim(),
   model: settings.model.trim() || WHISPER_LOCAL_DEFAULT_MODEL,
   apiKey: "",
+  keyOptional: isLocalHost(hostOf(settings.baseUrl)),
   language: languageHint(language),
   fileSizeLimit: WHISPER_LOCAL_FILE_LIMIT,
   prompt: language === "zh" ? SIMPLIFIED_PROMPT : undefined,

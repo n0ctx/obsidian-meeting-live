@@ -11,6 +11,7 @@ import { detectVolcResource, fileResourceFor } from "../asr/providers/volc/detec
 import { volcSettingsOf } from "../asr/providers/volc/index.ts"
 import type { HandshakeResult, VolcConfig } from "../asr/providers/volc/live.ts"
 import { volcConfig } from "../asr/providers/volc/settings.ts"
+import { checkLocalSpeech } from "../asr/providers/localSpeech/check.ts"
 import { t } from "../i18n/index.ts"
 import { chat, llmConfigProblem, type HttpGet, type HttpPost } from "../llm/client.ts"
 import { hasListing, listModels } from "../llm/models.ts"
@@ -119,6 +120,7 @@ export async function freeCheck(account: Account, key: string, deps: CheckDeps):
     // Listing one transcript is a read: https://www.assemblyai.com/docs/api-reference/transcripts/list
     return authCall(deps.get, `${assemblyAiEndpoints(assemblyAiSettingsOf(account)).api}/v2/transcript?limit=1`, { Authorization: key })
   }
+  if (def.id === "local-speech") return checkLocalSpeech(String(account.options.baseUrl ?? ""), key, deps.get)
   return { state: "manual" }
 }
 
@@ -127,7 +129,7 @@ export const hasFreeCheck = (account: Account): boolean => {
   const def = serviceDef(account.service)
   if (!def) return false
   const llm = accountLlmConfig(account, "", "")
-  return !!def.keyless || ["volc", "deepgram", "assemblyai"].includes(def.id) || (!!llm && hasListing(llm.preset.id))
+  return !!def.keyless || ["volc", "deepgram", "assemblyai", "local-speech"].includes(def.id) || (!!llm && hasListing(llm.preset.id))
 }
 
 /** The check the user asks for when there is no free one: one tiny request to the language model, which may count as usage. */

@@ -19,6 +19,8 @@ export interface LiveCapabilities {
   diarization: boolean
   /** Reads ProviderEnv.context: the note's names and the meeting's scene beyond the typed hotwords. Absent where only those are taken. */
   context?: true
+  /** Final text arrives after a pause, not word by word. The card says so, and does not show a live guess. */
+  afterPause?: true
 }
 
 /** What a recorded-file recognizer can do. */

@@ -35,6 +35,11 @@ export interface AsrUpdate {
   utterances: AsrUtterance[]
   /** Leave the in-progress utterances as they are (for example a keep-alive carrying no content). */
   keepInterims?: boolean
+  /**
+   * A note for the card, not text. `"recognizing"` means a finished utterance is being recognized; `""` clears it.
+   * The streamer does not read it: the session does, so a slow request can say it is still working.
+   */
+  activity?: string
 }
 
 export interface AsrConnection {

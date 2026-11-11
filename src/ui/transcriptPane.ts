@@ -142,7 +142,11 @@ export class TranscriptPane {
     const message =
       status === "recording"
         ? asr === "live"
-          ? t("transcript.empty.listening")
+          ? this.session.asrAfterPause
+            ? this.session.asrDetail === "recognizing"
+              ? t("card.asr.recognizing")
+              : t("transcript.empty.afterPause")
+            : t("transcript.empty.listening")
           : asr === "disabled"
             ? t("transcript.empty.noAsr")
             : t("transcript.empty.connecting")

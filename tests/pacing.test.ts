@@ -96,7 +96,7 @@ test("every live provider declares a pace, at or above real time and never unbou
 
 test("the declared values are the documented ones", () => {
   const rates = Object.fromEntries(declared.map((d) => [d.id, d.pacing.maxRate]))
-  assert.deepEqual(rates, { volc: 6, dashscope: 1.25, assemblyai: 1.25, deepgram: 1.25, "sherpa-onnx": 2.5 })
+  assert.deepEqual(rates, { volc: 6, dashscope: 1.25, assemblyai: 1.25, deepgram: 1.25, "sherpa-onnx": 2.5, "local-speech": 4 })
 })
 
 test("a resolved recognizer carries its provider's pace, also when it has no connector; an unknown one gets the cautious default", () => {

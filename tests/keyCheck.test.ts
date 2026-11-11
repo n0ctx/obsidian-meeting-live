@@ -170,7 +170,7 @@ test("the file resource follows the streaming one only while it is still the def
 })
 
 test("which services show Check (free) and which Test (may count as usage)", () => {
-  const free = ["deepseek", "openai", "anthropic", "gemini", "openrouter", "kimi", "siliconflow", "grok", "mistral", "groq", "azure", "ollama", "lmstudio", "dashscope", "custom", "volc", "deepgram", "assemblyai", "sherpa", "whisper-local"]
+  const free = ["deepseek", "openai", "anthropic", "gemini", "openrouter", "kimi", "siliconflow", "grok", "mistral", "groq", "azure", "ollama", "lmstudio", "dashscope", "custom", "volc", "deepgram", "assemblyai", "sherpa", "whisper-local", "local-speech"]
   for (const service of free) assert.equal(hasFreeCheck(account(service, {}, serviceDef(service)!.regions ? "intl" : "")), true, service)
   for (const service of ["glm", "ark"]) assert.equal(hasFreeCheck(account(service, {}, serviceDef(service)!.regions ? "cn" : "")), false, service)
   assert.equal(hasFreeCheck(account("minimax", {}, "cn")), false, "only the international MiniMax host documents a list")

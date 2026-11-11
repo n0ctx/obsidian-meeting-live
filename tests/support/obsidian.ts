@@ -164,3 +164,8 @@ export class Vault {
 // Obsidian's DOM helper globals, reduced to what notices use.
 const element = (): Record<string, unknown> => ({ createDiv: element, createEl: element, createSpan: element, addEventListener() {} })
 ;(globalThis as Record<string, unknown>).createFragment = element
+
+/** A test that reaches the real request path has forgotten to inject a post. */
+export const requestUrl = (): never => {
+  throw new Error("requestUrl is not available in tests")
+}

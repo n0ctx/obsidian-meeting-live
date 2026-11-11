@@ -7,6 +7,7 @@ import { addsToTyped, asrContextFor, type AsrContext } from "../asr/context.ts"
 import { applyCorrections, correctionTables, type Correction } from "../asr/corrections.ts"
 import type { ResolvedLive } from "../asr/providers/registry.ts"
 import { extractVocabulary, type NoteVocabulary } from "../asr/vocabulary.ts"
+import type { AsrConnect } from "../asr/contract.ts"
 import { AsrStreamer, type AsrState } from "../asr/streamer.ts"
 import type { LlmClient } from "../llm/client.ts"
 import { writeMinutes } from "../llm/contextGuard.ts"
@@ -69,6 +70,8 @@ export class MeetingSession extends Events {
   interims: Utterance[] = []
   asrState: AsrState = "idle"
   asrDetail: string | undefined
+  /** The live recognizer delivers text after a pause, not word by word. */
+  asrAfterPause = false
   /** The recognizer resolved for the current or latest run. */
   private asrRun: ResolvedLive | undefined
   saveState: SaveState = "saved"
@@ -256,8 +259,10 @@ export class MeetingSession extends Events {
   }
 
   /** Starts recognition with the recognizer resolved for this run, so settings changed between runs apply to the next one. */
-  private startAsr({ connect, pacing, problem }: ResolvedLive): void {
-    this.asrDetail = problem
+  private startAsr(resolved: ResolvedLive): void {
+    this.asrAfterPause = resolved.afterPause === true
+    this.asrDetail = resolved.problem
+    const connect = resolved.connect ? this.watchActivity(resolved.connect) : null
     if (!this.asr) {
       this.asr = new AsrStreamer({
         onFinal: (u) => this.onFinal(u),
@@ -278,7 +283,7 @@ export class MeetingSession extends Events {
       this.asr.restore(this.utterances)
     }
     this.runGapStart = this.meta.gaps.length
-    this.asr.begin(this.durationMs, connect, pacing)
+    this.asr.begin(this.durationMs, connect, resolved.pacing)
     this.asrState = this.asr.currentState
   }
 
@@ -373,13 +378,29 @@ export class MeetingSession extends Events {
       this.emitChange()
       return
     }
-    if (!this.asr.retryNow(resolved.connect, resolved.pacing)) return
+    if (!this.asr.retryNow(resolved.connect ? this.watchActivity(resolved.connect) : resolved.connect, resolved.pacing)) return
     this.asrRun = resolved
+    this.asrAfterPause = resolved.afterPause === true
     // A stretch of audio is tagged with the provider it is sent to, which may be another one from here on.
     if (this.liveSegment) this.liveSegment.asrProvider = resolved.id
   }
 
   // ---------------------------------------------------------------- speech context and corrections
+
+  /** The card reads `activity` on a result; the streamer does not, so a slow request can say it is still working. */
+  private watchActivity(connect: AsrConnect): AsrConnect {
+    return (handlers) =>
+      connect({
+        ...handlers,
+        onResult: (update, last) => {
+          if (update.activity !== undefined) {
+            this.asrDetail = update.activity || undefined
+            this.emitChange()
+          }
+          handlers.onResult(update, last)
+        },
+      })
+  }
 
   /** What the recognizer is told for this meeting: the typed hotwords, and the note's names and the scene when the user agreed. */
   asrContext(): AsrContext {

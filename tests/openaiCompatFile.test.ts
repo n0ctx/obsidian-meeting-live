@@ -188,7 +188,7 @@ test("the provider resolves from settings: host, model, the user's size limit, l
     o.baseUrl = "http://localhost:8000/v1"
     o.model = "large-v3"
   })
-  assert.equal(resolveFile({ secrets: secrets({}), settings: local }).problem, undefined)
+  assert.match(resolveFile({ secrets: secrets({}), settings: local }).problem ?? "", /API Key/, "a local address is not configured without a key")
   assert.match(resolveFile({ secrets: secrets({}), settings: settings((_, o) => (o.model = " ")) }).problem ?? "", /模型/)
   assert.match(resolveFile({ secrets: secrets({}), settings: settings((_, o) => (o.baseUrl = "")) }).problem ?? "", /API 地址/)
 })

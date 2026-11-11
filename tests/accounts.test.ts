@@ -24,6 +24,7 @@ test("each service offers the roles one key covers, and no more", () => {
   // Local services are accounts too.
   assert.deepEqual(rolesOf("sherpa"), ["live"])
   assert.deepEqual(rolesOf("whisper-local"), ["file"])
+  assert.deepEqual(rolesOf("local-speech"), ["live", "file"])
   assert.deepEqual(rolesOf("ollama"), ["llm"])
   assert.deepEqual(rolesOf("lmstudio"), ["llm"])
   assert.deepEqual(rolesOf("custom"), ["file", "llm"])

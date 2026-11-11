@@ -8,6 +8,7 @@ import { DEFAULT_DEEPGRAM } from "../asr/providers/deepgram/settings.ts"
 import { DEFAULT_SHERPA } from "../asr/providers/sherpa/settings.ts"
 import { DEFAULT_VOLC } from "../asr/providers/volc/settings.ts"
 import { DEFAULT_WHISPER_LOCAL } from "../asr/providers/whisperLocal/settings.ts"
+import { DEFAULT_LOCAL_SPEECH } from "../asr/providers/localSpeech/settings.ts"
 
 export interface ServiceRegion {
   id: string
@@ -32,6 +33,8 @@ export interface ServiceDef {
   readonly address?: "required" | "prefilled"
   /** The option that holds the service's address, where the adapter calls it something other than `baseUrl`. */
   readonly addressKey?: string
+  /** One sentence on the account row, instead of the role list, when the roles would not say what the service actually does. */
+  readonly summary?: () => string
   /** The service's own settings with their defaults. Language-model services carry their address as `baseUrl`. */
   options(region: string): Record<string, unknown>
 }
@@ -161,6 +164,20 @@ export const SERVICES: readonly ServiceDef[] = [
     address: "prefilled",
     keyUrl: () => "",
     options: () => ({ ...DEFAULT_WHISPER_LOCAL }),
+  },
+  {
+    id: "local-speech",
+    get name() {
+      return t("provider.localSpeech")
+    },
+    asr: "local-speech",
+    address: "prefilled",
+    summary: () => t("localSpeech.line"),
+    keyUrl: () => "",
+    options: () => {
+      const { apiKeySecret: _key, ...rest } = DEFAULT_LOCAL_SPEECH
+      return rest
+    },
   },
   {
     id: "custom",

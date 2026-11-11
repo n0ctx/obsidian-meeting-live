@@ -9,12 +9,13 @@ import { assemblyAiProvider } from "./assemblyai/index.ts"
 import { dashScopeProvider } from "./dashscope/index.ts"
 import { deepgramProvider } from "./deepgram/index.ts"
 import { openAiCompatProvider } from "./openaiCompat/index.ts"
+import { localSpeechProvider } from "./localSpeech/index.ts"
 import { sherpaProvider } from "./sherpa/index.ts"
 import { whisperLocalProvider } from "./whisperLocal/index.ts"
 import { volcProvider } from "./volc/index.ts"
 import type { AsrProvider, ProviderEnv } from "./types.ts"
 
-export const ASR_PROVIDERS: readonly AsrProvider[] = [volcProvider, dashScopeProvider, assemblyAiProvider, deepgramProvider, openAiCompatProvider, sherpaProvider, whisperLocalProvider]
+export const ASR_PROVIDERS: readonly AsrProvider[] = [volcProvider, dashScopeProvider, assemblyAiProvider, deepgramProvider, openAiCompatProvider, sherpaProvider, whisperLocalProvider, localSpeechProvider]
 
 export function asrProvider(id: string): AsrProvider | undefined {
   return ASR_PROVIDERS.find((p) => p.id === id)
@@ -38,6 +39,8 @@ export interface ResolvedLive {
   connect: AsrConnect | null
   /** How fast this recognizer takes audio; the streamer sends no faster. */
   pacing: LivePacing
+  /** Text arrives after a pause, not word by word. The card says so. */
+  afterPause?: boolean
   problem?: string
 }
 
@@ -50,7 +53,7 @@ export function resolveLive(env: ResolveEnv): ResolvedLive {
   if (!provider) return { id: account.service, name: account.service, connect: null, pacing: CAUTIOUS_LIVE_PACING, problem: unknownProblem(account.service) }
   const name = accountLabel(accounts, account)
   if (!provider.live) return { id: provider.id, name, connect: null, pacing: CAUTIOUS_LIVE_PACING, problem: unsupportedProblem(name, t("asr.role.live")) }
-  return { id: provider.id, name, pacing: provider.live.pacing(account), ...provider.live.resolve({ ...env, account }) }
+  return { id: provider.id, name, pacing: provider.live.pacing(account), afterPause: provider.live.capabilities(account).afterPause === true, ...provider.live.resolve({ ...env, account }) }
 }
 
 /** The recorded-file recognizer under the current settings. */

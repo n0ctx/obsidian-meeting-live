@@ -18,7 +18,7 @@ const settings = (patch: (s: MeetingLiveSettings, volc: Record<string, unknown>)
 const volcAccount = (s: MeetingLiveSettings) => s.accounts.find((a) => a.service === "volc")!
 
 test("the registry lists Volcengine with its capabilities and destinations", () => {
-  assert.deepEqual(ASR_PROVIDERS.map((p) => p.id), ["volc", "dashscope", "assemblyai", "deepgram", "openai-compat", "sherpa-onnx", "whisper-local"])
+  assert.deepEqual(ASR_PROVIDERS.map((p) => p.id), ["volc", "dashscope", "assemblyai", "deepgram", "openai-compat", "sherpa-onnx", "whisper-local", "local-speech"])
   const volc = asrProvider("volc")!
   assert.equal(volc.name, "火山引擎")
   const account = volcAccount(settings())
@@ -98,8 +98,8 @@ test("a provider may be live-only or file-only: the choices list only capable on
   providers.push(liveOnly, fileOnly)
   services.push(serviceFor(liveOnly), serviceFor(fileOnly))
   try {
-    assert.deepEqual(liveProviders().map((p) => p.id), ["volc", "dashscope", "assemblyai", "deepgram", "sherpa-onnx", "live-only"])
-    assert.deepEqual(fileProviders().map((p) => p.id), ["volc", "dashscope", "assemblyai", "deepgram", "openai-compat", "whisper-local", "file-only"])
+    assert.deepEqual(liveProviders().map((p) => p.id), ["volc", "dashscope", "assemblyai", "deepgram", "sherpa-onnx", "local-speech", "live-only"])
+    assert.deepEqual(fileProviders().map((p) => p.id), ["volc", "dashscope", "assemblyai", "deepgram", "openai-compat", "whisper-local", "local-speech", "file-only"])
 
     const mixed = settings((s) => {
       s.roles.live = withAccount(s, "live-only").id

@@ -8,6 +8,7 @@ import type { MeetingSession } from "../meeting/session.ts"
 import { formatClock, formatShortDateTime, type MeetingStatus, type Utterance } from "../meeting/types.ts"
 import { platformText } from "../platform.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
+import { asrChipLabel, asrChipTone } from "./asrChip.ts"
 import { TimelinePlayer } from "./player.ts"
 import { speakerChip } from "./speakerChip.ts"
 import { TranscriptPane } from "./transcriptPane.ts"
@@ -41,15 +42,6 @@ const STATUS_LABEL = {
   ended: "card.status.ended",
   interrupted: "card.status.interrupted",
 } as const satisfies Record<MeetingStatus, Key>
-
-const ASR_LABEL: Record<string, [Key, string]> = {
-  live: ["card.asr.live", "ok"],
-  connecting: ["card.asr.connecting", "busy"],
-  reconnecting: ["card.asr.reconnecting", "warn"],
-  failed: ["card.asr.failed", "error"],
-  disabled: ["card.asr.disabled", "off"],
-  idle: ["card.asr.idle", "idle"],
-}
 
 /** Events that must not reach the editor, so interacting with the card never moves the cursor into the block. */
 const ISOLATED_EVENTS = ["mousedown", "pointerdown", "keydown", "keyup", "keypress", "beforeinput", "input", "paste", "cut", "dragstart", "drop"]
@@ -359,7 +351,8 @@ export class MeetingCard extends MarkdownRenderChild {
     if (session.status !== "idle" || session.meta.segments.length) {
       const live = session.status === "recording" || session.status === "paused" || session.status === "stopping"
       if (live) {
-        const [labelKey, tone] = ASR_LABEL[session.asrState] ?? [undefined, "idle"]
+        const tone = asrChipTone(session.asrState)
+        const labelKey = asrChipLabel(session.asrAfterPause, session.asrState, session.asrDetail)
         const label = labelKey ? t(labelKey) : ""
         const backlog = session.asrBacklogMs
         const text = session.asrState === "reconnecting" && backlog > 1500 ? t("card.chip.buffered", label, Math.round(backlog / 1000)) : label

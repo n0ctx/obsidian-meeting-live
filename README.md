@@ -44,6 +44,7 @@ One key covers all the jobs listed for it (taken from each service's documentati
 | Custom (OpenAI-compatible) | | ✓ | ✓ | Any server with `/audio/transcriptions` or `/chat/completions`: its address and key |
 | Local (sherpa-onnx) | ✓ | | | No key; address prefilled. [Set-up steps](#speech-recognition-on-your-own-computer) |
 | Local Whisper (whisper.cpp) | | ✓ | | No key; address prefilled |
+| Local speech (OpenAI-compatible) | ✓ | ✓ | | Needs a key. Address prefilled, and editable. Check is `GET /v1/models`: the key is wrong, or the service is not running. Text after a pause, timed, no speaker labels |
 | Ollama, LM Studio | | | ✓ | No key; address prefilled. Set the input limit to your model's real context length |
 
 Volcengine speech and the Ark language model are different services with different keys; so are the two regions of Alibaba Cloud, Kimi, GLM, SiliconFlow and MiniMax, which is why those ask where the key was made.
@@ -58,7 +59,7 @@ Volcengine speech and the Ark language model are different services with differe
 | AssemblyAI | `GET /v2/transcript?limit=1`, a read | Same |
 | Volcengine speech | A WebSocket handshake with no audio, trying the 2.0 streaming resource `volc.seedasr.sauc.duration` and then the 1.0 one `volc.bigasr.sauc.duration`, and keeping the one that is accepted (an account that already has a resource keeps it if it works) | Billing is by audio duration and nothing is sent, but the documentation does not say a bare connection is free |
 | Zhipu GLM, Volcengine Ark, MiniMax (China) | None documented. **Test** sends one tiny chat request | May count as usage |
-| Local services | Whether the address answers (sherpa-onnx: a connection with no audio) | Free |
+| Local services | Whether the address answers (sherpa-onnx: a connection with no audio). Local speech: `GET /v1/models`; 401 means the key is wrong, and no connection means the service is not running | Free |
 
 Recorded-file resources (Volcengine `volc.seedasr.auc` or `volc.bigasr.auc`) have no free check; a new account that falls back to the 1.0 streaming resource gets the 1.0 file resource with it, which is an inference from the naming.
 

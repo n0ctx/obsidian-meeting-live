@@ -4,7 +4,7 @@
 //   https://console.groq.com/docs/speech-to-text
 import type { PreparedAudio } from "../../../audio/transcode.ts"
 import { t } from "../../../i18n/index.ts"
-import { hostOf, isLocalHost } from "../../../url.ts"
+import { hostOf } from "../../../url.ts"
 import type { FileAsrCall, FileAsrProvider, FileAsrResponse, FileAsrResult, FileUtterance } from "../../fileAsr.ts"
 import { buildMultipart } from "../../multipart.ts"
 import { OPENAI_COMPAT_ID } from "./info.ts"
@@ -18,8 +18,12 @@ export interface OpenAiFileConfig {
   /** ISO 639-1 code, or undefined to let the service detect it. */
   language: string | undefined
   fileSizeLimit: number
-  /** Text that steers the first window of recognition (the API's `prompt`); only local Whisper servers set it. */
+  /** Text that steers recognition (the API's `prompt`): a Whisper hint, or the meeting's terms. A server that rejects the field is asked again without it. */
   prompt?: string
+  /** Set by a service that does not use a key. A local address does not imply this: some local servers require one. */
+  keyOptional?: boolean
+  /** Asked instead of the format inferred from the model name. The name is not a capability. */
+  responseFormat?: ResponseFormat
 }
 
 /**
@@ -103,9 +107,9 @@ export function parseTranscription(raw: string, speakers: boolean): FileAsrResul
 }
 
 /** Speakers, timestamps and chunking are asked of the service only for the formats that give them. */
-function fields(config: OpenAiFileConfig, format: ResponseFormat): [string, string][] {
+function fields(config: OpenAiFileConfig, format: ResponseFormat, prompt: string | undefined): [string, string][] {
   const list: [string, string][] = [["model", config.model], ["response_format", format]]
-  if (config.prompt) list.push(["prompt", config.prompt])
+  if (prompt) list.push(["prompt", prompt])
   if (format === "verbose_json") list.push(["timestamp_granularities[]", "segment"])
   if (format === "diarized_json") list.push(["chunking_strategy", "auto"])
   // The diarizing model takes no language hint in the guide's description, and gpt-transcribe takes a `languages` array instead of
@@ -115,23 +119,27 @@ function fields(config: OpenAiFileConfig, format: ResponseFormat): [string, stri
 }
 
 export async function openAiTranscribeFile(config: OpenAiFileConfig, audio: PreparedAudio, call: FileAsrCall): Promise<FileAsrResult> {
-  const send = (format: ResponseFormat) => {
+  const send = (format: ResponseFormat, prompt?: string) => {
     if (call.signal?.aborted) throw new Error(t("asr.cancelled"))
-    const form = buildMultipart(fields(config, format), { name: `audio.${audio.format}`, mime: MIME[audio.format] ?? "application/octet-stream", data: audio.data })
+    const form = buildMultipart(fields(config, format, prompt), { name: `audio.${audio.format}`, mime: MIME[audio.format] ?? "application/octet-stream", data: audio.data })
     const headers: Record<string, string> = { "Content-Type": form.contentType }
     if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`
     return call.post(transcriptionsUrl(config.baseUrl), headers, form.body)
   }
-  let format = responseFormatFor(config.model)
+  let format = config.responseFormat ?? responseFormatFor(config.model)
+  let prompt = config.prompt
   call.onStage?.({ stage: "uploading" })
-  let pending = send(format)
   call.onStage?.({ stage: "recognizing", waitedMs: 0 })
-  let response = await pending
+  let response = await send(format, prompt)
+  // A server that does not take `prompt` is asked again without it. The verbose_json fallback below still applies.
+  if (response.status === 400 && prompt) {
+    prompt = undefined
+    response = await send(format, prompt)
+  }
   // A server that does not know verbose_json for this model (local servers, newer models) is asked for plain JSON instead.
   if (response.status === 400 && format === "verbose_json") {
     format = "json"
-    pending = send(format)
-    response = await pending
+    response = await send(format, prompt)
   }
   if (response.status >= 400) throw errorOf(response)
   return parseTranscription(response.text, call.speakers && format === "diarized_json")
@@ -139,7 +147,7 @@ export async function openAiTranscribeFile(config: OpenAiFileConfig, audio: Prep
 
 export function openAiFileProvider(config: OpenAiFileConfig): FileAsrProvider {
   const host = hostOf(config.baseUrl)
-  const problem = !config.baseUrl ? t("openai.noBaseUrl") : !host ? t("openai.badBaseUrl") : !config.model ? t("openai.noModel") : !config.apiKey && !isLocalHost(host) ? t("openai.noKey") : undefined
+  const problem = !config.baseUrl ? t("openai.noBaseUrl") : !host ? t("openai.badBaseUrl") : !config.model ? t("openai.noModel") : !config.apiKey && !config.keyOptional ? t("openai.noKey") : undefined
   return {
     id: OPENAI_COMPAT_ID,
     name: t("provider.openaiCompat"),

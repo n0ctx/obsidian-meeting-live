@@ -208,8 +208,9 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
   private renderAccount(parent: HTMLElement, account: Account): void {
     const status = this.status.get(account.id)
     const roles = this.roleNames(account)
+    const line = serviceDef(account.service)?.summary?.()
     const setting = new Setting(parent).setName(accountLabel(this.s.accounts, account))
-    setting.descEl.createDiv({ text: roles ? t("settings.account.serves", roles) : t("settings.account.servesNothing") })
+    setting.descEl.createDiv({ text: line ?? (roles ? t("settings.account.serves", roles) : t("settings.account.servesNothing")) })
     const paid = this.needsTest.has(account.id) || !hasFreeCheck(account)
     // A service with no free check says so at once, rather than offering a Check that cannot tell anything.
     const shown: Status = status ?? (paid ? { kind: "manual", text: t("settings.status.manual") } : { kind: "unchecked", text: t("settings.status.unchecked") })

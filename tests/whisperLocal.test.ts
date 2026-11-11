@@ -68,6 +68,8 @@ test("the recording's destination is listed as on this machine, and a server on 
   assert.deepEqual(destinations(settings).find((d) => d.kind === "file"), { kind: "file", name: "本地 Whisper（whisper.cpp）", host: "127.0.0.1:8080", local: true })
   account.options.baseUrl = "http://192.168.1.9:8080/v1"
   assert.equal(destinations(settings).find((d) => d.kind === "file")?.local, undefined)
+  account.options.baseUrl = "https://whisper.example.com/v1"
+  assert.match(resolveFile({ secrets: noSecrets, settings }).problem ?? "", /API Key/, "a whisper server that is not on this machine or a private network still needs a key")
 })
 
 test("existing settings are unchanged by the new provider: the same file and live providers, and no local account", () => {
