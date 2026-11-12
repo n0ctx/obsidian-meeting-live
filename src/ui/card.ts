@@ -339,6 +339,8 @@ export class MeetingCard extends MarkdownRenderChild {
       parts.push(t("card.meta.utterances", session.utterances.length))
       if (session.meta.summaries.length) parts.push(t("card.meta.stages", session.meta.summaries.length))
     }
+    // Said while the meeting runs too, so it is plain whether the model changed anything.
+    if (session.cleanedLines) parts.push(t("card.meta.cleaned", session.cleanedLines))
     this.metaText.setText(parts.join(" · "))
     this.renderChips()
     this.player?.refresh()
@@ -466,6 +468,14 @@ export class MeetingCard extends MarkdownRenderChild {
     menu.addItem((i) => i.setTitle(t("card.menu.minutes")).setIcon("file-pen-line").onClick(() => inBackground(this.host.openMinutes(session))))
     menu.addSeparator()
     menu.addItem((i) => i.setTitle(t("card.menu.openRaw")).setIcon("captions").onClick(() => this.host.openPath(session.transcriptPath)))
+    if (session.cleanedLines) {
+      menu.addItem((i) =>
+        i
+          .setTitle(t("card.menu.restore"))
+          .setIcon("undo-2")
+          .onClick(() => inBackground(session.restoreRecognized().then((n) => new Notice(t("notice.restored", n))))),
+      )
+    }
     menu.addItem((i) => i.setTitle(platformText("reveal")).setIcon("folder-open").onClick(() => this.host.revealFolder(session)))
     menu.addItem((i) =>
       i

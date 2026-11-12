@@ -63,7 +63,7 @@ test("transcript header, gap lines, provider names and dates follow the language
   assert.equal(providerNameIn("volc", "zh"), "火山引擎")
   assert.equal(providerNameIn("openai-compat", "en"), "OpenAI-compatible")
   const header = transcriptHeader(meta, providerNameIn("volc", "en"), "en")
-  assert.match(header, /> \[!info\] Raw transcript produced by Volcengine live speech recognition/)
+  assert.match(header, /> \[!info\] Transcript produced by Volcengine live speech recognition/)
   assert.doesNotMatch(header, HAN)
   const gap = { startMs: 6000, endMs: 9000, reason: "网络中断", code: "overflow" as const }
   assert.equal(gapLine(gap, "en"), "> [!warning] Transcript gap 00:00:06 – 00:00:09: The network was down for longer than the buffer holds; this stretch could not be transcribed. The recording is saved and that stretch can be played back.\n\n")

@@ -19,7 +19,7 @@ test("client and server frames round-trip", () => {
 
 test("the transcript header credits the provider by its display name", () => {
   const header = transcriptHeader({ id: "m-1", notePath: "a.md", createdAt: "2026-10-27T14:30:00+08:00" }, "示例服务")
-  assert.match(header, /> \[!info\] 由示例服务实时语音识别生成的原始转写/)
+  assert.match(header, /> \[!info\] 由示例服务实时语音识别生成的转写/)
   assert.doesNotMatch(header, /火山/)
 })
 

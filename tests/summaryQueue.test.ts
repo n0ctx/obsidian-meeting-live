@@ -28,7 +28,8 @@ function setup(reply: (messages: ChatMessage[]) => string) {
         if (change) files[path] = applyEdit(files[path] ?? "", change)
       },
     },
-    settings: () => DEFAULT_SETTINGS,
+    // The stages are not tidied here: these tests are about summaries and the overview (see llmCorrection.test.ts).
+    settings: () => ({ ...DEFAULT_SETTINGS, transcriptCleanup: "off" }),
     llmConsented: () => true,
     llm: () => ({
       problem: undefined,
@@ -58,7 +59,8 @@ test("each finished stage is merged into the overview, which the next stage sees
   })
   await session.runQueue()
   assert.deepEqual(prompts.map(isOverview), [false, true, false, true])
-  assert.deepEqual(options, [{ json: true }, { json: true }, { json: true }, { json: true }], "stage summaries and overviews ask for a JSON reply")
+  assert.deepEqual(options.map((o) => o?.json), [true, true, true, true], "stage summaries and overviews ask for a JSON reply")
+  assert.ok(options.every((o) => typeof o?.usage === "function"), "and their usage is counted")
   assert.match(prompts[2][1].content, /overview so far \(context only\):\n经营: 第 1 版概览 \[00:00:01\]/)
   assert.match(prompts[3][1].content, /Current overview:\n经营: 第 1 版概览[^]*New stage summaries:\nStage 2 /)
   assert.deepEqual(session.meta.overview?.stages, [1, 2])

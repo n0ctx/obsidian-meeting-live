@@ -131,10 +131,12 @@ test("the summary region markers carry no wording, and the region 1.0.1 wrote is
   assert.equal(old.slice(0, rewritten.from) + rewritten.text + old.slice(rewritten.to), "```meeting-live\nid: m-1\n```\n\n%% meeting-live-summary m-1 %%\n\n新\n\n%% /meeting-live-summary m-1 %%\n")
 })
 
+// The header differs from 1.0.1: the text may now be corrected and tidied, which the old "转写文字不会被改写" denied. It is written only
+// when a transcript is created, so transcripts written before keep theirs.
 test("transcript header, gap lines and short dates read as 1.0.1 wrote them", () => {
   assert.equal(
     transcriptHeader({ id: "m-1", notePath: "Daily/周会.md", createdAt: "2026-10-27T14:30:00+08:00" }, "火山引擎"),
-    "---\nmeeting: m-1\ntype: meeting-transcript\nnote: \"[[Daily/周会]]\"\ndate: 2026-10-27\n---\n\n> [!info] 由火山引擎实时语音识别生成的原始转写，按录音时间轴记录。时间点链接回会议笔记中对应的 AI 摘要；转写文字不会被改写。\n\n",
+    "---\nmeeting: m-1\ntype: meeting-transcript\nnote: \"[[Daily/周会]]\"\ndate: 2026-10-27\n---\n\n> [!info] 由火山引擎实时语音识别生成的转写，按录音时间轴记录。时间点链接回会议笔记中对应的 AI 摘要。转写可能按替换表改过名字，或在生成阶段摘要前由模型整理过标点、语气词和听错的词（设置「转写整理」）；只改文字，不动时间、顺序和句子划分，原始识别文本可用「恢复本场原始识别文本」命令还原。\n\n",
   )
   assert.equal(gapLine({ startMs: 6000, endMs: 9000, reason: "网络中断" }), "> [!warning] 转写缺口 00:00:06 – 00:00:09：网络中断。录音已保存，可回放该时段。\n\n")
   assert.equal(utteranceLine({ startMs: 3200, endMs: 5600, text: "收入 3 亿" }), "[00:00:03] 收入 3 亿 ^t3200-5600\n\n")

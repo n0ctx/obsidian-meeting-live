@@ -16,7 +16,7 @@ import type { HttpGet, HttpPost } from "./llm/client.ts"
 import { DEFAULT_MINUTES_PROMPT } from "./llm/minutes.ts"
 import { curatedModels, listModels } from "./llm/models.ts"
 import { DEFAULT_SUMMARY_FOCUS } from "./llm/summary.ts"
-import type { MeetingLiveSettings } from "./settings.ts"
+import { isTranscriptCleanup, type MeetingLiveSettings } from "./settings.ts"
 import { platformText } from "./platform.ts"
 import { readSecret } from "./secrets.ts"
 import { textField } from "./ui/settingFields.ts"
@@ -151,6 +151,19 @@ export class MeetingLiveSettingTab extends PluginSettingTab {
           .setValue(this.s.summaryIntervalMin)
           .onChange((v) => {
             this.s.summaryIntervalMin = v
+            this.save()
+          }),
+      )
+    new Setting(containerEl)
+      .setName(t("settings.cleanup.name"))
+      .setDesc(t("settings.cleanup.desc"))
+      .addDropdown((d) =>
+        d
+          .addOptions({ polish: t("settings.cleanup.polish"), names: t("settings.cleanup.names"), off: t("settings.cleanup.off") })
+          .setValue(this.s.transcriptCleanup)
+          .onChange((v) => {
+            if (!isTranscriptCleanup(v)) return
+            this.s.transcriptCleanup = v
             this.save()
           }),
       )

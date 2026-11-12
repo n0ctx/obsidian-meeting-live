@@ -22,6 +22,21 @@ export interface LlmConfig {
 export interface CompleteOptions {
   /** The reply must be one JSON object. Asked of the service only where the preset supports it. */
   json?: boolean
+  /** Overrides the configured effort for this request; "off" for a mechanical task, where reasoning tokens are billed for nothing. */
+  effort?: CompatibleEffort
+  /** Told what the request used, when the service reports it. */
+  usage?: (usage: LlmUsage) => void
+}
+
+/** Tokens one request used, as the service reported them. */
+export interface LlmUsage {
+  input: number
+  /** Input tokens served from the service's prompt cache, billed far lower. */
+  cached: number
+  /** Output tokens, reasoning included. */
+  output: number
+  /** Of the output, the tokens spent reasoning. */
+  reasoning: number
 }
 
 export interface ChatMessage {
@@ -55,6 +70,20 @@ type JsonRecord = Record<string, unknown>
 
 const asRecord = (value: unknown): JsonRecord | undefined =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : undefined
+
+const count = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0)
+
+/** The usage of an OpenAI-compatible reply: DeepSeek reports cache hits in its own field, OpenAI under prompt_tokens_details. */
+export function usageOf(data: unknown): LlmUsage | undefined {
+  const usage = asRecord(asRecord(data)?.usage)
+  if (!usage) return undefined
+  return {
+    input: count(usage.prompt_tokens),
+    cached: count(usage.prompt_cache_hit_tokens) || count(asRecord(usage.prompt_tokens_details)?.cached_tokens),
+    output: count(usage.completion_tokens),
+    reasoning: count(asRecord(usage.completion_tokens_details)?.reasoning_tokens),
+  }
+}
 
 // Response text extraction follows obsidian-realtime-transcription (MIT), see THIRD_PARTY_NOTICES.md.
 function textOf(content: unknown): string {
@@ -90,7 +119,7 @@ function errorMessage(status: number, text: string): string {
 /** Whether a JSON reply may be requested from this service under this configuration. */
 function jsonRequested(config: LlmConfig, options: CompleteOptions): boolean {
   const { json } = config.preset
-  return !!options.json && (json === "always" || (json === "effort-off" && config.effort === "off"))
+  return !!options.json && (json === "always" || (json === "effort-off" && (options.effort ?? config.effort) === "off"))
 }
 
 export function chatRequestBody(config: LlmConfig, messages: ChatMessage[], options: CompleteOptions = {}): Record<string, unknown> {
@@ -98,8 +127,9 @@ export function chatRequestBody(config: LlmConfig, messages: ChatMessage[], opti
   const body: Record<string, unknown> = { model: config.model.trim(), messages }
   if (preset.temperature) body.temperature = config.temperature
   body.stream = false
-  const thinking = config.effort !== "off"
-  if (preset.effort !== "none" && thinking) body.reasoning_effort = config.effort
+  const effort = options.effort ?? config.effort
+  const thinking = effort !== "off"
+  if (preset.effort !== "none" && thinking) body.reasoning_effort = effort
   // DeepSeek switches thinking on and off with its own field; other providers would reject it.
   if (preset.effort === "deepseek") body.thinking = { type: thinking ? "enabled" : "disabled" }
   if (jsonRequested(config, options)) body.response_format = { type: "json_object" }
@@ -141,6 +171,8 @@ async function chatOnce(config: LlmConfig, messages: ChatMessage[], post: HttpPo
   } catch {
     throw new ChatError(t("llm.notJson"))
   }
+  const usage = usageOf(data)
+  if (usage) options.usage?.(usage)
   const text = extractCompletionText(data)
   if (!text) {
     const finish = asRecord(asRecord(data)?.choices && (asRecord(data)!.choices as unknown[])[0])?.finish_reason
@@ -158,7 +190,7 @@ export async function chat(config: LlmConfig, messages: ChatMessage[], post: Htt
   try {
     return await chatOnce(config, messages, post, options)
   } catch (error) {
-    if (error instanceof ChatError && jsonRequested(config, options) && (error.status === 400 || error.empty)) return chatOnce(config, messages, post, {})
+    if (error instanceof ChatError && jsonRequested(config, options) && (error.status === 400 || error.empty)) return chatOnce(config, messages, post, { ...options, json: false })
     throw error
   }
 }
@@ -183,4 +215,19 @@ export function compatibleClient(config: LlmConfig, post: HttpPost): LlmClient {
     // Keep the raw value for display.
   }
   return { problem: llmConfigProblem(config), model: config.model, target, inputLimit: config.inputLimit, complete: (messages, options) => chat(config, messages, post, options) }
+}
+
+/** The same client, telling `record` what each request used, on top of whatever the caller asks to be told. */
+export function metered(llm: LlmClient, record: (usage: LlmUsage) => void): LlmClient {
+  return {
+    ...llm,
+    complete: (messages, options = {}) =>
+      llm.complete(messages, {
+        ...options,
+        usage: (usage) => {
+          record(usage)
+          options.usage?.(usage)
+        },
+      }),
+  }
 }

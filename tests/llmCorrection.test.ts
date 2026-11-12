@@ -36,7 +36,7 @@ function setup(fixes: () => string, hotwords = "蓝箭\n章帆") {
         if (change) files[path] = applyEdit(files[path] ?? "", change)
       },
     },
-    settings: () => ({ ...DEFAULT_SETTINGS, hotwords }),
+    settings: () => ({ ...DEFAULT_SETTINGS, hotwords, transcriptCleanup: "names" }),
     llmConsented: () => true,
     llm: () => ({
       problem: undefined,

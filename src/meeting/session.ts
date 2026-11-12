@@ -9,9 +9,10 @@ import type { ResolvedLive } from "../asr/providers/registry.ts"
 import { extractVocabulary, type NoteVocabulary } from "../asr/vocabulary.ts"
 import type { AsrConnect } from "../asr/contract.ts"
 import { AsrStreamer, type AsrState } from "../asr/streamer.ts"
-import type { LlmClient } from "../llm/client.ts"
+import { metered, type LlmClient } from "../llm/client.ts"
 import { writeMinutes } from "../llm/contextGuard.ts"
 import { acceptFixes, buildCorrectionMessages, correctionTerms, noTerms, parseFixes } from "../llm/correction.ts"
+import { acceptPolish, buildPolishMessages, parsePolish } from "../llm/polish.ts"
 import { buildOverviewMessages, buildSummaryMessages, capOverview, hasUnverified, isEmptySummary, overviewMarkdown, overviewProblems, overviewRetryMessage, parseSummary, summaryMarkdown, type LineAnchor } from "../llm/summary.ts"
 import type { MeetingLiveSettings } from "../settings.ts"
 import { dueCutoff, uncovered } from "./schedule.ts"
@@ -19,7 +20,7 @@ import { placeCardHeading, placeSummary } from "./noteSummary.ts"
 import { noteLang } from "./labels.ts"
 import { meetingFile, movedPath, noteName, transcriptFileName, type MeetingStore } from "./store.ts"
 import { audioLine, blockId, gapLine, linkTranscript, parseTranscript, retextTranscript, utteranceLine } from "./transcriptFormat.ts"
-import { formatClock, formatDate, formatDateTime, totalDuration, type AudioFormat, type AudioSegment, type MeetingMeta, type SummaryRecord, type TranscriptGap, type Utterance } from "./types.ts"
+import { formatClock, formatDate, formatDateTime, totalDuration, type AudioFormat, type AudioSegment, type MeetingMeta, type SummaryRecord, type TranscriptGap, type UsageKind, type Utterance } from "./types.ts"
 
 export interface SessionEnv {
   store: MeetingStore
@@ -53,6 +54,8 @@ export type MinutesState = { status: "idle" } | { status: "running" } | { status
 const LEVEL_HISTORY = 256
 const SUMMARY_RETRY_MS = [5000, 20000]
 const MAX_SUMMARY_ATTEMPTS = 3
+/** Lines sent to be tidied in one request: a five-minute stage is usually 40 to 80. */
+const POLISH_LINES = 120
 const SAVE_DEBOUNCE_MS = 2000
 /** How long the note must stay unchanged before its names and pairs are read again, so typing does not re-read on every key. */
 const NOTE_SETTLE_MS = 1500
@@ -103,8 +106,6 @@ export class MeetingSession extends Events {
   private noteTimer: number | undefined
   /** The note's pairs the transcript was last corrected with, so an edit that leaves them as they were rewrites nothing. */
   private appliedPairs = ""
-  /** Stages whose window the model has already checked for misheard names, so a retried summary does not ask again. */
-  private readonly checkedStages = new Set<number>()
 
   constructor(env: SessionEnv, folder: string, meta: MeetingMeta, transcript: string) {
     super()
@@ -132,6 +133,25 @@ export class MeetingSession extends Events {
 
   get transcriptPath(): string {
     return this.env.store.path(this.folder, transcriptFileName(this.meta))
+  }
+
+  /** The model client whose requests add to this meeting's usage of `kind`. */
+  private llmFor(kind: UsageKind): LlmClient {
+    return metered(this.env.llm(), (usage) => {
+      const totals = (this.meta.usage ??= {})
+      const sum = (totals[kind] ??= { requests: 0, input: 0, cached: 0, output: 0, reasoning: 0 })
+      sum.requests++
+      sum.input += usage.input
+      sum.cached += usage.cached
+      sum.output += usage.output
+      sum.reasoning += usage.reasoning
+      this.markDirty()
+    })
+  }
+
+  /** Lines of this meeting the model has tidied or corrected so far. */
+  get cleanedLines(): number {
+    return Object.keys(this.meta.recognized ?? {}).length
   }
 
   get llmProblem(): string | undefined {
@@ -466,18 +486,47 @@ export class MeetingSession extends Events {
   }
 
   /**
+   * Puts back the recognized text of every line the model tidied or corrected, with the replacement tables applied as they are now.
+   * The stages stay checked, so the model does not change them again. The number of sentences restored.
+   */
+  async restoreRecognized(): Promise<number> {
+    if (this.cleanedLines === 0) return 0
+    this.vocabulary = await this.readVocabulary()
+    const tables = this.correctionTables()
+    // Taken now: a stage tidied while the transcript is being written keeps its own originals, to be restored another time.
+    const recognized = { ...this.meta.recognized }
+    const restored = await this.retext((text, u) => {
+      const original = recognized[blockId(u)]
+      return original === undefined ? text : applyCorrections(original, tables)
+    })
+    const left = { ...this.meta.recognized }
+    for (const [id, text] of Object.entries(recognized)) if (left[id] === text) delete left[id]
+    this.meta.recognized = Object.keys(left).length ? left : undefined
+    await this.saveNow()
+    this.emitChange()
+    return restored
+  }
+
+  /**
    * Gives sentences new text and rewrites their transcript lines in place: only the text changes, the time link (which may point at a
    * summary anchor by now), the speaker and the block id stay. The number of sentences changed.
    */
-  private async retext(edit: (text: string, u: Utterance) => string): Promise<number> {
+  private async retext(edit: (text: string, u: Utterance) => string, byModel = false): Promise<number> {
     const changed = new Map<string, string>()
     for (const u of this.utterances) {
       const text = edit(u.text, u)
       if (text === u.text) continue
+      const id = blockId(u)
+      // The text as recognized is kept the first time the model changes a line; later changes keep that first version.
+      if (byModel) {
+        const recognized = (this.meta.recognized ??= {})
+        recognized[id] ??= u.text
+      }
       u.text = text
-      changed.set(blockId(u), text)
+      changed.set(id, text)
     }
     if (changed.size === 0) return 0
+    if (byModel) this.markDirty()
     this.trigger("retext")
     await this.writeIo(async () => {
       const path = this.transcriptPath
@@ -567,7 +616,7 @@ export class MeetingSession extends Events {
   }
 
   private async runSummary(record: SummaryRecord): Promise<void> {
-    const llm = this.env.llm()
+    const llm = this.llmFor("summary")
     if (llm.problem) {
       record.status = "failed"
       record.error = llm.problem
@@ -581,7 +630,7 @@ export class MeetingSession extends Events {
     record.attempts++
     this.trigger("summary")
     try {
-      await this.correctWindow(record, items, llm)
+      await this.cleanWindow(record, items)
       const messages = buildSummaryMessages(this.meta.title, this.env.settings().summaryFocus, record, items, previous, this.meta.overview?.content, this.noteLang)
       const text = await llm.complete(messages, { json: true })
       const content = parseSummary(text, items)
@@ -605,26 +654,53 @@ export class MeetingSession extends Events {
   }
 
   /**
-   * Asks the summary's model which words of the stage's window are misheard known terms, and applies the fixes that pass the checks
-   * (acceptFixes) before the summary reads the window. Once per stage. A failure or a reply with nothing usable leaves the text as it
-   * was and the summary goes on; with no known terms nothing is asked.
+   * Before the summary reads the stage's window, the summary's model tidies it (src/llm/polish.ts) or, set to names only, replaces the
+   * misheard known names in it (src/llm/correction.ts). Only the changes that pass the checks are applied. Once per stage, also across
+   * reloads (`record.cleaned`). A failure or a reply with nothing usable leaves the text as it was and the summary goes on.
    */
-  private async correctWindow(record: SummaryRecord, items: Utterance[], llm: LlmClient): Promise<void> {
-    if (this.checkedStages.has(record.index) || items.length === 0) return
-    this.checkedStages.add(record.index)
+  private async cleanWindow(record: SummaryRecord, items: Utterance[]): Promise<void> {
+    const mode = this.env.settings().transcriptCleanup
+    if (record.cleaned !== undefined || items.length === 0 || mode === "off") return
     // Read afresh rather than trust the watcher: Obsidian in the background throttles its timers, so a name written a moment ago
     // may not have been picked up yet.
     this.vocabulary = await this.readVocabulary()
     const terms = correctionTerms(asrContextFor(this.env.settings(), this.vocabulary, true), this.correctionTables())
-    if (noTerms(terms)) return
+    if (mode === "names" && noTerms(terms)) {
+      record.cleaned = 0
+      return
+    }
+    const llm = this.llmFor("cleanup")
     try {
-      const reply = await llm.complete(buildCorrectionMessages(items, terms, this.noteLang), { json: true })
-      const fixes = acceptFixes(parseFixes(reply), items, terms)
-      if (fixes.length === 0) return
-      const window = new Set(items)
-      await this.retext((text, u) => (window.has(u) ? applyCorrections(text, [fixes]) : text))
+      if (mode === "polish") {
+        const tidied = new Map<Utterance, string>()
+        let read = false
+        // A long window (a final stage after a long outage) goes in parts, so neither the request nor the reply grows past a few pages.
+        for (let i = 0; i < items.length; i += POLISH_LINES) {
+          const part = items.slice(i, i + POLISH_LINES)
+          // Tidying is mechanical: reasoning would only add billed output.
+          const lines = parsePolish(await llm.complete(buildPolishMessages(part, terms, this.noteLang), { json: true, effort: "off" }))
+          if (!lines) {
+            console.warn("[meeting-live] the model's tidied lines could not be read; that part keeps its text")
+            continue
+          }
+          read = true
+          for (const [u, text] of acceptPolish(lines, part, terms, this.noteLang)) tidied.set(u, text)
+        }
+        const tables = this.correctionTables()
+        // The replacement tables apply to the tidied text as well: a pair the user wrote wins over what the model chose.
+        const changed = await this.retext((text, u) => (tidied.has(u) ? applyCorrections(tidied.get(u)!, tables) : text), true)
+        // With no reply readable the stage stays unchecked, so a retried summary asks again.
+        if (read) record.cleaned = changed
+      } else {
+        const reply = await llm.complete(buildCorrectionMessages(items, terms, this.noteLang), { json: true })
+        const fixes = acceptFixes(parseFixes(reply), items, terms)
+        const window = new Set(items)
+        record.cleaned = fixes.length ? await this.retext((text, u) => (window.has(u) ? applyCorrections(text, [fixes]) : text), true) : 0
+      }
+      // The card's count of tidied lines changes, also for a meeting that has ended and no longer ticks.
+      this.emitChange()
     } catch (error) {
-      console.warn("[meeting-live] checking the transcript for misheard names failed; the summary reads it as it is", error)
+      console.warn("[meeting-live] tidying the stage's transcript failed; the summary reads it as it is", error)
     }
   }
 
@@ -640,7 +716,7 @@ export class MeetingSession extends Events {
     this.overviewRunning = true
     try {
       for (let stages = this.overviewBacklog; stages.length; stages = this.overviewBacklog) {
-        const llm = this.env.llm()
+        const llm = this.llmFor("overview")
         if (llm.problem || !this.llmConsented) return
         const overview = this.meta.overview ?? { stages: [] }
         const merged = [...overview.stages, ...stages.map((s) => s.index)].sort((a, b) => a - b)
@@ -743,7 +819,7 @@ export class MeetingSession extends Events {
   // ---------------------------------------------------------------- minutes
 
   async generateMinutes(prompt: string, notes: { path: string; content: string }[], onProgress?: (text: string) => void): Promise<string> {
-    const llm = this.env.llm()
+    const llm = this.llmFor("minutes")
     if (llm.problem) throw new Error(llm.problem)
     if (!this.llmConsented) throw new Error(t("session.consentNeeded"))
     if (this.utterances.length === 0) throw new Error(t("session.noTranscript"))

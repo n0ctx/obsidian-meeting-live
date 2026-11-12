@@ -16,6 +16,14 @@ import { readSecret, type SecretReader } from "./secrets.ts"
 
 export const SETTINGS_VERSION = 3
 
+/**
+ * What the model may do to a stage's transcript before summarizing it: nothing, replace misheard known names (src/llm/correction.ts),
+ * or tidy punctuation, filler and misheard words as well (src/llm/polish.ts).
+ */
+export type TranscriptCleanup = "off" | "names" | "polish"
+const CLEANUPS: readonly TranscriptCleanup[] = ["off", "names", "polish"]
+export const isTranscriptCleanup = (value: unknown): value is TranscriptCleanup => CLEANUPS.includes(value as TranscriptCleanup)
+
 export interface MeetingLiveSettings extends AccountSettings {
   version: typeof SETTINGS_VERSION
   folder: string
@@ -31,6 +39,7 @@ export interface MeetingLiveSettings extends AccountSettings {
   meetingContext: string
   /** `错→对` lines applied to every meeting's recognized text before it is saved (src/asr/corrections.ts). Never leaves the machine. */
   corrections: string
+  transcriptCleanup: TranscriptCleanup
   autoSummary: boolean
   summaryIntervalMin: number
   summaryFocus: string
@@ -52,6 +61,7 @@ export const DEFAULT_SETTINGS: MeetingLiveSettings = {
   hotwords: "",
   meetingContext: "",
   corrections: "",
+  transcriptCleanup: "polish",
   autoSummary: true,
   summaryIntervalMin: 5,
   summaryFocus: DEFAULT_SUMMARY_FOCUS,
@@ -87,6 +97,7 @@ export function loadSettings(raw: unknown): LoadedSettings {
     if (typeof value === typeof DEFAULT_SETTINGS[key]) (settings as unknown as Record<string, unknown>)[key] = value
   }
   if (!isAsrLanguage(settings.asrLanguage)) settings.asrLanguage = DEFAULT_SETTINGS.asrLanguage
+  if (!isTranscriptCleanup(settings.transcriptCleanup)) settings.transcriptCleanup = DEFAULT_SETTINGS.transcriptCleanup
   // Notes written by 1.0.x are in Chinese whatever the interface language, so settings from before the choice existed keep writing
   // Chinese; otherwise opening an old note would rewrite its summary region in another language. A fresh install follows the interface.
   const hadNoteLanguage = "noteLanguage" in stored

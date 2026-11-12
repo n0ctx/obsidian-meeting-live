@@ -88,6 +88,20 @@ export interface SummaryRecord {
   content?: SummaryContent
   /** Model output kept verbatim when it could not be parsed as structured JSON. */
   raw?: string
+  /** How many of the stage's lines the model tidied or corrected; set once the stage was checked, so it is not sent again. */
+  cleaned?: number
+}
+
+/** What the model was used for in a meeting, for adding up its tokens. */
+export type UsageKind = "cleanup" | "summary" | "overview" | "minutes"
+
+/** Tokens a meeting's requests of one kind used, as the service reported them. */
+export interface UsageTotals {
+  requests: number
+  input: number
+  cached: number
+  output: number
+  reasoning: number
 }
 
 export interface MeetingMeta {
@@ -115,6 +129,9 @@ export interface MeetingMeta {
   minutes: string[]
   /** The card is folded into a single-line capsule. */
   collapsed?: boolean
+  /** The recognized text of each line the model changed, by block id, as it was before the first change; restored on request. */
+  recognized?: Record<string, string>
+  usage?: Partial<Record<UsageKind, UsageTotals>>
 }
 
 export function totalDuration(meta: MeetingMeta): number {

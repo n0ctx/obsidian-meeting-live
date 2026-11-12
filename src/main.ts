@@ -286,6 +286,7 @@ export default class MeetingLivePlugin extends Plugin implements CardHost {
     withSession("summarize", t("cmd.summarize"), "list", (s) => this.summarize(s), () => true)
     withSession("minutes", t("cmd.minutes"), "file-pen-line", (s) => this.openMinutes(s), (s) => s.utterances.length > 0)
     withSession("apply-corrections", t("cmd.applyCorrections"), "replace", async (s) => new Notice(t("notice.corrected", await s.correctTranscript())), (s) => s.utterances.length > 0)
+    withSession("restore-recognized", t("cmd.restoreRecognized"), "undo-2", async (s) => new Notice(t("notice.restored", await s.restoreRecognized())), (s) => s.cleanedLines > 0)
   }
 
   /** Where raw transcripts of recordings go: an existing folder keeps its name whatever the note language. */
