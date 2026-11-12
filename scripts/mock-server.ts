@@ -113,8 +113,16 @@ const server = createServer(async (req, res) => {
       const user = request.messages.find((m) => m.role === "user")?.content ?? ""
       const lines = [...user.matchAll(/^\[(\d{2}:\d{2}:\d{2})\] (.+)$/gm)].map((m) => ({ t: m[1], text: m[2] }))
       const isSummary = request.messages[0]?.content.includes("Output one JSON object only")
+      const isPolish = request.messages[0]?.content.startsWith("You tidy")
       let content: string
-      if (isSummary) {
+      if (isPolish) {
+        // Tidies the way the prompt asks, crudely: leading hesitation sounds go.
+        const tidied = [...user.matchAll(/^(\d+)\. (?:\S+ \d+[：:] ?)?(.+)$/gm)].flatMap((m) => {
+          const text = m[2].replace(/^(?:[嗯啊呃哎][，,、 ]*)+/, "")
+          return text && text !== m[2] ? [{ n: Number(m[1]), text }] : []
+        })
+        content = JSON.stringify({ lines: tidied })
+      } else if (isSummary) {
         const first = lines[0] ?? { t: "00:00:00", text: "" }
         const last = lines[lines.length - 1] ?? first
         content = JSON.stringify({
@@ -131,7 +139,9 @@ const server = createServer(async (req, res) => {
       }
       setTimeout(() => {
         res.setHeader("Content-Type", "application/json")
-        res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }] }))
+        // Usage as DeepSeek reports it, so the plugin's token counts can be watched without a paid service.
+        const usage = { prompt_tokens: body.length, prompt_cache_hit_tokens: 0, completion_tokens: content.length }
+        res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }], usage }))
       }, 1200)
     })
     return

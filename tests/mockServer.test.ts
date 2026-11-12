@@ -17,7 +17,8 @@ import { volcConnector } from "../src/asr/providers/volc/live.ts"
 import { runLiveTest } from "../src/asr/providers/liveTest.ts"
 import { AsrStreamer, type AsrState } from "../src/asr/streamer.ts"
 import type { AudioChunk } from "../src/audio/transcode.ts"
-import { chat } from "../src/llm/client.ts"
+import { chat, type LlmUsage } from "../src/llm/client.ts"
+import { buildPolishMessages, parsePolish } from "../src/llm/polish.ts"
 import { presetById } from "../src/llm/presets.ts"
 import { parseTranscript, utteranceLine } from "../src/meeting/transcriptFormat.ts"
 import type { TranscriptGap, Utterance } from "../src/meeting/types.ts"
@@ -317,6 +318,21 @@ test("the Volcengine and LLM routes still answer", async () => {
     },
   )
   assert.ok(text.length > 0)
+
+  // A tidy request through the real client: lines come back by number, and the usage is reported.
+  const usage: LlmUsage[] = []
+  const reply = await chat(
+    { preset: presetById("custom"), baseUrl: `${base}/v1`, apiKey: "k", model: "m", temperature: 0.2, effort: "off", headers: {}, inputLimit: 1000 },
+    buildPolishMessages([{ startMs: 0, endMs: 1000, text: "嗯，收入三亿。", speaker: "1" }, { startMs: 1000, endMs: 2000, text: "对。" }], { words: [], scene: "" }, "zh"),
+    async (url, headers, body) => {
+      const response = await fetch(url, { method: "POST", headers, body })
+      return { status: response.status, text: await response.text() }
+    },
+    { json: true, effort: "off", usage: (u) => usage.push(u) },
+  )
+  assert.deepEqual(parsePolish(reply), [{ n: 1, text: "收入三亿。" }])
+  assert.equal(usage.length, 1)
+  assert.ok(usage[0].input > 0 && usage[0].output > 0)
 })
 
 test("speaker labels travel from Deepgram's words to the finals, the transcript lines and back through the parser; without diarize there are none", async () => {
